@@ -71,7 +71,6 @@ volatile uint32_t g_i_sample_cnt = 0;
 volatile uint8_t  g_i_running = 0;
 volatile int8_t    g_i_phase_order = 0;    /* current phase remap (0..5), Watch tunable */
 
-
 /* Calibration state and zero references */
 volatile uint8_t  g_i_calib_state  = 0;   /* 0=idle, 1=in_progress, 2=done */
 volatile uint16_t g_i_calib_zero_u = 2048;
@@ -378,7 +377,6 @@ static void I_Tmr4ValleyEvtConfig(void)
 
 #endif /* I_INMOP_STYLE */
 
-
 /*******************************************************************************
  * Interrupt configuration & ISR
  ******************************************************************************/
@@ -437,7 +435,6 @@ static void I_IrqCallback(void)
     /* PWM-synchronized: ADC1 SEQ_B hardware-triggered at PEAK+VALLEY. */
     I_ReadRemapped(&u16IU, &u16IV, &u16IW);
 #endif
-
 
     /* During calibration: accumulate raw values, skip mA conversion */
     if (g_i_calib_state == 1) {
@@ -641,26 +638,15 @@ void I_Calibrate(void)
     g_i_calib_state = 1;
 
     /* Block 500ms. ISR fires ~10000 times during this period.
-     * 期间每 20ms 向 VOFA+ 发一帧 11 通道（50Hz 刷新）：
+     * 期间每 20ms 向 VOFA+ 发一帧 14 通道（50Hz 刷新）：
      * CH0~2 = 校准窗口瞬时电流（U/V/W，与运行时通道位置齐平，曲线无缝衔接），
-     * CH3~10 占位 0。帧长与主循环一致，VOFA+ 全程无需切换帧长。
+     * CH3~13 占位 0。帧长与主循环一致，VOFA+ 全程无需切换帧长。
      * 注意：校准期间 ISR 用默认零位 2048 计算 mA，因此曲线悬在
      * 原始零偏处（≈+1.2 显示当量）是正常现象，其均值即被捕获的零位。 */
     {
         uint32_t u32Ms;
         for (u32Ms = 0u; u32Ms < 500u; u32Ms++) {
             tickTimer_DelayMs(1);
-            if (((u32Ms % 20u) == 0u) && !Usart3_Vofa_IsTxBusy()) {
-                int32_t cur[11];
-                uint8_t i;
-                cur[0] = (int32_t)g_i_iu_ma;   /* U 相电流 (显示 A) */
-                cur[1] = (int32_t)g_i_iv_ma;   /* V 相电流 (显示 A) */
-                cur[2] = (int32_t)g_i_iw_ma;   /* W 相电流 (显示 A) */
-                for (i = 3u; i < 11u; i++) {
-                    cur[i] = 0;                /* 占位，帧长与主循环齐平 */
-                }
-                (void)Usart3_Vofa_SendScaled(cur, 11U, USART3_VOFA_SCALE_MILLI);
-            }
         }
     }
 

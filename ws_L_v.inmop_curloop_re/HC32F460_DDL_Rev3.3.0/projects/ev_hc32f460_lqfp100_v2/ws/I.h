@@ -104,10 +104,10 @@ extern "C" {
 
 /* ===== Current conversion constants ===== */
 #define I_ADC_ZERO                      (2048)      /* ADC raw at 0A (1650mV @ 3.3V/12bit) */
-#define I_MA_PER_ADC                    (781)      /* Fixed-point slope: 3300*1000/(4095*264) ≈ 3.0525 mA/count, ×256 ≈ 781 (264mV/A, +-5A sensor) */
+#define I_MA_PER_ADC                    (1563)      /* Fixed-point slope: 3300*1000/(4095*132) ≈ 6.105 mA/count, ×256 ≈ 1563 (132mV/A, +-10A sensor) */
 #define I_MA_SHIFT                      (8U)        /* Right-shift after multiply */
 
-/* Integer conversion: I_mA = (raw - zero_ref) * 781 >> 8 (781 = 3.0525 mA/count x 256). */
+/* Integer conversion: I_mA = (raw - zero_ref) * 1563 >> 8 (1563 = 6.105 mA/count x 256). */
 #define I_ADC_TO_MA_REF(raw, zero)  ((int16_t)(((int32_t)((int32_t)(raw) - (int32_t)(zero)) * (int32_t)I_MA_PER_ADC) >> I_MA_SHIFT))
 
 /*******************************************************************************

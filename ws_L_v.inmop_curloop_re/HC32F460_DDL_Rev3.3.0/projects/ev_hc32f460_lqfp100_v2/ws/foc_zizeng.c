@@ -16,6 +16,7 @@
 #include "motor_config.h"
 #include "rtt_log.h"
 #include "hc32_ll_tmra.h"   /* 直接读取 TIMERA_1 计数器 */
+#include <math.h>           /* sqrtf */
 
 /* ============================================================================
  * ZIZENG 自动偏移补偿参数
@@ -47,6 +48,11 @@ static uint32_t s_zizeng_start_cnt = 0;          /* 用于延迟启动采样 */
 static float    s_id_rotor_f = 0.0f;
 static float    s_iq_rotor_f = 0.0f;
 
+/* 静止两相系电流观测（A，瞬时值）：Clarke(dataCal) 输出与幅值 */
+volatile float   g_foc_ialpha  = 0.0f;
+volatile float   g_foc_ibeta   = 0.0f;
+volatile float   g_foc_iab_mag = 0.0f;
+
 /**
  * @brief 启动 ZIZENG 模式
  */
@@ -63,7 +69,7 @@ void Foc_StartZizeng(void)
     s_zizeng_start_cnt = 0;
 
     if (g_zizeng_volt_v <= 0.0f) {
-        g_zizeng_volt_v = 0.4f;  /* ±5A 传感器：0.4V→≈3.3A，留削顶余量 */
+        g_zizeng_volt_v = 0.6f;  /* ±10A 传感器：0.6V→≈5A，量程内 */
     }
     if (g_zizeng_freq_hz <= 0.0f) {
         g_zizeng_freq_hz = 5.0f;
@@ -165,6 +171,9 @@ void Foc_Zizeng_Step(const stc_i_data_t *pData)
         g_zizeng_dw = 50.0f;
         g_foc_id_ma = 0.0f;
         g_foc_iq_ma = 0.0f;
+        g_foc_ialpha  = 0.0f;
+        g_foc_ibeta   = 0.0f;
+        g_foc_iab_mag = 0.0f;
         s_zizeng_start_cnt = 0;
         return;
     }
@@ -190,6 +199,17 @@ void Foc_Zizeng_Step(const stc_i_data_t *pData)
     dataCal.i16IU_mA = (int16_t)((float)pData->i16IU_mA - off_u);
     dataCal.i16IV_mA = (int16_t)((float)pData->i16IV_mA - off_v);
     dataCal.i16IW_mA = (int16_t)((float)pData->i16IW_mA - off_w);
+
+    /* 2.5 静止两相系观测：与 GetDq 同源的 Clarke（同符号约定），瞬时值无 EMA */
+    {
+        float sign = (float)g_foc_cur_sign;
+        float ia = (float)dataCal.i16IU_mA * 0.001f * sign;
+        float ib = (float)dataCal.i16IV_mA * 0.001f * sign;
+        float ic = (float)dataCal.i16IW_mA * 0.001f * sign;
+        Foc_Clarke(ia, ib, ic, &g_foc_ialpha, &g_foc_ibeta);
+        g_foc_iab_mag = sqrtf(g_foc_ialpha * g_foc_ialpha
+                            + g_foc_ibeta  * g_foc_ibeta);
+    }
 
     Foc_Core_GetDq(&dataCal, theta, &id, &iq);
     Foc_Core_EmaFilter(&id, &iq);

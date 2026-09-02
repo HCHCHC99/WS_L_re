@@ -13,12 +13,9 @@
 #include "foc.h"
 #include "encoder.h"
 #include "Usart3_Vofa.h"
-#include "Usart3_Vofa_Runner.h"
 #include "../Utils/dev_pid.h"
 #include "Gpio_io.h"
 #include <math.h>   /* sqrtf */
-
-Vofa_HandleTypedef vofa1;
 
 /* Hall sensor raw pins (from hall_sensor_3ch.c ISR, updated in real-time) */
 extern volatile uint8_t g_scope_ha;
@@ -70,8 +67,6 @@ int main(void)
         cfg.baudrate = 921600;
         Usart3_Vofa_Init(&cfg);
     }
-    Usart3_Vofa_Runner_Init();
-    Vofa_Init(&vofa1, VOFA_MODE_SKIP);
 
     tickTimer_DelayMs(5);
 
@@ -83,7 +78,7 @@ int main(void)
         .pid_cfg          = NULL,
     };
     CommRunner_Init(&runner_cfg);
-    
+
     /* ---- 电流采样（模式23和30需要电流监视） ---- */
     I_Init();
     tickTimer_DelayMs(2000);    /* 等传感器基准/VDDA 冷启动暂态稳定后再校零 */
@@ -129,13 +124,13 @@ int main(void)
             }
         }
         if (Key_GetShortPress(KEY_ID_SW2)) {    /* SW2 短按：停转（mode 0） */
-            
+
         }
         if (Key_GetShortPress(KEY_ID_SW3)) {    /* SW3 短按： */
             /* 在此填写动作 */
 						comm_mode = 0;
         }
- 
+
         /* Keil Watch 模式切换 */
         if (comm_mode != s_prev_mode) {
             s_prev_mode = comm_mode;
@@ -214,39 +209,48 @@ int main(void)
 #endif /* MOTOR_FOC_ENABLE */
 #endif /* !APP_MINIMAL_CURRENT_TEST — 最小系统模式下主循环只跑 VOFA */
 
-        /* ---- VOFA+ USART3 数据发送（电流观测通道，11 通道定长） ----
+        /* ---- VOFA+ USART3 数据发送（电流观测通道，12 通道定长） ----
          * 接口约定：SendScaled 内部 ×0.001，即"传毫单位、显示基本单位"。
-         * 电流通道直接传整数 mA -> 显示 A（1mA 分辨率，µA 精度已舍弃）；
-         * 角度通道传 mrad -> 显示 rad。
-         * 定长 11 通道与 I_Calibrate 校准帧一致，避免 VOFA+ 帧长切换错位。
-         * CH0~2 : 三相原始电流（含上电校准残余零偏，mode 0 下用于观察温漂/噪声）
-         * CH3~4 : 控制系 iq / id（mode 30 内已经过 foc_calib 零偏校正）
-         * CH5   : 控制系总电流幅值 = sqrt(iq^2+id^2)
-         * CH6   : 控制系角度（ZIZENG 磁场角）
-         * CH7~8 : 转子系 iq（真实力矩电流）/ id
-         * CH9   : 三相之和（真实零电流时应≈0，其值 = 三相残余零偏之和）
-         * CH10  : 占位 0 */
+         * 电流通道传整数 mA -> 显示 A（1mA 分辨率，µA 精度已舍弃）；
+         * 电压通道传 mV -> 显示 V；角度通道传 mrad -> 显示 rad。
+         * CH0~2  : 三相原始电流（含上电校准残余零偏，mode 0 下用于观察温漂/噪声）
+         * CH3~4  : 静止系 ialpha / ibeta（瞬时值，无 EMA）
+         * CH5~6  : 控制系 iq / id（mode 30 内已经过 foc_calib 零偏校正）
+         * CH7    : 自增电压幅值 g_zizeng_volt_v
+         * CH8    : 控制系总电流幅值 = sqrt(iq^2+id^2)
+         * CH9    : 控制系角度（ZIZENG 磁场角）
+         * CH10   : 静止系电流幅值 sqrt(ialpha^2+ibeta^2)（应≈CH8）
+         * CH11   : 母线直流电流估算 = 1.5*(vd*id+vq*iq)/Vbus（无母线采样，
+         *          由功率守恒估算，含铜损前的电功率；mode 0 下为 0） */
 #if 1
         if (!Usart3_Vofa_IsTxBusy()) {
-            int32_t cur[11];
+            int32_t cur[12];
 
-            cur[0] = (int32_t)g_i_iu_ma;                      /* U 相电流 (显示 A) */
-            cur[1] = (int32_t)g_i_iv_ma;                      /* V 相电流 (显示 A) */
-            cur[2] = (int32_t)g_i_iw_ma;                      /* W 相电流 (显示 A) */
-            cur[3] = (int32_t)g_foc_iq_ma;                    /* 控制系 iq (显示 A) */
-            cur[4] = (int32_t)g_foc_id_ma;                    /* 控制系 id (显示 A) */
-            cur[5] = (int32_t)sqrtf(g_foc_iq_ma * g_foc_iq_ma + g_foc_id_ma * g_foc_id_ma); /* 控制系总电流 (显示 A) */
-            cur[6] = (int32_t)(g_zizeng_theta_rad * 1000.0f); /* 控制系角度 (显示 rad) */
-            cur[7] = (int32_t)g_foc_iq_rotor_ma;              /* 转子系 iq 力矩电流 (显示 A) */
-            cur[8] = (int32_t)g_foc_id_rotor_ma;              /* 转子系 id (显示 A) */
-            cur[9] = (int32_t)g_i_uvw_ma;                     /* 三相之和 (显示 A) */
-            cur[10] = 0;                                      /* 占位 */
+            cur[0] = (int32_t)(g_i_iu_ma);            /* U 相电流 (mA -> A) */
+            cur[1] = (int32_t)(g_i_iv_ma);            /* V 相电流 (mA -> A) */
+            cur[2] = (int32_t)(g_i_iw_ma);            /* W 相电流 (mA -> A) */
+            cur[3] = (int32_t)(g_foc_ialpha * 1000.0f); /* 静止系 ialpha (mA -> A) */
+            cur[4] = (int32_t)(g_foc_ibeta * 1000.0f);  /* 静止系 ibeta (mA -> A) */
+            cur[5] = (int32_t)(g_foc_iq_ma);          /* 控制系 iq (mA -> A) */
+            cur[6] = (int32_t)(g_foc_id_ma);          /* 控制系 id (mA -> A) */
 
-            Usart3_Vofa_SendScaled(cur, 11, USART3_VOFA_SCALE_MILLI);
+            cur[7] = (int32_t)(g_zizeng_volt_v * 1000.0f); /* 电压幅值 (mV -> V) */
+            cur[8] = (int32_t)sqrtf(g_foc_iq_ma * g_foc_iq_ma
+                              + g_foc_id_ma * g_foc_id_ma);   /* 控制系合成 (mA -> A) */
+            cur[9] = (int32_t)(g_zizeng_theta_rad * 1000.0f); /* 控制系角度 (mrad -> rad) */
+
+            cur[10] = (int32_t)(g_foc_iab_mag * 1000.0f); /* 静止系幅值 (mA -> A) */
+#if ZIZENG_VOLT_ON_Q_AXIS
+            /* P = 1.5*vq*iq，iq_ma 已是 mA，结果直接为 mA -> 显示 A */
+            cur[11] = (int32_t)(1.5f * g_zizeng_volt_v
+                                * (float)g_foc_iq_ma / FOC_VBUS_V);
+#else
+            /* P = 1.5*vd*id */
+            cur[11] = (int32_t)(1.5f * g_zizeng_volt_v
+                                * (float)g_foc_id_ma / FOC_VBUS_V);
+#endif
+            Usart3_Vofa_SendScaled(cur, 12, USART3_VOFA_SCALE_MILLI);
         }
-
-        Usart3_Vofa_FeedRx(&vofa1);
-        Usart3_Vofa_Runner_Run();
 #endif
     }
 }

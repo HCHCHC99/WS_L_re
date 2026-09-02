@@ -77,7 +77,7 @@
         <tvExpOptDlg>0</tvExpOptDlg>
         <IsCurrentTarget>1</IsCurrentTarget>
       </OPTFL>
-      <CpuCode>255</CpuCode>
+      <CpuCode>0</CpuCode>
       <DebugOpt>
         <uSim>0</uSim>
         <uTrg>1</uTrg>
@@ -140,7 +140,7 @@
         <SetRegEntry>
           <Number>0</Number>
           <Key>JL2CM3</Key>
-          <Name>-U69730356 -O78 -S2 -ZTIFSpeedSel5000 -A0 -C0 -JU1 -JI127.0.0.1 -JP0 -RST0 -N00("ARM CoreSight SW-DP") -D00(2BA01477) -L00(0) -TO18 -TC10000000 -TP21 -TDS8007 -TDT0 -TDC1F -TIEFFFFFFFF -TIP8 -TB1 -TFE0 -FO15 -FD1FFF8000 -FC1000 -FN2 -FF0HC32F46x.FLM -FS00 -FL0200000 -FP0($$Device:HC32F460JETA$FlashARM\HC32F46x.FLM) -FF1HC32F46x_otp.FLM -FS13000C00 -FL13FC -FP1($$Device:HC32F460JETA$FlashARM\HC32F46x_otp.FLM)</Name>
+          <Name>-U69730356 -O78 -S2 -ZTIFSpeedSel5000 -A0 -C0 -JU1 -JI127.0.0.1 -JP0 -RST0 -N00("ARM CoreSight SW-DP") -D00(2BA01477) -L00(0) -TO18 -TC10000000 -TP21 -TDS8007 -TDT0 -TDC1F -TIEFFFFFFFF -TIP8 -TB1 -TFE0 -FO7 -FD1FFF8000 -FC1000 -FN2 -FF0HC32F46x.FLM -FS00 -FL0200000 -FP0($$Device:HC32F460JETA$FlashARM\HC32F46x.FLM) -FF1HC32F46x_otp.FLM -FS13000C00 -FL13FC -FP1($$Device:HC32F460JETA$FlashARM\HC32F46x_otp.FLM)</Name>
         </SetRegEntry>
         <SetRegEntry>
           <Number>0</Number>
@@ -149,84 +149,12 @@
         </SetRegEntry>
       </TargetDriverDllRegistry>
       <Breakpoint/>
-      <WatchWindow1>
-        <Ww>
-          <count>0</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>comm_mode</ItemText>
-        </Ww>
-        <Ww>
-          <count>1</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>g_foc_theta_rad</ItemText>
-        </Ww>
-        <Ww>
-          <count>2</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>g_foc_if_rotor_rad</ItemText>
-        </Ww>
-        <Ww>
-          <count>3</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>g_zizeng_running </ItemText>
-        </Ww>
-        <Ww>
-          <count>4</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>g_foc_active </ItemText>
-        </Ww>
-        <Ww>
-          <count>5</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>g_i_sample_cnt,0x0A</ItemText>
-        </Ww>
-        <Ww>
-          <count>6</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>g_foc_if_diff_rad </ItemText>
-        </Ww>
-        <Ww>
-          <count>7</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>g_enc_count          ,0x0A</ItemText>
-        </Ww>
-        <Ww>
-          <count>8</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>g_foc_if_rotor_rad   </ItemText>
-        </Ww>
-        <Ww>
-          <count>9</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>g_zizeng_volt_v</ItemText>
-        </Ww>
-        <Ww>
-          <count>10</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>g_zizeng_freq_hz</ItemText>
-        </Ww>
-        <Ww>
-          <count>11</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>g_foc_id_ma</ItemText>
-        </Ww>
-        <Ww>
-          <count>12</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>g_foc_iq_ma</ItemText>
-        </Ww>
-        <Ww>
-          <count>13</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>g_foc_enc_dir</ItemText>
-        </Ww>
-      </WatchWindow1>
       <Tracepoint>
         <THDelay>0</THDelay>
       </Tracepoint>
       <DebugFlag>
         <trace>0</trace>
-        <periodic>1</periodic>
+        <periodic>0</periodic>
         <aLwin>1</aLwin>
         <aCover>0</aCover>
         <aSer1>0</aSer1>
@@ -329,7 +257,7 @@
         <tvExpOptDlg>0</tvExpOptDlg>
         <IsCurrentTarget>0</IsCurrentTarget>
       </OPTFL>
-      <CpuCode>255</CpuCode>
+      <CpuCode>0</CpuCode>
       <DebugOpt>
         <uSim>1</uSim>
         <uTrg>0</uTrg>
@@ -1316,7 +1244,7 @@
 
   <Group>
     <GroupName>Dev</GroupName>
-    <tvExp>1</tvExp>
+    <tvExp>0</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -1548,7 +1476,7 @@
 
   <Group>
     <GroupName>Utils</GroupName>
-    <tvExp>1</tvExp>
+    <tvExp>0</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -1773,6 +1701,90 @@
       <bDave2>0</bDave2>
       <PathWithFileName>..\..\ws\foc_math.c</PathWithFileName>
       <FilenameWithoutPath>foc_math.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>10</GroupNumber>
+      <FileNumber>108</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>..\..\ws\foc_align.c</PathWithFileName>
+      <FilenameWithoutPath>foc_align.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>10</GroupNumber>
+      <FileNumber>109</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>..\..\ws\foc_core.c</PathWithFileName>
+      <FilenameWithoutPath>foc_core.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>10</GroupNumber>
+      <FileNumber>110</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>1</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>..\..\ws\foc_curloop.c</PathWithFileName>
+      <FilenameWithoutPath>foc_curloop.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>10</GroupNumber>
+      <FileNumber>111</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>..\..\ws\foc_openloop.c</PathWithFileName>
+      <FilenameWithoutPath>foc_openloop.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>10</GroupNumber>
+      <FileNumber>112</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>..\..\ws\foc_scope.c</PathWithFileName>
+      <FilenameWithoutPath>foc_scope.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>10</GroupNumber>
+      <FileNumber>113</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>..\..\ws\foc_zizeng.c</PathWithFileName>
+      <FilenameWithoutPath>foc_zizeng.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>10</GroupNumber>
+      <FileNumber>114</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>..\..\ws\foc_calib.c</PathWithFileName>
+      <FilenameWithoutPath>foc_calib.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>
