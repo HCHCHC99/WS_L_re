@@ -1,155 +1,58 @@
+/**
+ *******************************************************************************
+ * @file  foc.h
+ * @brief FOC 门面头文件 — 对外 API 与全部子模块的统一入口。
+ *
+ *        拆分后的模块结构（ws 目录）：
+ *          foc_core.h     公共核心：共享状态/观测量、过流保护、PWM 启停、
+ *                         公共助手（GetDq/EMA/电压包络/编码器电角度）
+ *          foc_openloop.h 模式21 开环 V/f
+ *          foc_curloop.h  模式22 编码器 FOC 电流环（I-F 启动 + RUN）
+ *          foc_align.h    模式23 静止电角度对齐校准
+ *          foc_zizeng.h   模式30 磁场角度自增拖动（ZIZENG）
+ *          foc_calib.h    相电流 DC 零偏自校准（各模式启动时复用）
+ *          foc_scope.h    MotorScope RTT 遥测
+ *
+ *        依赖方向：各模式模块 -> foc_core；本文件仅聚合头文件与
+ *        Foc_Init/Foc_Isr 分发入口。main.c / dev_comm_runner.c 等
+ *        外部调用方只需包含 foc.h，接口与拆分前完全一致。
+ *******************************************************************************
+ */
+
 #ifndef __FOC_H__
 #define __FOC_H__
 
 #include "I.h"
 #include "../Utils/dev_pid.h"
+#include "foc_core.h"
+#include "foc_openloop.h"
+#include "foc_curloop.h"
+#include "foc_align.h"
+#include "foc_zizeng.h"
+#include "foc_calib.h"
+#include "foc_scope.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/*=============================================================================
- * FOC run modes (g_foc_mode)
- *=============================================================================*/
-#define FOC_MODE_NONE      0u   /* FOC stopped */
-#define FOC_MODE_OPENLOOP  1u   /* comm_mode 21: open-loop V/f */
-#define FOC_MODE_CURLOOP   2u   /* comm_mode 22: encoder FOC current loop */
-#define FOC_MODE_ALIGN     3u   /* comm_mode 23: standstill electrical alignment */
-
-/*******************************************************************************
- * Global variables for JScope / Keil Watch
- ******************************************************************************/
-
-extern volatile float    g_foc_theta_rad;        /* electrical angle (rad) */
-extern volatile float    g_foc_du;               /* U duty (%) */
-extern volatile float    g_foc_dv;               /* V duty (%) */
-extern volatile float    g_foc_dw;               /* W duty (%) */
-extern volatile float    g_foc_valpha;           /* stationary alpha voltage (V) */
-extern volatile float    g_foc_vbeta;            /* stationary beta voltage (V) */
-extern volatile uint8_t  g_foc_active;           /* 1 = FOC output enabled */
-extern volatile float    g_foc_openloop_freq_hz; /* electrical freq (Hz), Keil Watch editable */
-extern volatile float    g_foc_openloop_volt_v;  /* voltage amplitude (V), Keil Watch editable */
-
-/* Current-loop run mode / observables (all volatile, Keil Watch editable) */
-extern volatile uint8_t  g_foc_mode;             /* 0=idle, 1=open-loop, 2=current-loop */
-extern volatile int32_t  g_foc_cur_sign;        /* current sign correction (+1/-1), Watch tunable */
-extern volatile int32_t  g_foc_enc_dir;         /* encoder direction for electrical angle (+1/-1), Watch tunable */
-extern volatile int32_t  g_motor_scope;          /* MotorScope RTT 总开关：0=关 1=开（Watch 可改） */
-extern volatile int32_t  g_foc_pi_off_180;      /* add 180deg to control angle to flip torque direction (0/1), Watch tunable */
-extern volatile float    g_foc_iq_ref_cmd_ma;    /* Iq target (mA), Keil Watch editable */
-extern volatile float    g_foc_iq_ref_ma;        /* ramped Iq setpoint actually used (mA) */
-extern volatile float    g_foc_id_ma;            /* d-axis feedback (mA) */
-extern volatile float    g_foc_iq_ma;            /* q-axis feedback (mA) */
-extern volatile float    g_foc_vd;               /* d-axis PI output (V) */
-extern volatile float    g_foc_vq;               /* q-axis PI output (V) */
-extern volatile uint8_t  g_foc_align_state;      /* 0=idle, 1=aligning, 2=running */
-extern volatile uint8_t  g_foc_fault;            /* 1 = over-current fault */
-
-/* Over-current limit (A, Keil Watch editable) and trip diagnostic (mA) */
-extern volatile float    g_foc_oc_limit_a;
-extern volatile float    g_foc_fault_i_ma;
-extern volatile uint8_t  g_foc_phase;       /* 0=idle 1=hold 2=ramp/sync 3=run 4=align */
-extern volatile uint8_t  g_foc_fault_stage; /* g_foc_phase at OC trip */
-extern volatile int16_t  g_foc_fault_iu_ma; /* phase currents at OC trip (mA) */
-extern volatile int16_t  g_foc_fault_iv_ma;
-extern volatile int16_t  g_foc_fault_iw_ma;
-/* Gentle handover / voltage envelope / feedback filter (Keil Watch editable) */
-extern volatile float    g_foc_vmax_v;       /* current-loop max |v| (V) */
-extern volatile float    g_foc_vramp_v_s;    /* voltage envelope ramp (V/s) */
-extern volatile float    g_foc_cur_fb_alpha; /* EMA weight on id/iq (1.0 = off) */
-extern volatile float    g_foc_iq_ramp_ma_s; /* Iq soft-start ramp (mA/s) */
-extern volatile float    g_foc_vlim_v;       /* current voltage envelope (V) */
-extern volatile float    g_foc_run_target_rpm; /* RUN speed PI target (rpm), Watch tunable */
-extern volatile float    g_foc_iq_pi_ma;       /* actual RUN Iq reference from speed PI (mA) */
-extern volatile float    g_foc_anchor_deg;     /* extra anchor angle (deg), sweep to find RUN frame */
-extern volatile float    g_foc_run_iq_sign;    /* RUN Iq sign (+-1), Watch tunable */
-
-/* I-F start observables */
-extern volatile float    g_foc_if_freq_hz;   /* current I-F electrical frequency (Hz) */
-extern volatile float    g_foc_if_diff_rad;  /* encoder-elec angle - synthetic angle (rad) */
-extern volatile float    g_foc_if_sweep_cHz; /* live diff sweep rate (cHz), 100ms window */
-extern volatile float    g_foc_if_hold_iq_ma; /* I-F hold Iq threshold (mA), Watch tunable */
-extern volatile float    g_foc_if_sync_band_rad; /* sync window band (rad), Watch tunable */
-extern volatile uint32_t g_foc_if_sync_win_cnt;  /* sync window length (samples @20k), Watch tunable */
-extern volatile uint32_t g_foc_if_sync_good_wins;/* consecutive good windows required, Watch tunable */
-extern volatile float    g_foc_if_lock_diff_rad; /* lock offset latched while aligned in hold (rad) */
-extern volatile float    g_foc_if_rotor_rad;     /* rotor electrical angle, folded [0,2PI) (rad) */
-extern volatile float    g_foc_if_rel_diff_rad;  /* unwrapped diff relative to lock offset (rad) */
-extern volatile float    g_foc_if_win_min_rad;   /* current sync-window min of rel diff (rad) */
-extern volatile float    g_foc_if_win_max_rad;   /* current sync-window max of rel diff (rad) */
-extern volatile uint32_t g_foc_if_win_cnt;       /* samples collected in current window */
-extern volatile uint32_t g_foc_if_good_cnt;      /* consecutive good windows so far */
-extern volatile uint8_t  g_foc_if_sync;      /* 1 = synchronized, handed over to encoder */
-extern volatile uint8_t  g_foc_if_evt;       /* 1=hold done 2=handover 3=timeout */
-extern volatile int32_t  g_foc_if_evt_v1;
-extern volatile int32_t  g_foc_if_evt_v2;
-extern volatile int32_t  g_foc_if_evt_v3;
-extern volatile int32_t  g_foc_if_evt_v4;   /* diff sweep rate at timeout (cHz) */
-/* Align calibration (mode 23) */
-extern volatile float    g_foc_align_volt_v; /* fixed align voltage (V), Watch tunable */
-extern volatile int32_t  g_foc_align_offset; /* recorded encoder electrical-zero count */
-/* Align calibration events (main loop prints; ISR only sets flag+payload) */
-extern volatile uint8_t  g_foc_align_evt;    /* 1=start 2=beta done 3=locked 4=done 5=fault */
-extern volatile int32_t  g_foc_align_evt_v1;
-extern volatile int32_t  g_foc_align_evt_v2;
-extern volatile int32_t  g_foc_align_evt_v3;
-
-/* ============================================================================
- * 磁场角度自增拖动模式 (mode 30)
- * ==========================================================================*/
-extern volatile float    g_zizeng_theta_rad;      /* 当前自增角度 (rad) */
-extern volatile float    g_zizeng_freq_hz;        /* 自增频率 (Hz)，Keil Watch 可调 */
-extern volatile float    g_zizeng_volt_v;         /* 自增电压幅值 (V)，Keil Watch 可调 */
-extern volatile float    g_zizeng_du;             /* U 相 duty (%) */
-extern volatile float    g_zizeng_dv;             /* V 相 duty (%) */
-extern volatile float    g_zizeng_dw;             /* W 相 duty (%) */
-extern volatile uint8_t  g_zizeng_running;        /* 1 = 正在运行 */
-
-/* 启动/停止自增模式 */
-void Foc_StartZizeng(void);
-void Foc_StopZizeng(void);
-
-/* Current-loop PI configs (volatile, Keil Watch can tune kp/ki live) */
-extern pid_config_t g_foc_pid_id_cfg;
-extern pid_config_t g_foc_pid_iq_cfg;
-extern pid_config_t g_foc_pid_spd_cfg;
-
 /*******************************************************************************
  * Global function prototypes
  ******************************************************************************/
 
-/* Init: build math LUT, register Foc_Isr as the 2nd current callback.
- * Does NOT start any PWM output. Call once after I_Init()/CurLoop_Init(). */
+/* Init: build math LUT, bind current-loop PIs, register Foc_Isr as the 2nd
+ * current callback. Does NOT start any PWM output. Call once after
+ * I_Init()/I_Calibrate(). */
 void Foc_Init(void);
 
-/* Start open-loop FOC (comm_mode 21): reset theta, reconfigure TMR4 to
- * complementary, enable output, set active. */
-void Foc_StartOpenLoop(void);
-
-/* Start current-loop FOC (comm_mode 22): clear fault, reset PIs, enter
- * I-F start (current-controlled, synthetic angle), hand over to encoder angle
- * when synchronized, then RUN (encoder angle + Id/Iq PI). */
-void Foc_StartCurrentLoop(void);
-/* Start standstill electrical alignment (comm_mode 23): lock rotor to the
- * d-axis with a small current, record the encoder electrical zero, release. */
-void Foc_StartAlign(void);
-
-/* Stop FOC: clear active, disable PWM output, zero duty observables. */
-void Foc_Stop(void);
-
-/* Current-loop state (0=idle, 1=aligning, 2=running) */
-uint8_t Foc_GetState(void);
-
-/* 1 = FOC output enabled (open-loop or current-loop) */
-uint8_t Foc_IsRunning(void);
-
 /* 20 kHz ISR callback (registered via I_RegisterFocCallback). Must be short:
- * no blocking, no prints, no malloc. */
+ * no blocking, no prints, no malloc. 按模式分发：
+ *   FOC_MODE_OPENLOOP -> Foc_OpenLoop_Step
+ *   FOC_MODE_ALIGN    -> Foc_Align_Step
+ *   FOC_MODE_CURLOOP  -> Foc_CurLoop_Step（内部再按状态机分派）
+ *   g_zizeng_running  -> Foc_Zizeng_Step
+ */
 void Foc_Isr(const stc_i_data_t *pData);
-void Foc_RttSend(uint64_t now_us);   /* MotorScope RTT 心跳，主循环调用（s 时间戳） */
-
-/* Mechanical encoder counts -> electrical angle (rad). */
-float Foc_EncoderElecAngleRad(void);
 
 #ifdef __cplusplus
 }

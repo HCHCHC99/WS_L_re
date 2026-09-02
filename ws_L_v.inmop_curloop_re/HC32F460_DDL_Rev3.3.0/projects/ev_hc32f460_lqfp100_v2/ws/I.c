@@ -10,6 +10,8 @@
 #include "rtt_log.h"
 #include "TickTimer.h"
 #include "tmr4_pwm.h"
+#include "motor_config.h"
+#include "Usart3_Vofa.h"
 #include "Aos.h"
 #include "Dma.h"
 #include <string.h>
@@ -405,6 +407,21 @@ static void I_ReadRemapped(uint16_t *iu, uint16_t *iv, uint16_t *iw)
     }
 }
 
+/* Apply KCL two-sensor derivation in the mA domain (after zero calibration).
+ * Mode defined by I_KCL_DERIVE_MODE: 0=three sensors, 1=U, 2=V, 3=W derived. */
+static void I_ApplyKclDerive(int16_t *pU, int16_t *pV, int16_t *pW)
+{
+#if (I_KCL_DERIVE_MODE == 1U)
+    *pU = (int16_t)(-((int32_t)*pV + (int32_t)*pW));
+#elif (I_KCL_DERIVE_MODE == 2U)
+    *pV = (int16_t)(-((int32_t)*pU + (int32_t)*pW));
+#elif (I_KCL_DERIVE_MODE == 3U)
+    *pW = (int16_t)(-((int32_t)*pU + (int32_t)*pV));
+#else
+    (void)pU; (void)pV; (void)pW;   /* 0: all three measured directly */
+#endif
+}
+
 static void I_IrqCallback(void)
 {
     /* Clear SEQ_B end-of-conversion flag */
@@ -439,10 +456,8 @@ static void I_IrqCallback(void)
     int16_t i16IV_mA = I_ADC_TO_MA_REF(u16IV, u16ZeroV);
     int16_t i16IW_mA = I_ADC_TO_MA_REF(u16IW, u16ZeroW);
 
-#if I_DERIVE_V_FROM_UW
-    /* KCL two-sensor mode: V = -(U+W), IV sensor not used for control */
-    i16IV_mA = (int16_t)(-((int32_t)i16IU_mA + (int32_t)i16IW_mA));
-#endif
+    /* KCL two-sensor mode: derive the selected phase from the other two */
+    I_ApplyKclDerive(&i16IU_mA, &i16IV_mA, &i16IW_mA);
 
     /* 2nd-order Butterworth IIR (fc=200Hz @ fs=50kHz design; actual sampling = PWM freq (MOTOR_PWM_FREQ_HZ); real fc = 200Hz x PWM/50k, display only) */
     float fIU, fIV, fIW;
@@ -604,11 +619,17 @@ void I_Calibrate(void)
 {
     MAIN_D("[I] Calibration started (500ms blocking)...\r\n");
 
-    /* Force all PWM channels OFF — motor truly floating, zero current */
-    TMR4_PWM_SetChannelMode(TMR4_CHANNEL_U, TMR4_MODE_OFF, 0.0f);
-    TMR4_PWM_SetChannelMode(TMR4_CHANNEL_V, TMR4_MODE_OFF, 0.0f);
-    TMR4_PWM_SetChannelMode(TMR4_CHANNEL_W, TMR4_MODE_OFF, 0.0f);
-    MAIN_D("[I] All PWM channels forced OFF for calibration\r\n");
+    /* 以 FOC 互补模式 + 50/50/50 零矢量采零——与运行时完全相同的
+     * 开关/供电/死区条件。不用通道 OFF：静止态与开关态下传感器
+     * 供电/采样条件存在差异，会捕获与运行态不符的零位
+     * （实测偏差可达 ~1A 当量）。
+     * 三相占空比相同 => 线电压为 0 => 绕组零电流，采零条件成立。
+     * 注：SetFocMode 内部会停止计数器，必须重新 StartOutput 恢复
+     *     20kHz 采样触发；上电默认通道为 OFF，也必须先切回 FOC 模式。 */
+    TMR4_PWM_SetFocMode(FOC_DEADTIME_NS);
+    TMR4_PWM_StartOutput();
+    TMR4_PWM_SetDuty3Phase(50.0f, 50.0f, 50.0f);
+    MAIN_D("[I] All PWM channels 50%% zero-vector (FOC mode) for calibration\r\n");
 
     /* Reset accumulators */
     s_i32CalibSumU = 0;
@@ -619,8 +640,29 @@ void I_Calibrate(void)
     /* Arm calibration mode — ISR starts accumulating */
     g_i_calib_state = 1;
 
-    /* Block 500ms. ISR fires ~25000 times during this period. */
-    tickTimer_DelayMs(500);
+    /* Block 500ms. ISR fires ~10000 times during this period.
+     * 期间每 20ms 向 VOFA+ 发一帧 11 通道（50Hz 刷新）：
+     * CH0~2 = 校准窗口瞬时电流（U/V/W，与运行时通道位置齐平，曲线无缝衔接），
+     * CH3~10 占位 0。帧长与主循环一致，VOFA+ 全程无需切换帧长。
+     * 注意：校准期间 ISR 用默认零位 2048 计算 mA，因此曲线悬在
+     * 原始零偏处（≈+1.2 显示当量）是正常现象，其均值即被捕获的零位。 */
+    {
+        uint32_t u32Ms;
+        for (u32Ms = 0u; u32Ms < 500u; u32Ms++) {
+            tickTimer_DelayMs(1);
+            if (((u32Ms % 20u) == 0u) && !Usart3_Vofa_IsTxBusy()) {
+                int32_t cur[11];
+                uint8_t i;
+                cur[0] = (int32_t)g_i_iu_ma;   /* U 相电流 (显示 A) */
+                cur[1] = (int32_t)g_i_iv_ma;   /* V 相电流 (显示 A) */
+                cur[2] = (int32_t)g_i_iw_ma;   /* W 相电流 (显示 A) */
+                for (i = 3u; i < 11u; i++) {
+                    cur[i] = 0;                /* 占位，帧长与主循环齐平 */
+                }
+                (void)Usart3_Vofa_SendScaled(cur, 11U, USART3_VOFA_SCALE_MILLI);
+            }
+        }
+    }
 
     /* Stop calibration */
     g_i_calib_state = 2;
@@ -699,11 +741,11 @@ void I_GetData(stc_i_data_t *pData)
     pData->i16IU_mA = I_ADC_TO_MA_REF(pData->u16IU, u16Z);
     u16Z = (g_i_calib_state == 2) ? g_i_calib_zero_v : I_ADC_ZERO;
     pData->i16IV_mA = I_ADC_TO_MA_REF(pData->u16IV, u16Z);
-#if I_DERIVE_V_FROM_UW
-    pData->i16IV_mA = (int16_t)(-((int32_t)pData->i16IU_mA + (int32_t)pData->i16IW_mA));
-#endif
     u16Z = (g_i_calib_state == 2) ? g_i_calib_zero_w : I_ADC_ZERO;
     pData->i16IW_mA = I_ADC_TO_MA_REF(pData->u16IW, u16Z);
+
+    /* KCL two-sensor mode: derive the selected phase from the other two */
+    I_ApplyKclDerive(&pData->i16IU_mA, &pData->i16IV_mA, &pData->i16IW_mA);
 
     /* Copy sample count and clear flag */
     pData->u32SampleCount = s_stcIData.u32SampleCount;
@@ -757,12 +799,20 @@ int16_t I_GetCurrentMA(uint8_t u8Phase)
     } else {
         u16Zero = I_ADC_ZERO;
     }
-#if I_DERIVE_V_FROM_UW
-    if (u8Phase == 1) {
-        /* KCL: V = -(U+W), from the other two measured phases */
-        int16_t iU = I_GetCurrentMA(0);
-        int16_t iW = I_GetCurrentMA(2);
-        return (int16_t)(-((int32_t)iU + (int32_t)iW));
+#if (I_KCL_DERIVE_MODE == 1U)
+    if (u8Phase == 0u) {
+        /* KCL: U = -(V+W), from the two measured phases */
+        return (int16_t)(-((int32_t)I_GetCurrentMA(1u) + (int32_t)I_GetCurrentMA(2u)));
+    }
+#elif (I_KCL_DERIVE_MODE == 2U)
+    if (u8Phase == 1u) {
+        /* KCL: V = -(U+W), from the two measured phases */
+        return (int16_t)(-((int32_t)I_GetCurrentMA(0u) + (int32_t)I_GetCurrentMA(2u)));
+    }
+#elif (I_KCL_DERIVE_MODE == 3U)
+    if (u8Phase == 2u) {
+        /* KCL: W = -(U+V), from the two measured phases */
+        return (int16_t)(-((int32_t)I_GetCurrentMA(0u) + (int32_t)I_GetCurrentMA(1u)));
     }
 #endif
     return I_ADC_TO_MA_REF(u16Raw, u16Zero);

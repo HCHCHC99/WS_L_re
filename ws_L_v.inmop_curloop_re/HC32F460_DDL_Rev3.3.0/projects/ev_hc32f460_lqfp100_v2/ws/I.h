@@ -7,8 +7,8 @@
  *        PA6 = ADC1_CH6 = IV  (current sensor V)
  *        PA7 = ADC1_CH7 = IW  (current sensor W)
  *
- *        Sensor formula: VOUT = 1650 + IP(A) × 132 (mV)
- *          ±10A range, 3.3V / 12-bit ADC, zero = 2048 raw
+ *        Sensor formula: VOUT = 1650 + IP(A) × 264 (mV)
+ *          ±5A range, 3.3V / 12-bit ADC, zero = 2048 raw
  *
  *        Trigger chain:
  *          TMR4_3 SCMP0 (PWM peak) → AOS_ADC1_0 (EVT0) → ADC1_SEQ_B → EOCB ISR
@@ -57,10 +57,16 @@ extern "C" {
  *   0 = ADC1 SEQ_B hardware-triggered samples (PWM peak/valley = ripple average) - recommended
  */
 #define I_ASYNC_ADC2_READ                (0U)
-/* Derive IV from IU+IW (KCL) instead of using the IV sensor:
- *   1 = two-sensor mode: V = -(U+W)   (like STM32 INMOP reference)
- *   0 = measure all three phases directly (default) */
-#define I_DERIVE_V_FROM_UW               (0U)
+/* KCL two-sensor mode selector (derive one phase from the other two):
+ *   0 = measure all three phases directly with current sensors (default)
+ *   1 = U derived:  IU = -(IV + IW)
+ *   2 = V derived:  IV = -(IU + IW)
+ *   3 = W derived:  IW = -(IU + IV)
+ * Derivation runs in the mA domain AFTER per-phase zero calibration,
+ * so only physical current is summed (per-phase zero offsets do not leak
+ * into the derived channel). All downstream paths (ISR globals, biquad,
+ * I_GetData, I_GetCurrentMA) honor this setting. */
+#define I_KCL_DERIVE_MODE                (0U)
 
 /* ===== Current channel definitions ===== */
 #define I_CH_U                          (ADC_CH5)   /* PA5/ADC1_CH5: IU */
@@ -98,10 +104,10 @@ extern "C" {
 
 /* ===== Current conversion constants ===== */
 #define I_ADC_ZERO                      (2048)      /* ADC raw at 0A (1650mV @ 3.3V/12bit) */
-#define I_MA_PER_ADC                    (1563)     /* Fixed-point slope: 3300*1000/(4095*132) ≈ 6.105 mA/count, ×256 ≈ 1563 (132mV/A, +-10A sensor) */
+#define I_MA_PER_ADC                    (781)      /* Fixed-point slope: 3300*1000/(4095*264) ≈ 3.0525 mA/count, ×256 ≈ 781 (264mV/A, +-5A sensor) */
 #define I_MA_SHIFT                      (8U)        /* Right-shift after multiply */
 
-/* Integer conversion: I_mA = (raw - zero_ref) * 1563 >> 8 (1563 = 6.105 mA/count x 256). */
+/* Integer conversion: I_mA = (raw - zero_ref) * 781 >> 8 (781 = 3.0525 mA/count x 256). */
 #define I_ADC_TO_MA_REF(raw, zero)  ((int16_t)(((int32_t)((int32_t)(raw) - (int32_t)(zero)) * (int32_t)I_MA_PER_ADC) >> I_MA_SHIFT))
 
 /*******************************************************************************

@@ -138,7 +138,7 @@
           </Flash1>
           <bUseTDR>1</bUseTDR>
           <Flash2>BIN\UL2CM3.DLL</Flash2>
-          <Flash3></Flash3>
+          <Flash3>"" ()</Flash3>
           <Flash4>.\config\debug_init.ini</Flash4>
           <pFcarmOut></pFcarmOut>
           <pFcarmGrp></pFcarmGrp>
@@ -962,6 +962,41 @@
               <FileName>foc_math.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_math.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_align.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_align.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_core.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_core.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_curloop.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_curloop.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_openloop.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_openloop.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_scope.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_scope.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_zizeng.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_zizeng.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_calib.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_calib.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1923,6 +1958,41 @@
               <FileName>foc_math.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_math.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_align.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_align.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_core.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_core.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_curloop.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_curloop.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_openloop.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_openloop.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_scope.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_scope.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_zizeng.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_zizeng.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_calib.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_calib.c</FilePath>
             </File>
           </Files>
         </Group>

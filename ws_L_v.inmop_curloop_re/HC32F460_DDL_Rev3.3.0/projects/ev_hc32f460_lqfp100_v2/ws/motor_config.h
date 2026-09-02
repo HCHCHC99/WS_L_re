@@ -77,7 +77,9 @@
 #define FOC_ALIGN_TIMEOUT_MS    3000
 #define FOC_ALIGN_HOLD_MS       2000
 
-#define FOC_OC_LIMIT_A          5.5f
+/* 过流阈值：必须在电流传感器量程内（±5A 传感器 → 阈值 ≤4.5A，留 10% 余量），
+ * 否则削顶后保护失明 */
+#define FOC_OC_LIMIT_A          4.5f
 #define FOC_CUR_SIGN            -1
 #define FOC_ENC_DIR             -1
 #define FOC_PI_OFF_180          0
