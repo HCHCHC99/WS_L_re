@@ -64,7 +64,7 @@ int main(void)
     /* ---- USART3 + VOFA+ ---- */
     {
         Usart3_HW_Config_t cfg = USART3_HW_CONFIG_DEFAULT;
-        cfg.baudrate = 921600;
+        cfg.baudrate = 115200;
         Usart3_Vofa_Init(&cfg);
     }
 
@@ -128,7 +128,14 @@ int main(void)
         }
         if (Key_GetShortPress(KEY_ID_SW3)) {    /* SW3 短按： */
             /* 在此填写动作 */
-						comm_mode = 0;
+			if(comm_mode != 31)
+            {
+                comm_mode = 31;
+            }
+			if(comm_mode == 31)
+            {
+                comm_mode = 0;
+            }
         }
 
         /* Keil Watch 模式切换 */
@@ -224,7 +231,7 @@ int main(void)
          *          由功率守恒估算，含铜损前的电功率；mode 0 下为 0） */
 #if 1
         if (!Usart3_Vofa_IsTxBusy()) {
-            int32_t cur[12];
+            int32_t cur[13];
 
             cur[0] = (int32_t)(g_i_iu_ma);            /* U 相电流 (mA -> A) */
             cur[1] = (int32_t)(g_i_iv_ma);            /* V 相电流 (mA -> A) */
@@ -249,7 +256,8 @@ int main(void)
             cur[11] = (int32_t)(1.5f * g_zizeng_volt_v
                                 * (float)g_foc_id_ma / FOC_VBUS_V);
 #endif
-            Usart3_Vofa_SendScaled(cur, 12, USART3_VOFA_SCALE_MILLI);
+            cur[12] = (int32_t)(g_iqpi_iq_ref_ramp_ma); /* mode31 iq 参考(斜坡后), mA -> A */
+            Usart3_Vofa_SendScaled(cur, 13, USART3_VOFA_SCALE_MILLI);
         }
 #endif
     }

@@ -10,6 +10,7 @@
  *          foc_curloop.h  模式22 编码器 FOC 电流环（I-F 启动 + RUN）
  *          foc_align.h    模式23 静止电角度对齐校准
  *          foc_zizeng.h   模式30 磁场角度自增拖动（ZIZENG）
+ *          foc_iq_pi.h    模式31 PI 电流环（编码器角度 + ZIZENG 偏移）
  *          foc_calib.h    相电流 DC 零偏自校准（各模式启动时复用）
  *          foc_scope.h    MotorScope RTT 遥测
  *
@@ -29,6 +30,7 @@
 #include "foc_curloop.h"
 #include "foc_align.h"
 #include "foc_zizeng.h"
+#include "foc_iq_pi.h"
 #include "foc_calib.h"
 #include "foc_scope.h"
 
@@ -51,6 +53,7 @@ void Foc_Init(void);
  *   FOC_MODE_ALIGN    -> Foc_Align_Step
  *   FOC_MODE_CURLOOP  -> Foc_CurLoop_Step（内部再按状态机分派）
  *   g_zizeng_running  -> Foc_Zizeng_Step
+ *   g_iqpi_running    -> Foc_IqPi_Step
  */
 void Foc_Isr(const stc_i_data_t *pData);
 

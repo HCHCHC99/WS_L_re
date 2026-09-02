@@ -42,6 +42,7 @@ static uint8_t  s_zizeng_offset_state = 0;      /* 0=IDLE, 1=SAMPLING, 2=LOCKED 
 static float    s_zizeng_offset_sum = 0.0f;
 static uint32_t s_zizeng_offset_cnt = 0;
 static float    s_zizeng_offset_locked = 0.0f;
+static uint8_t  s_zizeng_offset_valid = 0;      /* 1 = 曾锁定过（跨 stop 保留） */
 static uint32_t s_zizeng_start_cnt = 0;          /* 用于延迟启动采样 */
 
 /* 转子系电流独立 EMA 状态（不与磁场系 Foc_Core_EmaFilter() 共用） */
@@ -283,6 +284,7 @@ void Foc_Zizeng_Step(const stc_i_data_t *pData)
 
             s_zizeng_offset_locked = avg_diff;
             s_zizeng_offset_state = 2;
+            s_zizeng_offset_valid = 1;
 
             MAIN_D("[ZIZENG] Offset LOCKED: %.3f rad (%.1f deg), samples=%lu",
                    s_zizeng_offset_locked,
@@ -313,4 +315,17 @@ void Foc_Zizeng_Step(const stc_i_data_t *pData)
     g_zizeng_dw = dw;
     g_foc_valpha = valpha;
     g_foc_vbeta  = vbeta;
+}
+
+/**
+ * @brief 取 ZIZENG 锁定的偏移基线 (rad)
+ * @param  out_rad  输出锁定的偏移值（可为 NULL）
+ * @return 1 = 偏移已锁定（跨 stop 保留，掉电前一直有效）；0 = 未锁定
+ */
+uint8_t Foc_Zizeng_GetOffsetRad(float *out_rad)
+{
+    if (out_rad != NULL) {
+        *out_rad = s_zizeng_offset_locked;
+    }
+    return s_zizeng_offset_valid;
 }

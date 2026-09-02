@@ -14,6 +14,7 @@
  *          foc_curloop.c  模式22 电流环（I-F 启动 + 同步交接 + RUN）
  *          foc_align.c    模式23 对齐校准
  *          foc_zizeng.c   模式30 ZIZENG 自增拖动
+ *          foc_iq_pi.c    模式31 PI 电流环（ZIZENG 偏移 + 编码器角度）
  *          foc_scope.c    MotorScope RTT 遥测
  *
  *        ISR constraint: short, no blocking, no prints, no malloc.
@@ -36,6 +37,7 @@ void Foc_Init(void)
 
     Foc_Math_Init();
     Foc_CurLoop_InitPids();
+    Foc_IqPi_InitPids();
     I_RegisterFocCallback(Foc_Isr);
     s_bInited = 1u;
 }
@@ -69,6 +71,12 @@ void Foc_Isr(const stc_i_data_t *pData)
     /* ========== ZIZENG 模式 (mode 30) ========== */
     if (g_zizeng_running) {
         Foc_Zizeng_Step(pData);
+        return;
+    }
+
+    /* ========== IQ_PI 模式 (mode 31) ========== */
+    if (g_iqpi_running) {
+        Foc_IqPi_Step(pData);
         return;
     }
 }

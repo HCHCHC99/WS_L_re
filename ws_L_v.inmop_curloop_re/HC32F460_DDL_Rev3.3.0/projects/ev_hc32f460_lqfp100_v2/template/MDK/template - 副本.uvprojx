@@ -998,6 +998,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_calib.c</FilePath>
             </File>
+            <File>
+              <FileName>foc_iq_pi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_iq_pi.c</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>
@@ -1993,6 +1998,11 @@
               <FileName>foc_calib.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_calib.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_iq_pi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_iq_pi.c</FilePath>
             </File>
           </Files>
         </Group>

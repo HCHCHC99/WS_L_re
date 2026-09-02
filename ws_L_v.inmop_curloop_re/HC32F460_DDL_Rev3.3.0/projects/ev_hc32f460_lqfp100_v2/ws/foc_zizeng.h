@@ -57,6 +57,10 @@ extern volatile float   g_foc_iab_mag;
 void Foc_StartZizeng(void);
 void Foc_StopZizeng(void);
 
+/* 取 ZIZENG 锁定的偏移基线 (rad)。返回 1 = 已锁定（跨 stop 保留），
+ * 供 mode 31 (IQ_PI) 启动时做编码器电角度绝对化 */
+uint8_t Foc_Zizeng_GetOffsetRad(float *out_rad);
+
 /* 模式30 单步运算（20 kHz ISR 中由 Foc_Isr 分发调用） */
 void Foc_Zizeng_Step(const stc_i_data_t *pData);
 

@@ -6,13 +6,14 @@
 #include <stdint.h>
 
 /*=============================================================================
- * CommRunner: 精简版 — 仅保留 STOP / FOC_ALIGN / ZIZENG
+ * CommRunner: 精简版 — 仅保留 STOP / FOC_ALIGN / ZIZENG / IQ_PI
  *=============================================================================*/
 
 typedef enum {
     COMM_RUNNER_STOP       = 0,  /* 停止 */
     COMM_RUNNER_FOC_ALIGN  = 23, /* FOC 对齐校准 */
     COMM_RUNNER_ZIZENG     = 30, /* 磁场角度自增拖动模式 */
+    COMM_RUNNER_IQ_PI      = 31, /* PI 电流环模式（需先跑 mode 30 锁偏移） */
 } comm_runner_mode_t;
 
 /* 配置结构（精简版） */
