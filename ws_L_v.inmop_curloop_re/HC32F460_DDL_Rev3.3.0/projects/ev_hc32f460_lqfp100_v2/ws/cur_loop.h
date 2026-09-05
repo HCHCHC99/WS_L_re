@@ -17,6 +17,17 @@
 extern "C" {
 #endif
 
+/*=============================================================================
+ * Debug macros
+ *=============================================================================*/
+/* 1 = RTT prints on, 0 = off */
+#define CUR_LOOP_DBG   0
+#if CUR_LOOP_DBG
+    #define CURLOOP_DBG(fmt, ...)  MAIN_D("[CurLoop] " fmt, ##__VA_ARGS__)
+#else
+    #define CURLOOP_DBG(fmt, ...)  ((void)0)
+#endif
+
 /* Keil Watch: current setpoint (mA, signed) */
 extern volatile float g_i_ref_ma;
 

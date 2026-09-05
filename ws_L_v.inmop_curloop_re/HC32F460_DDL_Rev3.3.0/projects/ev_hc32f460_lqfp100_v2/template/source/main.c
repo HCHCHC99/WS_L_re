@@ -21,7 +21,17 @@
 extern volatile uint8_t g_scope_ha;
 extern volatile uint8_t g_scope_hb;
 extern volatile uint8_t g_scope_hc;
-extern volatile uint8_t g_scope_step;
+extern volatile uint8_t  g_scope_step;
+
+/*=============================================================================
+ * Debug switch: 1 = RTT prints on, 0 = off
+ *=============================================================================*/
+#define DEBUG_MAIN   1
+#if DEBUG_MAIN
+    #define MAIN_DBG(fmt, ...)    MAIN_D(fmt, ##__VA_ARGS__)
+#else
+    #define MAIN_DBG(fmt, ...)    ((void)0)
+#endif
 
 /*=============================================================================
  * Keil Watch 可调变量
@@ -59,7 +69,7 @@ extern volatile float g_zizeng_volt_v;
 int main(void)
 {
     Hardware_Init();
-    MAIN_D("System started (MINIMAL: mode23/30 only)");
+    MAIN_DBG("System started (MINIMAL: mode23/30 only)");
 
     /* ---- USART3 + VOFA+ ---- */
     {
@@ -163,7 +173,7 @@ int main(void)
         if (g_foc_fault != 0u) {
             if (!s_foc_fault_printed) {
                 s_foc_fault_printed = 1;
-                MAIN_D("[FOC] FAULT oc=%d stage=%d i=%d mA",
+                MAIN_DBG("[FOC] FAULT oc=%d stage=%d i=%d mA",
                       (int)g_foc_fault, (int)g_foc_fault_stage, (int)g_foc_fault_i_ma);
             }
         } else {
@@ -176,21 +186,21 @@ int main(void)
             g_foc_align_evt = 0u;
             switch (evt) {
             case 1u:
-                MAIN_D("[ALIGN] start volt=%d mV", (int)g_foc_align_evt_v1);
+                MAIN_DBG("[ALIGN] start volt=%d mV", (int)g_foc_align_evt_v1);
                 break;
             case 2u:
-                MAIN_D("[ALIGN] beta done -> alpha");
+                MAIN_DBG("[ALIGN] beta done -> alpha");
                 break;
             case 3u:
-                MAIN_D("[ALIGN] locked offset=%d id=%d iq=%d",
+                MAIN_DBG("[ALIGN] locked offset=%d id=%d iq=%d",
                        (int)g_foc_align_evt_v1, (int)g_foc_align_evt_v2,
                        (int)g_foc_align_evt_v3);
                 break;
             case 4u:
-                MAIN_D("[ALIGN] done offset=%d", (int)g_foc_align_evt_v1);
+                MAIN_DBG("[ALIGN] done offset=%d", (int)g_foc_align_evt_v1);
                 break;
             case 5u:
-                MAIN_D("[ALIGN] FAULT code=%d i=%d mA",
+                MAIN_DBG("[ALIGN] FAULT code=%d i=%d mA",
                        (int)g_foc_align_evt_v1, (int)g_foc_align_evt_v2);
                 break;
             default:
@@ -204,7 +214,7 @@ int main(void)
             uint32_t now = tickTimer_GetCount();
             if ((now - s_last_zz_dbg) >= 200u) {
                 s_last_zz_dbg = now;
-                MAIN_D("[ZIZENG_DBG] cnt=%d rpm=%d enc_dir=%d theta=%d mrad rotor=%d mrad diff=%d mrad",
+                MAIN_DBG("[ZIZENG_DBG] cnt=%d rpm=%d enc_dir=%d theta=%d mrad rotor=%d mrad diff=%d mrad",
                        (int)g_enc_count,
                        (int)g_enc_speed_rpm,
                        (int)g_foc_enc_dir,
@@ -212,6 +222,34 @@ int main(void)
                        (int)(g_foc_if_rotor_rad * 1000.0f),
                        (int)(g_foc_if_diff_rad * 1000.0f));
             }
+        }
+        /* ---- mode 31 运行监视（200ms 节流，全部整型缩放） ---- */
+        if (g_iqpi_running) {
+            static uint32_t s_last_iqpi_dbg = 0u;
+            uint32_t now = tickTimer_GetCount();
+            if ((now - s_last_iqpi_dbg) >= 200u) {
+                s_last_iqpi_dbg = now;
+                MAIN_DBG("[IQPI_MON] st=%d iq=%d id=%d vq=%d vd=%d rr=%d win=%d ev=%d cd=%d ed=%d rd=%d flip=%d pos=%d ",
+                         (int)g_iqpi_step,
+                         (int)g_foc_iq_ma, (int)g_foc_id_ma,
+                         (int)(g_foc_vq * 1000.0f), (int)(g_foc_vd * 1000.0f),
+                         (int)g_iqpi_iq_ref_ramp_ma,
+                         (int)g_iqpi_win_moved, (int)g_iqpi_win_evals,
+                         (int)g_iqpi_cur_dir, (int)g_iqpi_expect_dir,
+                         (int)g_iqpi_ref_dir, (int)g_iqpi_flip_cnt,
+                         (int)g_iqpi_enc_pos);
+            }
+        }
+
+        /* ---- mode 31 翻转事件（ISR 置 flag，此处打印一次后清零） ---- */
+        if (g_iqpi_evt_flag) {
+            g_iqpi_evt_flag = 0u;
+            MAIN_DBG("[IQPI_FLIP] n=%d pos=%d iq=%d vq=%d off=%d cd=%d ed=%d rd=%d",
+                     (int)g_iqpi_evt_seq, (int)g_iqpi_evt_pos,
+                     (int)g_iqpi_evt_iq_ma, (int)g_iqpi_evt_vq_mv,
+                     (int)g_iqpi_evt_off_mrad,
+                     (int)g_iqpi_cur_dir, (int)g_iqpi_expect_dir,
+                     (int)g_iqpi_ref_dir);
         }
 #endif /* MOTOR_FOC_ENABLE */
 #endif /* !APP_MINIMAL_CURRENT_TEST — 最小系统模式下主循环只跑 VOFA */

@@ -20,6 +20,17 @@
 extern "C" {
 #endif
 
+/*=============================================================================
+ * Debug macros
+ *=============================================================================*/
+/* 1 = RTT prints on, 0 = off */
+#define FOC_ZIZENG_DBG   1
+#if FOC_ZIZENG_DBG
+    #define ZIZENG_DBG(fmt, ...)   MAIN_D("[ZIZENG] " fmt, ##__VA_ARGS__)
+#else
+    #define ZIZENG_DBG(fmt, ...)   ((void)0)
+#endif
+
 /* ============================================================================
  * 开环加压轴选择（编译期宏）
  *   1 = q 轴加压（Vd=0, Vq=V）—— 控制系 id≈0、iq≈V/Rs，符合 FOC 直觉
@@ -39,6 +50,8 @@ extern volatile float   g_zizeng_du;             /* U 相 duty (%) */
 extern volatile float   g_zizeng_dv;             /* V 相 duty (%) */
 extern volatile float   g_zizeng_dw;             /* W 相 duty (%) */
 extern volatile uint8_t g_zizeng_running;        /* 1 = 正在运行 */
+extern volatile int8_t  g_zizeng_drag_dir;       /* 拖动方向: +1/-1 = 偏移采样窗口内
+                                                    编码器计数位移符号, 0 = 未测得 */
 
 /* 转子系电流观测（偏移基线锁定后有效，锁定前恒为 0）：
  * 用补偿后的转子电角度做 Park 变换，iq_rotor = 真实力矩电流，
@@ -60,6 +73,10 @@ void Foc_StopZizeng(void);
 /* 取 ZIZENG 锁定的偏移基线 (rad)。返回 1 = 已锁定（跨 stop 保留），
  * 供 mode 31 (IQ_PI) 启动时做编码器电角度绝对化 */
 uint8_t Foc_Zizeng_GetOffsetRad(float *out_rad);
+
+/* 取偏移采样窗口内实测的拖动方向（编码器计数位移符号 +1/-1，0=未测得）。
+ * mode 31 用它比对运行转向，检测 180° 框架误差 */
+int8_t Foc_Zizeng_GetDragDir(void);
 
 /* 模式30 单步运算（20 kHz ISR 中由 Foc_Isr 分发调用） */
 void Foc_Zizeng_Step(const stc_i_data_t *pData);

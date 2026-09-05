@@ -5,6 +5,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/*=============================================================================
+ * Debug macros
+ *=============================================================================*/
+/* 1 = RTT prints on, 0 = off */
+#define HALL_SENSOR3_DBG   0
+#if HALL_SENSOR3_DBG
+    #define HALL3_DBG(fmt, ...)    MAIN_D("[HALL3] " fmt, ##__VA_ARGS__)
+#else
+    #define HALL3_DBG(fmt, ...)    ((void)0)
+#endif
+
 /* ���� */
 typedef enum {
     HALL3_DIR_NONE = 0,

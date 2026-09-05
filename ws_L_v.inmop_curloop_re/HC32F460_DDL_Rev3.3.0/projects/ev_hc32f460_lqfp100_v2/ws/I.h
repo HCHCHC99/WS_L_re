@@ -33,8 +33,9 @@ extern "C" {
  * Global pre-processor symbols/macros ('#define')
  ******************************************************************************/
 
-/* Debug switch */
-#ifdef DEBUG_I_WS
+/* Debug switch: 1 = RTT prints on, 0 = off */
+#define DEBUG_I_WS   0
+#if DEBUG_I_WS
     #define I_DEBUG(fmt, ...)    MAIN_D("[I] " fmt, ##__VA_ARGS__)
 #else
     #define I_DEBUG(fmt, ...)    ((void)0)
@@ -56,7 +57,7 @@ extern "C" {
  *   1 = legacy INMOP-style: ADC2 free-running + DMA (async to PWM) - NOISY
  *   0 = ADC1 SEQ_B hardware-triggered samples (PWM peak/valley = ripple average) - recommended
  */
-#define I_ASYNC_ADC2_READ                (0U)
+#define I_ASYNC_ADC2_READ                (1U)
 /* KCL two-sensor mode selector (derive one phase from the other two):
  *   0 = measure all three phases directly with current sensors (default)
  *   1 = U derived:  IU = -(IV + IW)

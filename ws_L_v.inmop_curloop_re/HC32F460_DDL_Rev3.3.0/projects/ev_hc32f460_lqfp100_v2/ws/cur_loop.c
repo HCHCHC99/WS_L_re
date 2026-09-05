@@ -92,7 +92,7 @@ void CurLoop_Init(void)
     I_RegisterCallback(curloop_isr);
 
     s_inited = 1;
-    MAIN_D("[CurLoop] Init done (current-loop PI DISABLED — only mode23/30)");
+    CURLOOP_DBG("Init done (current-loop PI DISABLED - only mode23/30)");
 }
 
 /**

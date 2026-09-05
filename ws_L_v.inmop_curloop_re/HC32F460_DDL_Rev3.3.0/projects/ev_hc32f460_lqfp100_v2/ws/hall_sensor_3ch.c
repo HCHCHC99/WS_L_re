@@ -324,7 +324,7 @@ hall_3ch_handle_t hall_3ch_create(const hall_3ch_config_t *cfg)
     register_hall_irq(inst, 1, (func_ptr_t)hall_v_isr);
     register_hall_irq(inst, 2, (func_ptr_t)hall_w_isr);
 
-    MAIN_D("[HALL3] Created instance %d", i);
+    HALL3_DBG("Created instance %d", i);
     return (hall_3ch_handle_t)inst;
 }
 
@@ -408,8 +408,8 @@ void hall_3ch_start_flying(hall_3ch_handle_t h, hall3_direction_t dir)
         inst->config.on_step(step, dir);
     }
 
-    MAIN_D("[HALL3] Flying start: hall=0x%02X step=%d dir=%d",
-           hall_state, step, (int)dir);
+    HALL3_DBG("Flying start: hall=0x%02X step=%d dir=%d",
+              hall_state, step, (int)dir);
 }
 
 void hall_3ch_stop(hall_3ch_handle_t h)
@@ -435,9 +435,9 @@ void hall_3ch_set_table(hall_3ch_handle_t h, const uint8_t table[8])
     for (i = 0; i < 8; i++) {
         inst->config.hall_to_step[i] = table[i];
     }
-    MAIN_D("[HALL3] set_table: [%d,%d,%d,%d,%d,%d,%d,%d]",
-           (int)table[0], (int)table[1], (int)table[2], (int)table[3],
-           (int)table[4], (int)table[5], (int)table[6], (int)table[7]);
+    HALL3_DBG("set_table: [%d,%d,%d,%d,%d,%d,%d,%d]",
+              (int)table[0], (int)table[1], (int)table[2], (int)table[3],
+              (int)table[4], (int)table[5], (int)table[6], (int)table[7]);
 }
 
 /* ========== Read raw Hall state direct from GPIO ========== */
@@ -544,21 +544,21 @@ void hall_3ch_update(hall_3ch_handle_t h)
             const char *dir_str = (inst->target_dir == HALL3_DIR_FORWARD) ? "CW" :
                                    (inst->target_dir == HALL3_DIR_REVERSE) ? "CCW" : "-";
             uint8_t hs = inst->last_hall_state;
-            MAIN_D("[HALL] RPM raw=%d filt=%d A%d B%d C%d - %ddeg %s %s-%s(%ddeg) | fire=%lu/%lu/%lu/%lu unch=%lu noise=%lu fault=%lu baddiff=%lu valid=%lu dtMax=%lu",
-                   (int)inst->current_rpm, (int)inst->filtered_rpm,
-                   (hs >> 2) & 1, (hs >> 1) & 1, hs & 1,
-                   (int)s_hall_to_angle[(hs <= 7) ? hs : 7],
-                   dir_str,
-                   Commutation_GetHighPhase(inst->last_step),
-                   Commutation_GetLowPhase(inst->last_step),
-                   (int)Commutation_GetFieldAngle(inst->last_step),
-                   (unsigned long)g_dbg_isr_fire,
-                   (unsigned long)g_dbg_fire_ch0,
-                   (unsigned long)g_dbg_fire_ch1,
-                   (unsigned long)g_dbg_fire_ch2,
-                   g_dbg_isr_unchanged, g_dbg_isr_noise,
-                   g_dbg_isr_fault, g_dbg_isr_baddiff, g_dbg_isr_valid,
-                   (unsigned long)g_dbg_isr_time_max);
+            HALL3_DBG("RPM raw=%d filt=%d A%d B%d C%d - %ddeg %s %s-%s(%ddeg) | fire=%lu/%lu/%lu/%lu unch=%lu noise=%lu fault=%lu baddiff=%lu valid=%lu dtMax=%lu",
+                      (int)inst->current_rpm, (int)inst->filtered_rpm,
+                      (hs >> 2) & 1, (hs >> 1) & 1, hs & 1,
+                      (int)s_hall_to_angle[(hs <= 7) ? hs : 7],
+                      dir_str,
+                      Commutation_GetHighPhase(inst->last_step),
+                      Commutation_GetLowPhase(inst->last_step),
+                      (int)Commutation_GetFieldAngle(inst->last_step),
+                      (unsigned long)g_dbg_isr_fire,
+                      (unsigned long)g_dbg_fire_ch0,
+                      (unsigned long)g_dbg_fire_ch1,
+                      (unsigned long)g_dbg_fire_ch2,
+                      g_dbg_isr_unchanged, g_dbg_isr_noise,
+                      g_dbg_isr_fault, g_dbg_isr_baddiff, g_dbg_isr_valid,
+                      (unsigned long)g_dbg_isr_time_max);
         }
     }
 #endif

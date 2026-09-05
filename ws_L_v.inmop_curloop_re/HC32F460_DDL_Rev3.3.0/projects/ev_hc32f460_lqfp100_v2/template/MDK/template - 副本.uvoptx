@@ -319,22 +319,22 @@
         <Ww>
           <count>4</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_spd_pid_cfg.kp</ItemText>
+          <ItemText>flip_cnt </ItemText>
         </Ww>
         <Ww>
           <count>5</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_spd_pid_cfg.ki</ItemText>
+          <ItemText>g_iqpi_step_hist</ItemText>
         </Ww>
         <Ww>
           <count>6</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_cur_pid_cfg</ItemText>
+          <ItemText>g_foc_vq</ItemText>
         </Ww>
         <Ww>
           <count>7</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_cur_pid_cfg.kp</ItemText>
+          <ItemText>g_iqpi_theta_rad </ItemText>
         </Ww>
         <Ww>
           <count>8</count>
@@ -1839,7 +1839,7 @@
 
   <Group>
     <GroupName>Utils</GroupName>
-    <tvExp>0</tvExp>
+    <tvExp>1</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -1943,7 +1943,7 @@
 
   <Group>
     <GroupName>ws</GroupName>
-    <tvExp>1</tvExp>
+    <tvExp>0</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>

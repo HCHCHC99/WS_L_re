@@ -82,8 +82,9 @@ uint8_t Foc_Calib_Feed(const stc_i_data_t *pData)
             g_calib_iw_off_ma = (float)s_sum_w / (float)s_cnt;
             g_calib_state     = 3u;     /* LOCKED */
 
-            MAIN_D("[CALIB] Offset locked: U=%.0f mA, V=%.0f mA, W=%.0f mA",
-                   g_calib_iu_off_ma, g_calib_iv_off_ma, g_calib_iw_off_ma);
+            CALIB_DBG("Offset locked: U=%d mA, V=%d mA, W=%d mA",
+                      (int)g_calib_iu_off_ma, (int)g_calib_iv_off_ma,
+                      (int)g_calib_iw_off_ma);
         }
         return 0u;
     }

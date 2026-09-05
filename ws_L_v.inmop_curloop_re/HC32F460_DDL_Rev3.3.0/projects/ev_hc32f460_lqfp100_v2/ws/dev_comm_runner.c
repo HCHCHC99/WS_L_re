@@ -55,7 +55,7 @@ void CommRunner_Init(const comm_runner_config_t *cfg)
     s_mode = COMM_RUNNER_STOP;
     s_initialized = 1;
 
-    MAIN_D("[CommRunner] Init done (MINIMAL: modes 23/30/31), freq=%u Hz", cfg->pwm_freq_hz);
+    RUNNER_DBG("Init done (MINIMAL: modes 23/30/31), freq=%u Hz", cfg->pwm_freq_hz);
 }
 
 /*=============================================================================
@@ -80,7 +80,7 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         if (g_iqpi_running) {
             Foc_StopIqPi();
         }
-        MAIN_D("[CommRunner] STOP");
+        RUNNER_DBG("STOP");
         break;
 
     case COMM_RUNNER_FOC_ALIGN:
@@ -92,7 +92,7 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         }
         Commutation_Stop();
         Foc_StartAlign();
-        MAIN_D("[CommRunner] FOC_ALIGN (mode 23)");
+        RUNNER_DBG("FOC_ALIGN (mode 23)");
         break;
 
     case COMM_RUNNER_ZIZENG:
@@ -104,7 +104,7 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         }
         Commutation_Stop();
         Foc_StartZizeng();
-        MAIN_D("[CommRunner] ZIZENG (mode 30)");
+        RUNNER_DBG("ZIZENG (mode 30)");
         break;
 
     case COMM_RUNNER_IQ_PI:
@@ -116,7 +116,7 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         }
         Commutation_Stop();
         Foc_StartIqPi();
-        MAIN_D("[CommRunner] IQ_PI (mode 31)");
+        RUNNER_DBG("IQ_PI (mode 31)");
         break;
 
     default:

@@ -208,14 +208,14 @@ static void I_AdcConfig(void)
         /* Enable ADC channel in SEQ_B */
         ADC_ChCmd(I_ADC_UNIT, I_ADC_SEQ, astcChannels[i].u8Channel, ENABLE);
 
-        I_DEBUG("%s configured: P%c%d (ADC1_CH%d, SEQ_B)\r\n",
+        I_DEBUG("%s configured: P%c%d (ADC1_CH%d, SEQ_B)",
                astcChannels[i].pszName,
                I_GetPortLetter(astcChannels[i].u8Port),
                I_GetPinNumber(astcChannels[i].u8Pin),
                astcChannels[i].u8Channel);
     }
 
-    I_DEBUG("ADC1 SEQ_B configured for 3-channel current scan (self-init)\r\n");
+    I_DEBUG("ADC1 SEQ_B configured for 3-channel current scan (self-init)");
 }
 
 /*******************************************************************************
@@ -233,9 +233,9 @@ static void I_TriggerConfig(void)
     ADC_TriggerCmd(I_ADC_UNIT, I_ADC_SEQ, ENABLE);
 
 #if I_INMOP_STYLE
-    MAIN_D("[I] SEQ_B trigger: EVT0+EVT1 (SCMP0@PEAK + SCMP2@VALLEY, 10k PWM -> 20k sampling)\r\n");
+    I_DEBUG("SEQ_B trigger: EVT0+EVT1 (SCMP0@PEAK + SCMP2@VALLEY, 10k PWM -> 20k sampling)");
 #else
-    MAIN_D("[I] SEQ_B trigger: EVT0 (shared with BEMF SCMP0)\r\n");
+    I_DEBUG("SEQ_B trigger: EVT0 (shared with BEMF SCMP0)");
 #endif
 }
 
@@ -282,7 +282,7 @@ static void I_Adc2ContinuousConfig(void)
     ADC_ChCmd(I_ADC2_UNIT, ADC_SEQ_A, ADC_CH2, ENABLE);
     ADC_ChCmd(I_ADC2_UNIT, ADC_SEQ_A, ADC_CH3, ENABLE);
 
-    I_DEBUG("ADC2 SEQ_A continuous configured: CH1/2/3 (IU/IV/IW)\r\n");
+    I_DEBUG("ADC2 SEQ_A continuous configured: CH1/2/3 (IU/IV/IW)");
 }
 
 /**
@@ -330,10 +330,10 @@ static void I_DmaContinuousConfig(void)
 
         s_au8DmaId[i] = Dma_Create(&stcDmaConfig);
         if (s_au8DmaId[i] != 0xFF) {
-            I_DEBUG("DMA2 CH%d created (ID=%u) for ADC2_DR%d\r\n",
+            I_DEBUG("DMA2 CH%d created (ID=%u) for ADC2_DR%d",
                     astcDma[i].u8DmaCh, s_au8DmaId[i], astcDma[i].u8AdcCh);
         } else {
-            MAIN_D("[I] ERROR: DMA2 CH%d create failed!\r\n", astcDma[i].u8DmaCh);
+            I_DEBUG("ERROR: DMA2 CH%d create failed!", astcDma[i].u8DmaCh);
         }
     }
 
@@ -348,7 +348,7 @@ static void I_DmaContinuousConfig(void)
     /* Software start; continuous mode runs freely (no hardware trigger) */
     (void)ADC_Start(I_ADC2_UNIT);
 
-    MAIN_D("[I] INMOP-style: ADC2 continuous + DMA2 CH1/2/3 running, read via EOCB ISR\r\n");
+    I_DEBUG("INMOP-style: ADC2 continuous + DMA2 CH1/2/3 running, read via EOCB ISR");
 }
 #endif /* I_INMOP_STYLE && I_ASYNC_ADC2_READ */
 
@@ -372,7 +372,7 @@ static void I_Tmr4ValleyEvtConfig(void)
 
     (void)TMR4_EVT_Init(CM_TMR4_3, TMR4_EVT_CH_VH, &stcTmr4Evt);
 
-    MAIN_D("[I] TMR4_3 EVT: SCMP2 @ VALLEY configured (10k PWM -> 20k tick)\r\n");
+    I_DEBUG("TMR4_3 EVT: SCMP2 @ VALLEY configured (10k PWM -> 20k tick)");
 }
 
 #endif /* I_INMOP_STYLE */
@@ -540,7 +540,7 @@ static void I_IrqConfig(void)
     stcIrq.pfnCallback = &I_IrqCallback;
 
     if (LL_OK != INTC_IrqSignIn(&stcIrq)) {
-        MAIN_D("[I] ERROR: INTC_IrqSignIn failed for ADC1 EOCB!\r\n");
+        I_DEBUG("ERROR: INTC_IrqSignIn failed for ADC1 EOCB!");
         return;
     }
 
@@ -551,7 +551,7 @@ static void I_IrqConfig(void)
     /* Enable ADC1 EOCB interrupt */
     ADC_IntCmd(I_ADC_UNIT, ADC_INT_EOCB, ENABLE);
 
-    MAIN_D("[I] ADC1 EOCB ISR registered: INT_SRC=%u, IRQn=%d, prio=%d\r\n",
+    I_DEBUG("ADC1 EOCB ISR registered: INT_SRC=%u, IRQn=%d, prio=%d",
            (unsigned)I_ADC_INT_SRC, (int)I_ADC_IRQn, (int)I_ADC_INT_PRIO);
 }
 
@@ -565,10 +565,10 @@ static void I_IrqConfig(void)
  */
 void I_Init(void)
 {
-    MAIN_D("[I] Init entry\r\n");
+    I_DEBUG("Init entry");
 
     if (s_bIInitialized) {
-        I_DEBUG("Already initialized\r\n");
+        I_DEBUG("Already initialized");
         return;
     }
 
@@ -598,7 +598,7 @@ void I_Init(void)
 
     s_bIInitialized = true;
     g_i_running = 1;
-    MAIN_D("[I] Init done: ADC1 SEQ_B self-initialized, ISR=INT116_EOCB\r\n");
+    I_DEBUG("Init done: ADC1 SEQ_B self-initialized, ISR=INT116_EOCB");
 }
 
 /*******************************************************************************
@@ -614,7 +614,7 @@ void I_Init(void)
  */
 void I_Calibrate(void)
 {
-    MAIN_D("[I] Calibration started (500ms blocking)...\r\n");
+    I_DEBUG("Calibration started (500ms blocking)...");
 
     /* 以 FOC 互补模式 + 50/50/50 零矢量采零——与运行时完全相同的
      * 开关/供电/死区条件。不用通道 OFF：静止态与开关态下传感器
@@ -626,7 +626,7 @@ void I_Calibrate(void)
     TMR4_PWM_SetFocMode(FOC_DEADTIME_NS);
     TMR4_PWM_StartOutput();
     TMR4_PWM_SetDuty3Phase(50.0f, 50.0f, 50.0f);
-    MAIN_D("[I] All PWM channels 50%% zero-vector (FOC mode) for calibration\r\n");
+    I_DEBUG("All PWM channels 50%% zero-vector (FOC mode) for calibration");
 
     /* Reset accumulators */
     s_i32CalibSumU = 0;
@@ -660,7 +660,7 @@ void I_Calibrate(void)
         g_i_calib_zero_w = (uint16_t)(s_i32CalibSumW / s_i32CalibCnt);
     }
 
-    MAIN_D("[I] Calibration done: %ld samples, zero_ref U=%u V=%u W=%u\r\n",
+    I_DEBUG("Calibration done: %ld samples, zero_ref U=%u V=%u W=%u",
            s_i32CalibCnt, g_i_calib_zero_u, g_i_calib_zero_v, g_i_calib_zero_w);
 }
 
@@ -695,7 +695,7 @@ void I_DeInit(void)
     /* Clear data */
     memset(&s_stcIData, 0, sizeof(s_stcIData));
 
-    I_DEBUG("Deinitialized\r\n");
+    I_DEBUG("Deinitialized");
 }
 
 /*******************************************************************************
@@ -816,7 +816,7 @@ int16_t I_GetCurrentMA(uint8_t u8Phase)
 void I_RegisterCallback(i_callback_t pfnCallback)
 {
     s_pfnUserCallback = pfnCallback;
-    I_DEBUG("Callback %s\r\n", (pfnCallback != NULL) ? "registered" : "unregistered");
+    I_DEBUG("Callback %s", (pfnCallback != NULL) ? "registered" : "unregistered");
 }
 
 /**
@@ -828,7 +828,7 @@ void I_RegisterCallback(i_callback_t pfnCallback)
 void I_RegisterFocCallback(i_callback_t pfnCallback)
 {
     s_pfnFocCallback = pfnCallback;
-    I_DEBUG("FocCallback %s\r\n", (pfnCallback != NULL) ? "registered" : "unregistered");
+    I_DEBUG("FocCallback %s", (pfnCallback != NULL) ? "registered" : "unregistered");
 }
 
 /*******************************************************************************
@@ -838,15 +838,15 @@ void I_RegisterFocCallback(i_callback_t pfnCallback)
 #ifdef DEBUG
 void I_PrintDebugInfo(void)
 {
-    I_DEBUG("=== Current Module Debug Info ===\r\n");
-    I_DEBUG("Initialized: %s\r\n", s_bIInitialized ? "Yes" : "No");
-    I_DEBUG("Samples: %lu\r\n", s_stcIData.u32SampleCount);
-    I_DEBUG("Latest raw:  IU=%u, IV=%u, IW=%u\r\n",
+    I_DEBUG("=== Current Module Debug Info ===");
+    I_DEBUG("Initialized: %s", s_bIInitialized ? "Yes" : "No");
+    I_DEBUG("Samples: %lu", s_stcIData.u32SampleCount);
+    I_DEBUG("Latest raw:  IU=%u, IV=%u, IW=%u",
            s_stcIData.u16IU, s_stcIData.u16IV, s_stcIData.u16IW);
-    I_DEBUG("Latest mA:   IU=%d, IV=%d, IW=%d\r\n",
+    I_DEBUG("Latest mA:   IU=%d, IV=%d, IW=%d",
            s_stcIData.i16IU_mA, s_stcIData.i16IV_mA, s_stcIData.i16IW_mA);
-    I_DEBUG("Zero ref: %u (1650mV)\r\n", I_ADC_ZERO);
-    I_DEBUG("Scale: 1 ADC count = %d.%d mA\r\n", I_MA_PER_ADC >> I_MA_SHIFT,
+    I_DEBUG("Zero ref: %u (1650mV)", I_ADC_ZERO);
+    I_DEBUG("Scale: 1 ADC count = %d.%d mA", I_MA_PER_ADC >> I_MA_SHIFT,
            (int)(((I_MA_PER_ADC & 0xFF) * 100) >> I_MA_SHIFT));
 }
 #endif

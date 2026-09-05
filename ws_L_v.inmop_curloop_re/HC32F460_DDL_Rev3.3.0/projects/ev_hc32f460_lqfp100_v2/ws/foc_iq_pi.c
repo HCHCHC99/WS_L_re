@@ -29,10 +29,30 @@
  * Keil Watch 可调变量 / 观测量
  ******************************************************************************/
 volatile uint8_t g_iqpi_running        = 0;
+volatile iqpi_step_t g_iqpi_step       = IQPI_STEP_IDLE;   /* 当前/最后状态，Watch 看枚举名 */
+volatile iqpi_step_t g_iqpi_step_hist[IQPI_HISTORY_LEN];   /* 状态历史, [0]最旧 */
+volatile uint8_t g_iqpi_step_hist_cnt  = 0;                /* 历史有效条数 0..10 */
+volatile uint8_t g_iqpi_flip_cnt       = 0;                /* 框架180°自动翻转次数 */
 volatile float   g_iqpi_iq_ref_ma      = IQPI_IQ_REF_MA;
 volatile float   g_iqpi_iq_ref_ramp_ma = 0.0f;
 volatile float   g_iqpi_iq_ramp_ma_s   = IQPI_IQ_RAMP_MA_S;
 volatile float   g_iqpi_theta_rad      = 0.0f;
+
+/* --- 转向诊断观测量（ISR 更新，main.c 周期打印 / Watch 直接看） --- */
+volatile int32_t g_iqpi_enc_pos        = 0;   /* ISR 内累积的编码器计数镜像 */
+volatile int32_t g_iqpi_win_moved      = 0;   /* 最近一次完成的500ms窗口位移(counts,带符号) */
+volatile uint32_t g_iqpi_win_evals     = 0;   /* 已完成的窗口评估次数(0=方向检查从未运行) */
+volatile int8_t  g_iqpi_cur_dir        = 0;   /* 最近窗口实测方向 +1/-1 */
+volatile int8_t  g_iqpi_expect_dir     = 0;   /* 预期方向(+1/-1) */
+volatile int8_t  g_iqpi_ref_dir        = 0;   /* 启动时捕获的 mode30 拖动方向基准 */
+
+/* 翻转事件快照（ISR 置 flag，main.c 打印后清 flag） */
+volatile uint8_t g_iqpi_evt_flag       = 0;
+volatile uint8_t g_iqpi_evt_seq        = 0;   /* 第几次翻转 (1,2,...) */
+volatile int32_t g_iqpi_evt_pos        = 0;   /* 翻转时编码器计数 */
+volatile int32_t g_iqpi_evt_iq_ma      = 0;   /* 翻转时 iq (mA) */
+volatile int32_t g_iqpi_evt_vq_mv      = 0;   /* 翻转时 vq (mV) */
+volatile int32_t g_iqpi_evt_off_mrad   = 0;   /* 翻转后偏移基线 (mrad) */
 
 /*******************************************************************************
  * d/q 轴 PI 配置（初值来自 foc_iq_pi.h 宏，字段 volatile 可 Watch 实时修改）
@@ -79,6 +99,40 @@ static uint8_t s_enc_initialized = 0;
 /* 启动时捕获的 ZIZENG 偏移基线 (rad) */
 static float s_zizeng_off_rad = 0.0f;
 
+/* mode 30 拖动方向基准 (+1/-1，0=未知)：mode 31 运行转向与之相反
+ * 即判定为 180° 框架误差，自动翻转修正 */
+static int8_t s_ref_dir = 0;
+
+/* 堵转检测（每 500ms 窗口评估一次机械位移） */
+static uint16_t s_stall_tick    = 0;
+static int32_t  s_stall_enc_ref = 0;
+static uint8_t  s_stall_flag    = 0;
+
+/*******************************************************************************
+ * Iqpi_SetStep - 更新当前状态并记录历史（状态变化才记录一条）
+ *   hist[0] 最旧、hist[cnt-1] 最新；连续相同状态不重复记录，
+ *   来回抖动（如 闭环<->饱和 反复切换）会按顺序如实记下
+ ******************************************************************************/
+static void Iqpi_SetStep(iqpi_step_t s)
+{
+    uint8_t i;
+
+    if (s == g_iqpi_step) {
+        return;
+    }
+    g_iqpi_step = s;
+
+    if (g_iqpi_step_hist_cnt < IQPI_HISTORY_LEN) {
+        g_iqpi_step_hist[g_iqpi_step_hist_cnt] = s;
+        g_iqpi_step_hist_cnt++;
+    } else {
+        for (i = 1; i < IQPI_HISTORY_LEN; i++) {
+            g_iqpi_step_hist[i - 1] = g_iqpi_step_hist[i];
+        }
+        g_iqpi_step_hist[IQPI_HISTORY_LEN - 1u] = s;
+    }
+}
+
 /*******************************************************************************
  * Foc_IqPi_InitPids - 绑定 PI 实例与配置（Foc_Init 调用一次）
  ******************************************************************************/
@@ -94,7 +148,8 @@ void Foc_IqPi_InitPids(void)
 void Foc_StartIqPi(void)
 {
     if (!Foc_Zizeng_GetOffsetRad(&s_zizeng_off_rad)) {
-        MAIN_D("[IQPI] ERROR: ZIZENG offset not locked, run mode 30 first");
+        IQPI_DBG("ERROR: ZIZENG offset not locked, run mode 30 first");
+        Iqpi_SetStep(IQPI_STEP_ERR_NO_OFFSET);   /* 不清历史，Watch 可查 */
         return;
     }
 
@@ -103,8 +158,24 @@ void Foc_StartIqPi(void)
     g_iqpi_theta_rad    = 0.0f;
     g_iqpi_iq_ref_ramp_ma = 0.0f;
 
+    /* 新的一次运行：清空历史重新记录 */
+    {
+        uint8_t i;
+        for (i = 0; i < IQPI_HISTORY_LEN; i++) {
+            g_iqpi_step_hist[i] = IQPI_STEP_IDLE;
+        }
+        g_iqpi_step_hist_cnt = 0;
+    }
+    Iqpi_SetStep(IQPI_STEP_PWM_ZERO_VECTOR);
+
     s_enc_initialized = 0;
     s_enc_pos = 0;
+    s_stall_tick    = 0;
+    s_stall_enc_ref = 0;
+    s_stall_flag    = 0;
+    g_iqpi_flip_cnt = 0;
+    s_ref_dir = Foc_Zizeng_GetDragDir();   /* mode 30 实测拖动方向基准 */
+    g_iqpi_ref_dir = s_ref_dir;
 
     TMR4_PWM_SetFocMode(FOC_DEADTIME_NS);
     g_foc_du = 50.0f;
@@ -123,10 +194,11 @@ void Foc_StartIqPi(void)
     PID_Reset(&s_pid_id);
     PID_Reset(&s_pid_iq);
 
-    MAIN_D("[IQPI] Started: off=%.3f rad, iq_ref=%d mA, kp=%d m, ki=%d",
-           s_zizeng_off_rad, (int)g_iqpi_iq_ref_ma,
-           (int)(g_iqpi_pid_iq_cfg.kp * 1000.0f),
-           (int)g_iqpi_pid_iq_cfg.ki);
+    IQPI_DBG("Started: off=%d mrad, iq_ref=%d mA, kp=%d m, ki=%d, ref_dir=%d",
+             (int)(s_zizeng_off_rad * 1000.0f), (int)g_iqpi_iq_ref_ma,
+             (int)(g_iqpi_pid_iq_cfg.kp * 1000.0f),
+             (int)g_iqpi_pid_iq_cfg.ki,
+             (int)s_ref_dir);
 }
 
 /*******************************************************************************
@@ -134,13 +206,16 @@ void Foc_StartIqPi(void)
  ******************************************************************************/
 void Foc_StopIqPi(void)
 {
+    /* 停止不清状态：g_iqpi_step 保持最后状态（如 FAULT_OC / VQ_SAT），
+     * 切到 mode 0 后 Watch 仍可查看停机原因；下次成功启动时才复位 */
+
     g_iqpi_running = 0;
     g_foc_active   = 0u;
     TMR4_PWM_EmergencyStop();
     g_foc_du = 0.0f;
     g_foc_dv = 0.0f;
     g_foc_dw = 0.0f;
-    MAIN_D("[IQPI] Stopped");
+    IQPI_DBG("Stopped");
 }
 
 /*******************************************************************************
@@ -162,6 +237,7 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
     if (Foc_Core_OverCurrent(pData)) {
         Foc_Core_FaultStop(1u);
         g_iqpi_running = 0;
+        Iqpi_SetStep(IQPI_STEP_FAULT_OC);   /* 停机后保持，Watch 可查 */
         return;
     }
 
@@ -177,6 +253,7 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
     s_enc_pos += (int32_t)delta;
     g_enc_count = s_enc_pos;
     g_enc_count_f = (float)s_enc_pos;
+    g_iqpi_enc_pos = s_enc_pos;   /* 诊断镜像 */
 
     /* ===== 1. 相电流 DC 零偏自校准（零矢量窗口，非阻塞） =====
      * 锁定前三相 50% 占空比（零电流），锁定后才开始闭环。 */
@@ -188,6 +265,7 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
         g_foc_dw = 50.0f;
         g_foc_id_ma = 0.0f;
         g_foc_iq_ma = 0.0f;
+        Iqpi_SetStep(IQPI_STEP_PWM_ZERO_VECTOR);
         return;
     }
 
@@ -249,6 +327,91 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
     vq = PID_UpdateUs(&s_pid_iq, iq_ref_a, iq, FOC_ISR_DT_US);
     g_foc_vd = vd;
     g_foc_vq = vq;
+
+    /* ===== 5b. 运行状态标记 g_iqpi_step（诊断用，优先级: 电压饱和 > 堵转 > 正常） ===== */
+    {
+        float ref_abs, iq_abs;
+        ref_abs = g_iqpi_iq_ref_ramp_ma;
+        if (ref_abs < 0.0f) {
+            ref_abs = -ref_abs;
+        }
+        iq_abs = g_foc_iq_ma;
+        if (iq_abs < 0.0f) {
+            iq_abs = -iq_abs;
+        }
+
+        /* 电压饱和: vd/vq 任一顶到限幅 98% 以上 */
+        {
+            float vq_lim = 0.98f * g_iqpi_pid_iq_cfg.output_max;
+            float vd_lim = 0.98f * g_iqpi_pid_id_cfg.output_max;
+            if ((vq >= vq_lim) || (vq <= -vq_lim) ||
+                (vd >= vd_lim) || (vd <= -vd_lim)) {
+                Iqpi_SetStep(IQPI_STEP_RUNNING_VQ_SAT);
+            } else {
+                Iqpi_SetStep(IQPI_STEP_CLOSED_LOOP);
+            }
+        }
+
+        /* 堵转疑似: 电流已建立但 500ms 窗口内机械位移过小
+         * (静摩擦/框架角度错误/电压饱和连带)。未饱和时才评估。 */
+        if (g_iqpi_step == IQPI_STEP_CLOSED_LOOP) {
+            if ((ref_abs > IQPI_STALL_IQ_MIN_MA) && (iq_abs > IQPI_STALL_IQ_MIN_MA)) {
+                s_stall_tick++;
+                if (s_stall_tick >= IQPI_STALL_WIN_MS * (FOC_ISR_HZ / 1000u)) {
+                    int32_t moved = s_enc_pos - s_stall_enc_ref;
+                    int32_t moved_abs = (moved < 0) ? -moved : moved;
+
+                    s_stall_enc_ref = s_enc_pos;
+                    s_stall_tick = 0;
+                    g_iqpi_win_evals++;          /* 诊断: 完成一次窗口评估 */
+                    g_iqpi_win_moved = moved;
+
+                    if (moved_abs < (int32_t)IQPI_STALL_MIN_CNTS) {
+                        s_stall_flag = 1u;              /* 没动 -> 疑似堵转 */
+                    } else {
+                        s_stall_flag = 0u;
+                        /* 方向比对: 编码器位移符号与 mode 30 拖动方向相反
+                         * => 180° 框架误差(180°误差在 dq 系里隐形, 唯一暴露
+                         * 就是转向) => 偏移基线 +180° 使框架翻转, 转矩反向。
+                         * 负 iq_ref 时预期方向同样取反。 */
+                        if (s_ref_dir != 0) {
+                            int8_t cur_dir = (moved > 0) ? 1 : -1;
+                            int8_t expect = (g_iqpi_iq_ref_ramp_ma >= 0.0f)
+                                          ? s_ref_dir : (int8_t)-s_ref_dir;
+                            g_iqpi_cur_dir = cur_dir;
+                            g_iqpi_expect_dir = expect;
+                            if (cur_dir != expect) {
+                                s_zizeng_off_rad += FOC_MATH_PI;
+                                if (s_zizeng_off_rad >= FOC_MATH_2PI) {
+                                    s_zizeng_off_rad -= FOC_MATH_2PI;
+                                }
+                                g_iqpi_flip_cnt++;
+                                Iqpi_SetStep(IQPI_STEP_DIR_FLIPPED);
+                                /* 翻转事件快照: main.c 检测 flag 后打印一次 */
+                                g_iqpi_evt_seq    = g_iqpi_flip_cnt;
+                                g_iqpi_evt_pos    = s_enc_pos;
+                                g_iqpi_evt_iq_ma  = (int32_t)g_foc_iq_ma;
+                                g_iqpi_evt_vq_mv  = (int32_t)(vq * 1000.0f);
+                                g_iqpi_evt_off_mrad = (int32_t)(s_zizeng_off_rad
+                                                                * 1000.0f);
+                                g_iqpi_evt_flag   = 1u;
+                            }
+                        }
+                    }
+                }
+                if (s_stall_flag) {
+                    Iqpi_SetStep(IQPI_STEP_RUNNING_STALL);
+                }
+            } else {
+                /* 电流未建立(斜坡初期/参考为0)不评估，避免误报 */
+                s_stall_tick = 0;
+                s_stall_flag = 0;
+            }
+        } else {
+            s_stall_tick = 0;
+            s_stall_flag = 0;
+        }
+    }
 
     /* ===== 6. InvPark -> SVPWM 输出 ===== */
     Foc_InvPark(vd, vq, enc_elec, &valpha, &vbeta);
