@@ -174,6 +174,14 @@ void Foc_StartIqPi(void)
     s_stall_enc_ref = 0;
     s_stall_flag    = 0;
     g_iqpi_flip_cnt = 0;
+    /* 诊断观测量启动清零: 避免上次运行的残值混进本次日志 */
+    g_iqpi_enc_pos    = 0;
+    g_iqpi_win_moved  = 0;
+    g_iqpi_win_evals  = 0;
+    g_iqpi_cur_dir    = 0;
+    g_iqpi_expect_dir = 0;
+    g_iqpi_evt_flag   = 0;
+    g_iqpi_evt_seq    = 0;
     s_ref_dir = Foc_Zizeng_GetDragDir();   /* mode 30 实测拖动方向基准 */
     g_iqpi_ref_dir = s_ref_dir;
 
@@ -265,6 +273,8 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
         g_foc_dw = 50.0f;
         g_foc_id_ma = 0.0f;
         g_foc_iq_ma = 0.0f;
+        g_foc_vd = 0.0f;    /* 校准窗口 PI 未运行, 清掉上次运行残值 */
+        g_foc_vq = 0.0f;
         Iqpi_SetStep(IQPI_STEP_PWM_ZERO_VECTOR);
         return;
     }

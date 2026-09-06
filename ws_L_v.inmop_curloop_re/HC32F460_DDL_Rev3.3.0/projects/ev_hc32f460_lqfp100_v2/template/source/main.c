@@ -215,12 +215,12 @@ int main(void)
             if ((now - s_last_zz_dbg) >= 200u) {
                 s_last_zz_dbg = now;
                 MAIN_DBG("[ZIZENG_DBG] cnt=%d rpm=%d enc_dir=%d theta=%d mrad rotor=%d mrad diff=%d mrad",
-                       (int)g_enc_count,
-                       (int)g_enc_speed_rpm,
-                       (int)g_foc_enc_dir,
-                       (int)(g_foc_theta_rad * 1000.0f),
-                       (int)(g_foc_if_rotor_rad * 1000.0f),
-                       (int)(g_foc_if_diff_rad * 1000.0f));
+                       (int)g_enc_count,                     /* 编码器累积计数(counts,4倍频,带符号) */
+                       (int)g_enc_speed_rpm,                 /* 机械转速估算(RPM) */
+                       (int)g_foc_enc_dir,                   /* 编码器方向符号(+1/-1) */
+                       (int)(g_foc_theta_rad * 1000.0f),     /* 磁场角theta(mrad,拖动角,递增) */
+                       (int)(g_foc_if_rotor_rad * 1000.0f),  /* 转子电角度(mrad,已扣mode30偏移) */
+                       (int)(g_foc_if_diff_rad * 1000.0f));  /* rotor-theta(mrad): 锁定后应≈0±0.2, 锁定前≈-1.57 */
             }
         }
         /* ---- mode 31 运行监视（200ms 节流，全部整型缩放） ---- */
@@ -230,14 +230,18 @@ int main(void)
             if ((now - s_last_iqpi_dbg) >= 200u) {
                 s_last_iqpi_dbg = now;
                 MAIN_DBG("[IQPI_MON] st=%d iq=%d id=%d vq=%d vd=%d rr=%d win=%d ev=%d cd=%d ed=%d rd=%d flip=%d pos=%d ",
-                         (int)g_iqpi_step,
-                         (int)g_foc_iq_ma, (int)g_foc_id_ma,
-                         (int)(g_foc_vq * 1000.0f), (int)(g_foc_vd * 1000.0f),
-                         (int)g_iqpi_iq_ref_ramp_ma,
-                         (int)g_iqpi_win_moved, (int)g_iqpi_win_evals,
-                         (int)g_iqpi_cur_dir, (int)g_iqpi_expect_dir,
-                         (int)g_iqpi_ref_dir, (int)g_iqpi_flip_cnt,
-                         (int)g_iqpi_enc_pos);
+                         (int)g_iqpi_step,                   /* 状态: 2=零矢量校准 3=闭环 4=vq饱和 5=堵转 6=过流 7=已翻转 */
+                         (int)g_foc_iq_ma, (int)g_foc_id_ma, /* 控制系电流 iq/id (mA), 应跟随 rr/0 */
+                         (int)(g_foc_vq * 1000.0f),          /* q轴电压指令(mV), ±3500=±限幅(顶格=饱和) */
+                         (int)(g_foc_vd * 1000.0f),          /* d轴电压指令(mV) */
+                         (int)g_iqpi_iq_ref_ramp_ma,         /* 斜坡后的iq参考 rr (mA) */
+                         (int)g_iqpi_win_moved,              /* 最近完成的500ms窗口位移(counts,带符号,0=尚无) */
+                         (int)g_iqpi_win_evals,              /* 已完成方向评估次数(0=方向检查从未运行) */
+                         (int)g_iqpi_cur_dir,                /* 最近窗口实测转向(+1/-1) */
+                         (int)g_iqpi_expect_dir,             /* 预期转向(由rd和rr符号决定) */
+                         (int)g_iqpi_ref_dir,                /* mode30记录的拖动方向基准(+1/-1,0=未测到) */
+                         (int)g_iqpi_flip_cnt,               /* 本次运行180°框架翻转次数 */
+                         (int)g_iqpi_enc_pos);               /* ISR累积编码器计数(看转向和速率) */
             }
         }
 
