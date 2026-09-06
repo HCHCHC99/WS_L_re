@@ -11,6 +11,7 @@
 #include "I.h"
 #include "motor_config.h"
 #include "foc.h"
+#include "foc_obs.h"
 #include "encoder.h"
 #include "Usart3_Vofa.h"
 #include "../Utils/dev_pid.h"
@@ -36,7 +37,7 @@ extern volatile uint8_t  g_scope_step;
 /*=============================================================================
  * Keil Watch 可调变量
  *=============================================================================*/
-volatile int   comm_mode        = 0;     /* 0=Stop, 23=FOC_Align, 30=ZIZENG */
+volatile int   comm_mode        = 0;     /* 0=Stop, 23=FOC_Align, 30=ZIZENG, 31=IQ_PI, 32=LOCK_IQ_PI */
 volatile float g_comm_duty_pct  = 80.0f;
 
 /* FOC 对齐参数（Keil Watch 可调） */
@@ -119,7 +120,6 @@ int main(void)
 
     /* ---- 主循环 ---- */
     static int s_prev_mode = -1;
-    static int s_foc_fault_printed = 0;
 
     while (1) {
 #if !APP_MINIMAL_CURRENT_TEST
@@ -168,93 +168,12 @@ int main(void)
             }
         }
 
-        /* ---- FOC 故障打印 ---- */
+        /* ---- 观察模块（foc_obs）：RTT 运行监视/事件打印 + mode32->31 交接 ----
+         * 原先这里的六段代码（FOC 故障打印 / ALIGN 事件 / ZIZENG_DBG /
+         * IQPI_MON / IQPI_FLIP / LOCKIQ 事件+交接）已整体迁移到 foc_obs.c，
+         * 变量名与打印格式未变，模块说明见 foc_obs.h。 */
 #if MOTOR_FOC_ENABLE
-        if (g_foc_fault != 0u) {
-            if (!s_foc_fault_printed) {
-                s_foc_fault_printed = 1;
-                MAIN_DBG("[FOC] FAULT oc=%d stage=%d i=%d mA",
-                      (int)g_foc_fault, (int)g_foc_fault_stage, (int)g_foc_fault_i_ma);
-            }
-        } else {
-            s_foc_fault_printed = 0;
-        }
-
-        /* ---- 对齐校准事件打印 ---- */
-        if (g_foc_align_evt != 0u) {
-            uint8_t evt = g_foc_align_evt;
-            g_foc_align_evt = 0u;
-            switch (evt) {
-            case 1u:
-                MAIN_DBG("[ALIGN] start volt=%d mV", (int)g_foc_align_evt_v1);
-                break;
-            case 2u:
-                MAIN_DBG("[ALIGN] beta done -> alpha");
-                break;
-            case 3u:
-                MAIN_DBG("[ALIGN] locked offset=%d id=%d iq=%d",
-                       (int)g_foc_align_evt_v1, (int)g_foc_align_evt_v2,
-                       (int)g_foc_align_evt_v3);
-                break;
-            case 4u:
-                MAIN_DBG("[ALIGN] done offset=%d", (int)g_foc_align_evt_v1);
-                break;
-            case 5u:
-                MAIN_DBG("[ALIGN] FAULT code=%d i=%d mA",
-                       (int)g_foc_align_evt_v1, (int)g_foc_align_evt_v2);
-                break;
-            default:
-                break;
-            }
-        }
-
-        /* ---- ZIZENG 状态打印（200ms 高频调试） ---- */
-        if (g_zizeng_running) {
-            static uint32_t s_last_zz_dbg = 0u;
-            uint32_t now = tickTimer_GetCount();
-            if ((now - s_last_zz_dbg) >= 200u) {
-                s_last_zz_dbg = now;
-                MAIN_DBG("[ZIZENG_DBG] cnt=%d rpm=%d enc_dir=%d theta=%d mrad rotor=%d mrad diff=%d mrad",
-                       (int)g_enc_count,                     /* 编码器累积计数(counts,4倍频,带符号) */
-                       (int)g_enc_speed_rpm,                 /* 机械转速估算(RPM) */
-                       (int)g_foc_enc_dir,                   /* 编码器方向符号(+1/-1) */
-                       (int)(g_foc_theta_rad * 1000.0f),     /* 磁场角theta(mrad,拖动角,递增) */
-                       (int)(g_foc_if_rotor_rad * 1000.0f),  /* 转子电角度(mrad,已扣mode30偏移) */
-                       (int)(g_foc_if_diff_rad * 1000.0f));  /* rotor-theta(mrad): 锁定后应≈0±0.2, 锁定前≈-1.57 */
-            }
-        }
-        /* ---- mode 31 运行监视（200ms 节流，全部整型缩放） ---- */
-        if (g_iqpi_running) {
-            static uint32_t s_last_iqpi_dbg = 0u;
-            uint32_t now = tickTimer_GetCount();
-            if ((now - s_last_iqpi_dbg) >= 200u) {
-                s_last_iqpi_dbg = now;
-                MAIN_DBG("[IQPI_MON] st=%d iq=%d id=%d vq=%d vd=%d rr=%d win=%d ev=%d cd=%d ed=%d rd=%d flip=%d pos=%d ",
-                         (int)g_iqpi_step,                   /* 状态: 2=零矢量校准 3=闭环 4=vq饱和 5=堵转 6=过流 7=已翻转 */
-                         (int)g_foc_iq_ma, (int)g_foc_id_ma, /* 控制系电流 iq/id (mA), 应跟随 rr/0 */
-                         (int)(g_foc_vq * 1000.0f),          /* q轴电压指令(mV), ±3500=±限幅(顶格=饱和) */
-                         (int)(g_foc_vd * 1000.0f),          /* d轴电压指令(mV) */
-                         (int)g_iqpi_iq_ref_ramp_ma,         /* 斜坡后的iq参考 rr (mA) */
-                         (int)g_iqpi_win_moved,              /* 最近完成的500ms窗口位移(counts,带符号,0=尚无) */
-                         (int)g_iqpi_win_evals,              /* 已完成方向评估次数(0=方向检查从未运行) */
-                         (int)g_iqpi_cur_dir,                /* 最近窗口实测转向(+1/-1) */
-                         (int)g_iqpi_expect_dir,             /* 预期转向(由rd和rr符号决定) */
-                         (int)g_iqpi_ref_dir,                /* mode30记录的拖动方向基准(+1/-1,0=未测到) */
-                         (int)g_iqpi_flip_cnt,               /* 本次运行180°框架翻转次数 */
-                         (int)g_iqpi_enc_pos);               /* ISR累积编码器计数(看转向和速率) */
-            }
-        }
-
-        /* ---- mode 31 翻转事件（ISR 置 flag，此处打印一次后清零） ---- */
-        if (g_iqpi_evt_flag) {
-            g_iqpi_evt_flag = 0u;
-            MAIN_DBG("[IQPI_FLIP] n=%d pos=%d iq=%d vq=%d off=%d cd=%d ed=%d rd=%d",
-                     (int)g_iqpi_evt_seq, (int)g_iqpi_evt_pos,
-                     (int)g_iqpi_evt_iq_ma, (int)g_iqpi_evt_vq_mv,
-                     (int)g_iqpi_evt_off_mrad,
-                     (int)g_iqpi_cur_dir, (int)g_iqpi_expect_dir,
-                     (int)g_iqpi_ref_dir);
-        }
+        Foc_Obs_Task();
 #endif /* MOTOR_FOC_ENABLE */
 #endif /* !APP_MINIMAL_CURRENT_TEST — 最小系统模式下主循环只跑 VOFA */
 

@@ -358,3 +358,21 @@ int8_t Foc_Zizeng_GetDragDir(void)
 {
     return g_zizeng_drag_dir;
 }
+
+/**
+ * @brief 注入偏移基线并置有效标志（mode 32 自锁偏移后调用，
+ *        mode 31 经 Foc_Zizeng_GetOffsetRad 无感取用）
+ */
+void Foc_Zizeng_SetOffsetRad(float rad)
+{
+    s_zizeng_offset_locked = rad;
+    s_zizeng_offset_valid  = 1u;
+}
+
+/**
+ * @brief 注入方向基准（mode 32 用本征推导值 FOC_ENC_DIR 注入）
+ */
+void Foc_Zizeng_SetDragDir(int8_t dir)
+{
+    g_zizeng_drag_dir = dir;
+}

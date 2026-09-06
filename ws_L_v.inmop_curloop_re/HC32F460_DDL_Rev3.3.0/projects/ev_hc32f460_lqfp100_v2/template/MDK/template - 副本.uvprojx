@@ -1003,6 +1003,16 @@
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_iq_pi.c</FilePath>
             </File>
+            <File>
+              <FileName>foc_lock_iq_pi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_lock_iq_pi.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_obs.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_obs.c</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>
@@ -2003,6 +2013,16 @@
               <FileName>foc_iq_pi.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_iq_pi.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_lock_iq_pi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_lock_iq_pi.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_obs.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_obs.c</FilePath>
             </File>
           </Files>
         </Group>

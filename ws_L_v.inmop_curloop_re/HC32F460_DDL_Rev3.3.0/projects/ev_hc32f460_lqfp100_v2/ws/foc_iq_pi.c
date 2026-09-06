@@ -13,6 +13,7 @@
  */
 
 #include "foc_iq_pi.h"
+#include "foc_obs.h"
 #include "foc_math.h"
 #include "foc_calib.h"
 #include "foc_zizeng.h"
@@ -30,29 +31,14 @@
  ******************************************************************************/
 volatile uint8_t g_iqpi_running        = 0;
 volatile iqpi_step_t g_iqpi_step       = IQPI_STEP_IDLE;   /* 当前/最后状态，Watch 看枚举名 */
-volatile iqpi_step_t g_iqpi_step_hist[IQPI_HISTORY_LEN];   /* 状态历史, [0]最旧 */
-volatile uint8_t g_iqpi_step_hist_cnt  = 0;                /* 历史有效条数 0..10 */
-volatile uint8_t g_iqpi_flip_cnt       = 0;                /* 框架180°自动翻转次数 */
 volatile float   g_iqpi_iq_ref_ma      = IQPI_IQ_REF_MA;
 volatile float   g_iqpi_iq_ref_ramp_ma = 0.0f;
 volatile float   g_iqpi_iq_ramp_ma_s   = IQPI_IQ_RAMP_MA_S;
 volatile float   g_iqpi_theta_rad      = 0.0f;
 
-/* --- 转向诊断观测量（ISR 更新，main.c 周期打印 / Watch 直接看） --- */
-volatile int32_t g_iqpi_enc_pos        = 0;   /* ISR 内累积的编码器计数镜像 */
-volatile int32_t g_iqpi_win_moved      = 0;   /* 最近一次完成的500ms窗口位移(counts,带符号) */
-volatile uint32_t g_iqpi_win_evals     = 0;   /* 已完成的窗口评估次数(0=方向检查从未运行) */
-volatile int8_t  g_iqpi_cur_dir        = 0;   /* 最近窗口实测方向 +1/-1 */
-volatile int8_t  g_iqpi_expect_dir     = 0;   /* 预期方向(+1/-1) */
-volatile int8_t  g_iqpi_ref_dir        = 0;   /* 启动时捕获的 mode30 拖动方向基准 */
-
-/* 翻转事件快照（ISR 置 flag，main.c 打印后清 flag） */
-volatile uint8_t g_iqpi_evt_flag       = 0;
-volatile uint8_t g_iqpi_evt_seq        = 0;   /* 第几次翻转 (1,2,...) */
-volatile int32_t g_iqpi_evt_pos        = 0;   /* 翻转时编码器计数 */
-volatile int32_t g_iqpi_evt_iq_ma      = 0;   /* 翻转时 iq (mA) */
-volatile int32_t g_iqpi_evt_vq_mv      = 0;   /* 翻转时 vq (mV) */
-volatile int32_t g_iqpi_evt_off_mrad   = 0;   /* 翻转后偏移基线 (mrad) */
+/* 注：状态历史 / 转向诊断量 / 翻转事件快照（g_iqpi_step_hist、
+ * g_iqpi_win_*、g_iqpi_evt_* 等）已集中迁移到 foc_obs.c/.h 观察模块，
+ * 变量名未变，Keil Watch 用法不变。 */
 
 /*******************************************************************************
  * d/q 轴 PI 配置（初值来自 foc_iq_pi.h 宏，字段 volatile 可 Watch 实时修改）
@@ -109,28 +95,16 @@ static int32_t  s_stall_enc_ref = 0;
 static uint8_t  s_stall_flag    = 0;
 
 /*******************************************************************************
- * Iqpi_SetStep - 更新当前状态并记录历史（状态变化才记录一条）
- *   hist[0] 最旧、hist[cnt-1] 最新；连续相同状态不重复记录，
- *   来回抖动（如 闭环<->饱和 反复切换）会按顺序如实记下
+ * Iqpi_SetStep - 更新当前状态（状态变化时调用观察模块记录历史一条）
+ *   历史缓冲本体与记录逻辑在 foc_obs.c（g_iqpi_step_hist，[0]最旧）
  ******************************************************************************/
 static void Iqpi_SetStep(iqpi_step_t s)
 {
-    uint8_t i;
-
     if (s == g_iqpi_step) {
         return;
     }
     g_iqpi_step = s;
-
-    if (g_iqpi_step_hist_cnt < IQPI_HISTORY_LEN) {
-        g_iqpi_step_hist[g_iqpi_step_hist_cnt] = s;
-        g_iqpi_step_hist_cnt++;
-    } else {
-        for (i = 1; i < IQPI_HISTORY_LEN; i++) {
-            g_iqpi_step_hist[i - 1] = g_iqpi_step_hist[i];
-        }
-        g_iqpi_step_hist[IQPI_HISTORY_LEN - 1u] = s;
-    }
+    Foc_Obs_IqpiRecordStep(s);
 }
 
 /*******************************************************************************
@@ -158,14 +132,8 @@ void Foc_StartIqPi(void)
     g_iqpi_theta_rad    = 0.0f;
     g_iqpi_iq_ref_ramp_ma = 0.0f;
 
-    /* 新的一次运行：清空历史重新记录 */
-    {
-        uint8_t i;
-        for (i = 0; i < IQPI_HISTORY_LEN; i++) {
-            g_iqpi_step_hist[i] = IQPI_STEP_IDLE;
-        }
-        g_iqpi_step_hist_cnt = 0;
-    }
+    /* 新的一次运行：清空历史重新记录（历史缓冲在 foc_obs.c） */
+    Foc_Obs_IqpiHistClear();
     Iqpi_SetStep(IQPI_STEP_PWM_ZERO_VECTOR);
 
     s_enc_initialized = 0;
@@ -362,9 +330,12 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
             }
         }
 
-        /* 堵转疑似: 电流已建立但 500ms 窗口内机械位移过小
-         * (静摩擦/框架角度错误/电压饱和连带)。未饱和时才评估。 */
-        if (g_iqpi_step == IQPI_STEP_CLOSED_LOOP) {
+        /* 堵转疑似 + 方向检测: 电流已建立但 500ms 窗口内机械位移过小。
+         * CLOSED_LOOP 与 VQ_SAT 均累积; 条件不满足仅"暂停", 不清进度
+         * (否则斜坡初期/饱和段/电流过零任一拍都会作废窗口,
+         *   方向检查 ev 永远无法运行, 自动纠正形同虚设)。 */
+        if ((g_iqpi_step == IQPI_STEP_CLOSED_LOOP) ||
+            (g_iqpi_step == IQPI_STEP_RUNNING_VQ_SAT)) {
             if ((ref_abs > IQPI_STALL_IQ_MIN_MA) && (iq_abs > IQPI_STALL_IQ_MIN_MA)) {
                 s_stall_tick++;
                 if (s_stall_tick >= IQPI_STALL_WIN_MS * (FOC_ISR_HZ / 1000u)) {
@@ -412,14 +383,8 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
                 if (s_stall_flag) {
                     Iqpi_SetStep(IQPI_STEP_RUNNING_STALL);
                 }
-            } else {
-                /* 电流未建立(斜坡初期/参考为0)不评估，避免误报 */
-                s_stall_tick = 0;
-                s_stall_flag = 0;
             }
-        } else {
-            s_stall_tick = 0;
-            s_stall_flag = 0;
+            /* 电流未建立(斜坡初期/参考为0): 本拍暂停累积, 已累积进度保留 */
         }
     }
 

@@ -1,0 +1,213 @@
+/**
+ *******************************************************************************
+ * @file  foc_obs.c
+ * @brief FOC 观察模块实现 — 观察变量定义 + 状态历史 + 主循环打印/事件处理。
+ *
+ *        本文件代码全部从 foc_iq_pi.c / foc_lock_iq_pi.c / main.c 原样
+ *        迁移而来（变量名、打印格式、处理逻辑均未改动）：
+ *          - g_iqpi_*  观察量与状态历史   <- foc_iq_pi.c
+ *          - g_lockiq_* 观察量与事件快照  <- foc_lock_iq_pi.c
+ *          - Foc_Obs_Task() 六段打印/事件 <- main.c 主循环
+ *
+ *        模块说明见 foc_obs.h 文件头。
+ *******************************************************************************
+ */
+
+#include "foc_obs.h"
+#include "foc_core.h"
+#include "foc_zizeng.h"
+#include "foc_lock_iq_pi.h"
+#include "foc_align.h"
+#include "encoder.h"
+#include "motor_config.h"
+#include "rtt_log.h"
+#include "TickTimer.h"
+
+/*******************************************************************************
+ * mode 31 观察量定义（原 foc_iq_pi.c）
+ ******************************************************************************/
+volatile iqpi_step_t g_iqpi_step_hist[IQPI_HISTORY_LEN];   /* 状态历史, [0]最旧 */
+volatile uint8_t g_iqpi_step_hist_cnt  = 0;                /* 历史有效条数 0..10 */
+volatile uint8_t g_iqpi_flip_cnt       = 0;                /* 框架180°自动翻转次数 */
+
+/* --- 转向诊断观测量（ISR 更新，Foc_Obs_Task 周期打印 / Watch 直接看） --- */
+volatile int32_t g_iqpi_enc_pos        = 0;   /* ISR 内累积的编码器计数镜像 */
+volatile int32_t g_iqpi_win_moved      = 0;   /* 最近一次完成的500ms窗口位移(counts,带符号) */
+volatile uint32_t g_iqpi_win_evals     = 0;   /* 已完成的窗口评估次数(0=方向检查从未运行) */
+volatile int8_t  g_iqpi_cur_dir        = 0;   /* 最近窗口实测方向 +1/-1 */
+volatile int8_t  g_iqpi_expect_dir     = 0;   /* 预期方向(+1/-1) */
+volatile int8_t  g_iqpi_ref_dir        = 0;   /* 启动时捕获的 mode30 拖动方向基准 */
+
+/* 翻转事件快照（ISR 置 flag，Foc_Obs_Task 打印后清 flag） */
+volatile uint8_t g_iqpi_evt_flag       = 0;
+volatile uint8_t g_iqpi_evt_seq        = 0;   /* 第几次翻转 (1,2,...) */
+volatile int32_t g_iqpi_evt_pos        = 0;   /* 翻转时编码器计数 */
+volatile int32_t g_iqpi_evt_iq_ma      = 0;   /* 翻转时 iq (mA) */
+volatile int32_t g_iqpi_evt_vq_mv      = 0;   /* 翻转时 vq (mV) */
+volatile int32_t g_iqpi_evt_off_mrad   = 0;   /* 翻转后偏移基线 (mrad) */
+
+/*******************************************************************************
+ * mode 32 观察量定义（原 foc_lock_iq_pi.c）
+ ******************************************************************************/
+volatile int32_t g_lockiq_win_moved      = 0; /* 最近完成窗口的平均位置位移 (counts) */
+volatile uint32_t g_lockiq_win_evals     = 0; /* 已完成窗口评估次数 */
+volatile int32_t g_lockiq_track_err_cnts = 0; /* VERIFY 跟踪误差 (counts) */
+
+/* 锁定/失败事件快照（ISR 置 flag，Foc_Obs_Task 处理后清 flag） */
+volatile uint8_t g_lockiq_evt_flag     = 0;
+volatile uint8_t g_lockiq_evt_code     = 0;
+volatile int32_t g_lockiq_evt_off_mrad = 0;
+
+/*******************************************************************************
+ * Foc_Obs_IqpiHistClear - 清空 mode 31 状态历史（新的一次运行重新记录）
+ ******************************************************************************/
+void Foc_Obs_IqpiHistClear(void)
+{
+    uint8_t i;
+
+    for (i = 0; i < IQPI_HISTORY_LEN; i++) {
+        g_iqpi_step_hist[i] = IQPI_STEP_IDLE;
+    }
+    g_iqpi_step_hist_cnt = 0;
+}
+
+/*******************************************************************************
+ * Foc_Obs_IqpiRecordStep - 记录一条状态历史
+ *   hist[0] 最旧、hist[cnt-1] 最新；记满后挤掉最旧一条（滑动窗口）
+ ******************************************************************************/
+void Foc_Obs_IqpiRecordStep(iqpi_step_t s)
+{
+    uint8_t i;
+
+    if (g_iqpi_step_hist_cnt < IQPI_HISTORY_LEN) {
+        g_iqpi_step_hist[g_iqpi_step_hist_cnt] = s;
+        g_iqpi_step_hist_cnt++;
+    } else {
+        for (i = 1; i < IQPI_HISTORY_LEN; i++) {
+            g_iqpi_step_hist[i - 1] = g_iqpi_step_hist[i];
+        }
+        g_iqpi_step_hist[IQPI_HISTORY_LEN - 1u] = s;
+    }
+}
+
+/*******************************************************************************
+ * Foc_Obs_Task - 观察任务（主循环每圈一次；ISR 内禁止调用）
+ *   以下六段均自 main.c 原样迁移，打印格式与处理逻辑未改动。
+ ******************************************************************************/
+void Foc_Obs_Task(void)
+{
+#if MOTOR_FOC_ENABLE
+    /* ---- FOC 故障打印 ---- */
+    {
+        static uint8_t s_foc_fault_printed = 0;
+
+        if (g_foc_fault != 0u) {
+            if (!s_foc_fault_printed) {
+                s_foc_fault_printed = 1;
+                OBS_DBG("[FOC] FAULT oc=%d stage=%d i=%d mA",
+                        (int)g_foc_fault, (int)g_foc_fault_stage, (int)g_foc_fault_i_ma);
+            }
+        } else {
+            s_foc_fault_printed = 0;
+        }
+    }
+
+    /* ---- 对齐校准事件打印 ---- */
+    if (g_foc_align_evt != 0u) {
+        uint8_t evt = g_foc_align_evt;
+        g_foc_align_evt = 0u;
+        switch (evt) {
+        case 1u:
+            OBS_DBG("[ALIGN] start volt=%d mV", (int)g_foc_align_evt_v1);
+            break;
+        case 2u:
+            OBS_DBG("[ALIGN] beta done -> alpha");
+            break;
+        case 3u:
+            OBS_DBG("[ALIGN] locked offset=%d id=%d iq=%d",
+                    (int)g_foc_align_evt_v1, (int)g_foc_align_evt_v2,
+                    (int)g_foc_align_evt_v3);
+            break;
+        case 4u:
+            OBS_DBG("[ALIGN] done offset=%d", (int)g_foc_align_evt_v1);
+            break;
+        case 5u:
+            OBS_DBG("[ALIGN] FAULT code=%d i=%d mA",
+                    (int)g_foc_align_evt_v1, (int)g_foc_align_evt_v2);
+            break;
+        default:
+            break;
+        }
+    }
+
+    /* ---- ZIZENG 状态打印（200ms 高频调试） ---- */
+    if (g_zizeng_running) {
+        static uint32_t s_last_zz_dbg = 0u;
+        uint32_t now = tickTimer_GetCount();
+        if ((now - s_last_zz_dbg) >= 200u) {
+            s_last_zz_dbg = now;
+            OBS_DBG("[ZIZENG_DBG] cnt=%d rpm=%d enc_dir=%d theta=%d mrad rotor=%d mrad diff=%d mrad",
+                    (int)g_enc_count,                     /* 编码器累积计数(counts,4倍频,带符号) */
+                    (int)g_enc_speed_rpm,                 /* 机械转速估算(RPM) */
+                    (int)g_foc_enc_dir,                   /* 编码器方向符号(+1/-1) */
+                    (int)(g_foc_theta_rad * 1000.0f),     /* 磁场角theta(mrad,拖动角,递增) */
+                    (int)(g_foc_if_rotor_rad * 1000.0f),  /* 转子电角度(mrad,已扣mode30偏移) */
+                    (int)(g_foc_if_diff_rad * 1000.0f));  /* rotor-theta(mrad): 锁定后应≈0±0.2, 锁定前≈-1.57 */
+        }
+    }
+
+    /* ---- mode 31 运行监视（200ms 节流，全部整型缩放） ---- */
+    if (g_iqpi_running) {
+        static uint32_t s_last_iqpi_dbg = 0u;
+        uint32_t now = tickTimer_GetCount();
+        if ((now - s_last_iqpi_dbg) >= 200u) {
+            s_last_iqpi_dbg = now;
+            OBS_DBG("[IQPI_MON] st=%d iq=%d id=%d vq=%d vd=%d rr=%d win=%d ev=%d cd=%d ed=%d rd=%d flip=%d pos=%d ",
+                    (int)g_iqpi_step,                   /* 状态: 2=零矢量校准 3=闭环 4=vq饱和 5=堵转 6=过流 7=已翻转 */
+                    (int)g_foc_iq_ma, (int)g_foc_id_ma, /* 控制系电流 iq/id (mA), 应跟随 rr/0 */
+                    (int)(g_foc_vq * 1000.0f),          /* q轴电压指令(mV), ±3500=±限幅(顶格=饱和) */
+                    (int)(g_foc_vd * 1000.0f),          /* d轴电压指令(mV) */
+                    (int)g_iqpi_iq_ref_ramp_ma,         /* 斜坡后的iq参考 rr (mA) */
+                    (int)g_iqpi_win_moved,              /* 最近完成的500ms窗口位移(counts,带符号,0=尚无) */
+                    (int)g_iqpi_win_evals,              /* 已完成方向评估次数(0=方向检查从未运行) */
+                    (int)g_iqpi_cur_dir,                /* 最近窗口实测转向(+1/-1) */
+                    (int)g_iqpi_expect_dir,             /* 预期转向(由rd和rr符号决定) */
+                    (int)g_iqpi_ref_dir,                /* mode30记录的拖动方向基准(+1/-1,0=未测到) */
+                    (int)g_iqpi_flip_cnt,               /* 本次运行180°框架翻转次数 */
+                    (int)g_iqpi_enc_pos);               /* ISR累积编码器计数(看转向和速率) */
+        }
+    }
+
+    /* ---- mode 31 翻转事件（ISR 置 flag，此处打印一次后清零） ---- */
+    if (g_iqpi_evt_flag) {
+        g_iqpi_evt_flag = 0u;
+        OBS_DBG("[IQPI_FLIP] n=%d pos=%d iq=%d vq=%d off=%d cd=%d ed=%d rd=%d",
+                (int)g_iqpi_evt_seq, (int)g_iqpi_evt_pos,
+                (int)g_iqpi_evt_iq_ma, (int)g_iqpi_evt_vq_mv,
+                (int)g_iqpi_evt_off_mrad,
+                (int)g_iqpi_cur_dir, (int)g_iqpi_expect_dir,
+                (int)g_iqpi_ref_dir);
+    }
+
+    /* ---- mode 32 锁定/失败事件（ISR 置 flag，此处打印并交接/停机） ---- */
+    if (g_lockiq_evt_flag) {
+        uint8_t lock_code = g_lockiq_evt_code;
+        g_lockiq_evt_flag = 0u;
+        if ((lock_code == LOCKIQ_EVT_LOCKED) && g_lockiq_running) {
+            OBS_DBG("[LOCKIQ] locked off=%d mrad dir=%d -> handoff iqpi",
+                    (int)g_lockiq_evt_off_mrad, (int)g_foc_enc_dir);
+            g_lockiq_running = 0u;   /* 交接: ISR 停发 mode 32 */
+            Foc_StartIqPi();         /* mode 31 接管（偏移/方向已注入） */
+        } else if (lock_code == LOCKIQ_EVT_LOCKED) {
+            /* 事件置位后、处理前模式已被切走（如已进 mode 0）：跳过交接 */
+            OBS_DBG("[LOCKIQ] locked off=%d mrad but mode moved, skip handoff",
+                    (int)g_lockiq_evt_off_mrad);
+        } else {
+            OBS_DBG("[LOCKIQ] FAIL code=%d step=%d moved=%d track_err=%d",
+                    (int)lock_code, (int)g_lockiq_step,
+                    (int)g_lockiq_win_moved, (int)g_lockiq_track_err_cnts);
+            Foc_LockIqPi_Stop();
+        }
+    }
+#endif /* MOTOR_FOC_ENABLE */
+}

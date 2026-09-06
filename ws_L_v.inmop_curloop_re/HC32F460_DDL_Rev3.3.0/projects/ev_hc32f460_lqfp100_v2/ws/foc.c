@@ -15,6 +15,7 @@
  *          foc_align.c    模式23 对齐校准
  *          foc_zizeng.c   模式30 ZIZENG 自增拖动
  *          foc_iq_pi.c    模式31 PI 电流环（ZIZENG 偏移 + 编码器角度）
+ *          foc_lock_iq_pi.c 模式32 自锁偏移 + 自动交接 mode 31
  *          foc_scope.c    MotorScope RTT 遥测
  *
  *        ISR constraint: short, no blocking, no prints, no malloc.
@@ -71,6 +72,12 @@ void Foc_Isr(const stc_i_data_t *pData)
     /* ========== ZIZENG 模式 (mode 30) ========== */
     if (g_zizeng_running) {
         Foc_Zizeng_Step(pData);
+        return;
+    }
+
+    /* ========== LOCK_IQ_PI 模式 (mode 32)：自锁偏移 -> 交接 mode 31 ========== */
+    if (g_lockiq_running) {
+        Foc_LockIqPi_Step(pData);
         return;
     }
 

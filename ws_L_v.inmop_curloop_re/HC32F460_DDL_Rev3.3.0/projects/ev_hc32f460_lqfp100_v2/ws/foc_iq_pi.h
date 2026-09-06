@@ -3,17 +3,60 @@
  * @file  foc_iq_pi.h
  * @brief FOC 模式31 — 编码器转子角度 PI 电流环 (comm_mode 31)。
  *
- *        前置条件：先运行 mode 30 (ZIZENG) 完成偏移锁定，使编码器电角度
- *        绝对化（扣除 ZIZENG 锁定的基线偏移），本模式即可直接闭环。
+ * ============================================================================
+ * 【傻瓜式讲解：这个模式是干什么的】
  *
- *        控制流程（20 kHz ISR）：
- *          TIMERA_1 硬件计数 -> 转子电角度（扣 ZIZENG 偏移） -> Park
- *          -> id PI(id_ref=0) / iq PI(iq_ref) -> InvPark -> SVPWM
+ * 一句话：真正"看着转"的闭环模式。每 50µs 读一次编码器知道转子在哪，
+ *         用两个 PI 调节器精确控制电流，想要多大力矩就出多大力矩。
  *
- *        启动时复用 foc_calib 零偏自校准窗口（~210ms 零矢量），
- *        锁定后 iq_ref 从 0 软启动斜坡至目标值。
+ * 和 mode 30 的区别（重要）：
+ *   mode 30 是"闭着眼施力"：磁场自己匀速转，不管转子在哪，靠磁力拖着走。
+ *   mode 31 是"睁着眼施力"：先问编码器"转子现在在哪"，再算"要出这个力，
+ *   电压该往哪个方向打、打多大"，每一拍都重新算。
  *
- *        ISR 约束：短小、无阻塞、无打印、无 malloc。
+ * 前置条件：
+ *   必须先跑过 mode 30 或 mode 32，拿到"偏移量"（编码器读数换算成磁铁
+ *   真实角度要扣的修正值）。没锁定过偏移就启动会被拒绝（step=1）。
+ *
+ * 工作过程（按时间顺序）：
+ *   1. 启动检查：偏移没锁定 -> 拒绝启动，step=1 (ERR_NO_OFFSET)。
+ *   2. 校准窗口（step=2，约 210ms）：三相 50/50/50 不出力，测电流传感器
+ *      零点误差。这是每次启动的必经步骤，不是卡住了。
+ *   3. 闭环运行（step=3）：目标电流 iq_ref 从 0 按斜坡慢慢升到
+ *      g_iqpi_iq_ref_ma（软启动，防电流冲击）。两个 PI 分别干活：
+ *        - id PI：把"无用功电流" id 压到 0
+ *        - iq PI：把"力矩电流" iq 压到目标值（力矩大小和 iq 成正比）
+ *   4. 每 500ms 做一次"体检"（窗口检查）：
+ *        - 这 500ms 转子基本没动     -> step=5，疑似堵转
+ *        - 转了，但方向和预期相反    -> 说明角度框架差了 180°（这种错误
+ *          在电流读数上看不出来，只有转向能暴露），自动把角度基线翻转
+ *          180° 修正，step=7，打印 [IQPI_FLIP]
+ *        - vq/vd 顶到限幅           -> step=4，电压饱和（电压不够用，
+ *          常见于转速太高或目标电流太大）
+ *   5. 任何时刻过流 -> step=6，立即停机保护。
+ *
+ * RTT 怎么看它运行得好不好（每 200ms 一条 [IQPI_MON]，由 foc_obs 打印）：
+ *   st    : 当前状态码（含义见下面枚举）
+ *   iq/id : 实际电流 mA，正常应 iq≈rr、id≈0
+ *   vq/vd : 电压指令 mV，±3500 = 顶满限幅（饱和）
+ *   rr    : 斜坡后的目标电流 mA（启动时应从 0 慢慢涨上来）
+ *   win   : 最近 500ms 编码器位移 counts（正负=方向，0=没动）
+ *   ev    : 体检已做次数（0=一次都没做，方向检查没运行过）
+ *   cd/ed : 实际方向 / 预期方向，正常应相等
+ *   rd    : 启动时捕获的拖动方向基准
+ *   flip  : 本次运行翻转次数（>0 说明发生过 180° 修正）
+ *   pos   : 编码器累积计数（看转速和方向最直观）
+ *
+ * Watch 可调参数：
+ *   g_iqpi_iq_ref_ma    : 目标力矩电流 mA，正负号决定转向，运行中可改
+ *   g_iqpi_iq_ramp_ma_s : 电流斜坡斜率 mA/s
+ *   g_iqpi_pid_iq_cfg / g_iqpi_pid_id_cfg : PI 参数（kp/ki 已按 1kHz
+ *       带宽整定；带宽不得超过 PWM 频率的 1/10，不要随意加大）
+ *
+ * 状态历史：g_iqpi_step_hist[]（在 foc_obs 观察模块）像行车记录仪一样
+ *   记录最近 10 次状态变化，出问题回放即可知道它在哪一步出的错。
+ *
+ * ISR 约束：短小、无阻塞、无打印、无 malloc。
  *******************************************************************************
  */
 
@@ -83,38 +126,18 @@ typedef enum {
                                        已自动翻转框架修正, 数秒内应回到 3/4 */
 } iqpi_step_t;
 
-/* 状态历史（每次状态变化记录一条，hist[0] 最旧，hist[cnt-1] 最新；
- * 成功启动 mode 31 时清空重记。Watch 直接看数组各元素的枚举名） */
-#define IQPI_HISTORY_LEN  10u
-
 /* ============================================================================
  * Keil Watch 可调变量 / 观测量（定义见 foc_iq_pi.c）
+ *   状态历史 g_iqpi_step_hist、转向诊断量 g_iqpi_win_*、g_iqpi_cur_dir 等、
+ *   翻转事件快照 g_iqpi_evt_* 已集中迁移到观察模块 foc_obs.h（定义在
+ *   foc_obs.c），变量名未变，Keil Watch 用法不变。
  * ==========================================================================*/
 extern volatile uint8_t g_iqpi_running;        /* 1 = 模式31 运行中 */
 extern volatile iqpi_step_t g_iqpi_step;       /* 模式31 当前/最后状态 (Watch 看枚举名) */
-extern volatile iqpi_step_t g_iqpi_step_hist[IQPI_HISTORY_LEN]; /* 状态历史, [0]最旧 */
-extern volatile uint8_t g_iqpi_step_hist_cnt;  /* 历史有效条数 0..10 */
-extern volatile uint8_t g_iqpi_flip_cnt;       /* 本次运行中框架180°自动翻转次数 */
 extern volatile float   g_iqpi_iq_ref_ma;      /* iq 目标 (mA)，Watch 可实时修改 */
 extern volatile float   g_iqpi_iq_ref_ramp_ma; /* 斜坡后的实际 iq 参考 (mA) */
 extern volatile float   g_iqpi_iq_ramp_ma_s;   /* iq 斜率 (mA/s)，Watch 可调 */
 extern volatile float   g_iqpi_theta_rad;      /* 当前使用的转子电角度 (rad) */
-
-/* --- 转向诊断观测量（ISR 更新；main.c 周期打印 [IQPI_MON]） --- */
-extern volatile int32_t  g_iqpi_enc_pos;       /* ISR 累积编码器计数镜像 */
-extern volatile int32_t  g_iqpi_win_moved;     /* 最近完成的500ms窗口位移(counts,带符号) */
-extern volatile uint32_t g_iqpi_win_evals;     /* 已完成窗口评估次数(0=方向检查从未运行) */
-extern volatile int8_t   g_iqpi_cur_dir;       /* 最近窗口实测方向 +1/-1 */
-extern volatile int8_t   g_iqpi_expect_dir;    /* 预期方向 +1/-1 */
-extern volatile int8_t   g_iqpi_ref_dir;       /* 启动时捕获的 mode30 拖动方向 */
-
-/* --- 翻转事件快照（ISR 置 g_iqpi_evt_flag，main.c 打印后清零） --- */
-extern volatile uint8_t  g_iqpi_evt_flag;
-extern volatile uint8_t  g_iqpi_evt_seq;       /* 第几次翻转 (1,2,...) */
-extern volatile int32_t  g_iqpi_evt_pos;       /* 翻转时编码器计数 */
-extern volatile int32_t  g_iqpi_evt_iq_ma;     /* 翻转时 iq (mA) */
-extern volatile int32_t  g_iqpi_evt_vq_mv;     /* 翻转时 vq (mV) */
-extern volatile int32_t  g_iqpi_evt_off_mrad;  /* 翻转后偏移基线 (mrad) */
 
 /* d/q 轴 PI 配置（字段 volatile，Watch 可实时改 kp/ki/限幅） */
 extern pid_config_t g_iqpi_pid_id_cfg;
