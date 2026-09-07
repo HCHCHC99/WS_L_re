@@ -24,10 +24,13 @@
  *      90°电角度（= CPR/(4·极对数) counts）。挪的量和标准答案对不上
  *      （差超过 12 counts）就拒绝启动——防止转子被卡死在别的位置却
  *      "看起来静止"骗过了第 2 步。
- *   4. 锁定：对表完成，偏移量恒定注入 90°（1571 mrad；为什么是恒定
- *      90° 见 .c 文件头推导），方向基准注入 FOC_ENC_DIR，打印：
- *        "[LOCKIQ] locked off=1571 mrad dir=±1 -> handoff iqpi"
- *   5. 自动交接：零矢量保持转子不动，观察模块 foc_obs 的
+ *   4. 锁定：对表完成，偏移量恒定注入 0（为什么是恒定 0 见 .c 文件头
+ *      推导：VERIFY 结束时转子被吸停在 90°，而 mode 31 要求
+ *      off = 90° − 转子角度 = 0。旧版注入 90° 是加 VERIFY 前的推导，
+ *      会造成 90° 框架差 → 堵转/过流），方向基准注入 FOC_ENC_DIR，打印：
+ *        "[LOCKIQ] locked off=0 deg dir=±1 -> handoff iqpi"
+ *   5. 自动交接：继续保持 90° 磁场吸住转子不放手（保证 mode 31 启动
+ *      瞬间转子仍在对齐位，off=0 的前提），观察模块 foc_obs 的
  *      Foc_Obs_Task() 看到事件后自动调用 mode 31 启动，无缝闭环。
  *      整个流程不用人管。
  *
@@ -39,13 +42,13 @@
  * Watch 常用变量：
  *   g_lockiq_step            : 进行到哪一步（含义见下面枚举）
  *   g_lockiq_align_volt_v    : 吸力大小 V，启动前可改
- *   g_lockiq_off_mrad        : 已注入 mode 31 的偏移（成功后应为 1571）
+ *   g_lockiq_off_deg         : 已注入 mode 31 的偏移（deg，成功后应为 0）
  *   g_lockiq_track_err_cnts  : 复测位移误差，0 附近=好
  *   窗口诊断量 g_lockiq_win_moved/win_evals、事件快照 g_lockiq_evt_*
  *   已集中迁移到观察模块 foc_obs.h（定义在 foc_obs.c），变量名未变。
  *
  * 使用限制（重要）：
- *   偏移=90° 只对"mode 32 -> 自动交接 mode 31"这条链路有效（交接时
+ *   偏移=0 只对"mode 32 -> 自动交接 mode 31"这条链路有效（交接时
  *   转子必须仍停在对齐位）。交接后转子若被人手拧动过，再单独进
  *   mode 31 是无效的，需要重跑 mode 32。
  *
@@ -122,7 +125,7 @@ extern volatile uint8_t g_lockiq_running;       /* 1 = 模式32 运行中 */
 extern volatile lockiq_step_t g_lockiq_step;    /* 当前/最后状态 (Watch 看枚举名) */
 extern volatile float   g_lockiq_align_volt_v;  /* 对齐电压幅值 (V)，Watch 可调
                                                    (0.4V -> ≈4A 直流，量程内) */
-extern volatile int32_t g_lockiq_off_mrad;      /* 已注入 mode 31 的偏移 (mrad) */
+extern volatile int32_t g_lockiq_off_deg;       /* 已注入 mode 31 的偏移 (deg) */
 
 /*******************************************************************************
  * API

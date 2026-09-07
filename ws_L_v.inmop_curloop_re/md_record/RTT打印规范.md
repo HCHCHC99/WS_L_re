@@ -49,7 +49,9 @@
 | cur_loop.h | `CUR_LOOP_DBG` | `CURLOOP_DBG` |
 | dev_comm_runner.h | `COMM_RUNNER_DBG` | — |
 | foc_calib.h | `FOC_CALIB_DBG` | — |
+| foc_cal.h | `FOC_CAL_DBG` | `CAL_DBG`（[CAL] 前缀，打印在 foc_obs 事件段，ISR 内不打印） |
 | foc_iq_pi.h | `FOC_IQPI_DBG` | `IQPI_DBG` |
+| foc_obs.h | `FOC_OBS_DBG` | `OBS_DBG` |
 | foc_zizeng.h | `FOC_ZIZENG_DBG` | — |
 | hall_sensor_3ch.h | `HALL_SENSOR3_DBG` | — |
 | main.c（无独立 .h，定义在文件顶部） | `DEBUG_MAIN` | `MAIN_DBG` |

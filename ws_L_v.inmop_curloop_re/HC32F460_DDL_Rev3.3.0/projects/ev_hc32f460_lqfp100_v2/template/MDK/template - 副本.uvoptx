@@ -120,7 +120,6 @@
         <SetRegEntry>
           <Number>0</Number>
           <Key>DLGUARM</Key>
-          <Name>0d?</Name>
         </SetRegEntry>
         <SetRegEntry>
           <Number>0</Number>
@@ -340,42 +339,42 @@
         <Ww>
           <count>8</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_cur_pid_cfg.ki</ItemText>
+          <ItemText>g_foc_if_rotor_rad</ItemText>
         </Ww>
         <Ww>
           <count>9</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_i_ref_ma</ItemText>
+          <ItemText>g_foc_mech_rad</ItemText>
         </Ww>
         <Ww>
           <count>10</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_cur_pid_cfg.i_valid</ItemText>
+          <ItemText>g_lockiq_off_deg,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>11</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_cur_fb_alpha</ItemText>
+          <ItemText>g_lockiq_evt_off_deg</ItemText>
         </Ww>
         <Ww>
           <count>12</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_foc_cur_fb_alpha</ItemText>
+          <ItemText>g_iqpi_evt_off_deg</ItemText>
         </Ww>
         <Ww>
           <count>13</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_foc_pid_iq_cfg</ItemText>
+          <ItemText>rotor_deg</ItemText>
         </Ww>
         <Ww>
           <count>14</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_foc_enc_dir</ItemText>
+          <ItemText>g_foc_mech_deg,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>15</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_foc_cur_sign</ItemText>
+          <ItemText>g_foc_elec_deg,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>16</count>
@@ -2185,6 +2184,30 @@
       <bDave2>0</bDave2>
       <PathWithFileName>..\..\ws\foc_obs.c</PathWithFileName>
       <FilenameWithoutPath>foc_obs.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>10</GroupNumber>
+      <FileNumber>118</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>..\..\ws\foc_cal.c</PathWithFileName>
+      <FilenameWithoutPath>foc_cal.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>10</GroupNumber>
+      <FileNumber>119</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>..\..\ws\foc_cal_angle.c</PathWithFileName>
+      <FilenameWithoutPath>foc_cal_angle.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>

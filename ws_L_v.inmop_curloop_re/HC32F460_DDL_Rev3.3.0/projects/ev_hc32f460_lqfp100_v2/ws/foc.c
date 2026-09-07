@@ -13,6 +13,7 @@
  *          foc_openloop.c 模式21 开环 V/f
  *          foc_curloop.c  模式22 电流环（I-F 启动 + 同步交接 + RUN）
  *          foc_align.c    模式23 对齐校准
+ *          foc_cal.c      模式20 编码器零点校准（BETA 2s + ALPHA 2s -> 锁 offset）
  *          foc_zizeng.c   模式30 ZIZENG 自增拖动
  *          foc_iq_pi.c    模式31 PI 电流环（ZIZENG 偏移 + 编码器角度）
  *          foc_lock_iq_pi.c 模式32 自锁偏移 + 自动交接 mode 31
@@ -60,7 +61,15 @@ void Foc_Isr(const stc_i_data_t *pData)
     }
 
     if (g_foc_mode == FOC_MODE_ALIGN) {
-        Foc_Align_Step(pData);
+        /* mode 20 校准优先（g_cal_running 托管），mode 25 次之
+         * （g_calang_running 托管），否则 mode 23 对齐 */
+        if (g_cal_running) {
+            Foc_Cal_Step(pData);
+        } else if (g_calang_running) {
+            Foc_CalAngle_Step(pData);
+        } else {
+            Foc_Align_Step(pData);
+        }
         return;
     }
 

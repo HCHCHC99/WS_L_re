@@ -81,7 +81,7 @@ extern volatile uint8_t  g_iqpi_evt_seq;       /* 第几次翻转 (1,2,...) */
 extern volatile int32_t  g_iqpi_evt_pos;       /* 翻转时编码器计数 */
 extern volatile int32_t  g_iqpi_evt_iq_ma;     /* 翻转时 iq (mA) */
 extern volatile int32_t  g_iqpi_evt_vq_mv;     /* 翻转时 vq (mV) */
-extern volatile int32_t  g_iqpi_evt_off_mrad;  /* 翻转后偏移基线 (mrad) */
+extern volatile int32_t  g_iqpi_evt_off_deg;   /* 翻转后偏移基线 (deg) */
 
 /*=============================================================================
  * mode 32 观察量（定义在 foc_obs.c；傻瓜式含义讲解见 foc_lock_iq_pi.h 顶部）
@@ -93,7 +93,7 @@ extern volatile int32_t g_lockiq_track_err_cnts; /* VERIFY 跟踪误差 (counts)
 /* --- 锁定/失败事件快照（ISR 置 g_lockiq_evt_flag，Foc_Obs_Task 处理后清零） --- */
 extern volatile uint8_t  g_lockiq_evt_flag;
 extern volatile uint8_t  g_lockiq_evt_code;     /* LOCKIQ_EVT_xxx（定义见 foc_lock_iq_pi.h） */
-extern volatile int32_t  g_lockiq_evt_off_mrad; /* 锁定的注入偏移 (mrad) */
+extern volatile int32_t  g_lockiq_evt_off_deg; /* 锁定的注入偏移 (deg) */
 
 /*******************************************************************************
  * API

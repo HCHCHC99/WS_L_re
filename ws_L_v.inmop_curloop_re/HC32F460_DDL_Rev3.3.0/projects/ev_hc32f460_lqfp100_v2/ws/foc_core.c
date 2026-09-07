@@ -13,6 +13,7 @@
 #include "tmr4_pwm.h"
 #include "encoder.h"
 #include "motor_config.h"
+#include "hc32_ll_tmra.h"   /* Foc_Core_UpdateAngleObs 读 TMRA_1 原始计数 */
 #include <math.h>
 
 /*******************************************************************************
@@ -60,6 +61,9 @@ volatile float   g_foc_openloop_volt_v  = FOC_OPENLOOP_VOLT_V;
 /* 共享角度观测量 */
 volatile float   g_foc_if_rotor_rad     = 0.0f;
 volatile float   g_foc_if_diff_rad      = 0.0f;
+volatile float   g_foc_mech_rad         = 0.0f;   /* 机械角度 [0,2PI)，mode 0 观测更新 */
+volatile int32_t g_foc_mech_deg         = 0;      /* 机械角度 [0,360)，mode 0 观测更新 */
+volatile int32_t g_foc_elec_deg         = 0;      /* 电角度 [0,360*极对数)，mode 0 观测更新 */
 
 /* 对齐电零点 */
 volatile int32_t g_foc_align_offset     = 0;
@@ -107,6 +111,46 @@ void Foc_Core_SetAlignOffset(int32_t offset)
 {
     s_align_offset    = offset;
     g_foc_align_offset = offset;
+}
+
+/*******************************************************************************
+ * Foc_Core_UpdateAngleObs - mode 0 / 空闲时实时刷新角度观测量（主循环调用）
+ *
+ * 直接读 TMRA_1 原始硬件计数（free-run 16 位）。CPR=4096 整除 65536，
+ * "原始计数 mod CPR" 是连续合法的圈内位置，回绕无缝，无需累积器。
+ * 扣对齐零点 offset（mode 20/23 锁定）后：
+ *   g_foc_mech_rad     = 机械角度 [0, 2π)          （rad，控制框架）
+ *   g_foc_if_rotor_rad = 电角度   [0, 2π)（折叠）  （rad，控制框架）
+ *   g_foc_mech_deg     = 机械角度 [0, 360)          （deg，显示/Watch）
+ *   g_foc_elec_deg     = 电角度   [0, 360*极对数)   （deg，显示/Watch）
+ * 活跃模式下各 step 函数会覆盖 g_foc_if_rotor_rad，不冲突。
+ ******************************************************************************/
+void Foc_Core_UpdateAngleObs(void)
+{
+    int32_t cnt;
+    int32_t diff;
+    float   mech;
+    float   elec;
+
+    cnt  = (int32_t)TMRA_GetCountValue(CM_TMRA_1);
+    diff = Foc_Core_ModPos(cnt * (int32_t)g_foc_enc_dir - s_align_offset,
+                           (int32_t)ENCODER_CPR);
+
+    mech = (float)diff * (FOC_MATH_2PI / (float)ENCODER_CPR);   /* 已在 [0,2π) */
+    g_foc_mech_rad = mech;
+
+    /* deg 观测量（纯整数运算）：机械角 0-360，电角度 = 机械 x 极对数，
+     * 直接从 counts 展开（不经 mech_deg 放大截断误差） */
+    g_foc_mech_deg = diff * 360 / (int32_t)ENCODER_CPR;
+    g_foc_elec_deg = (diff * 360 * (int32_t)FOC_POLE_PAIRS / (int32_t)ENCODER_CPR)
+                   % (360 * (int32_t)FOC_POLE_PAIRS);
+
+    elec = mech * (float)FOC_POLE_PAIRS;
+    elec -= (float)((int32_t)(elec * (1.0f / FOC_MATH_2PI))) * FOC_MATH_2PI;
+    if (elec < 0.0f) {
+        elec += FOC_MATH_2PI;   /* 浮点截断误差防负 */
+    }
+    g_foc_if_rotor_rad = elec;
 }
 
 /*******************************************************************************

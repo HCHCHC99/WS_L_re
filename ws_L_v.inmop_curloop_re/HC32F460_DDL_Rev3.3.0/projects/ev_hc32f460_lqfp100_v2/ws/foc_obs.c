@@ -18,6 +18,9 @@
 #include "foc_zizeng.h"
 #include "foc_lock_iq_pi.h"
 #include "foc_align.h"
+#include "foc_cal.h"
+#include "foc_cal_angle.h"
+#include "dev_comm_runner.h"   /* CommRunner_SetMode（mode 20 完成自动回 mode 0） */
 #include "encoder.h"
 #include "motor_config.h"
 #include "rtt_log.h"
@@ -44,7 +47,7 @@ volatile uint8_t g_iqpi_evt_seq        = 0;   /* 第几次翻转 (1,2,...) */
 volatile int32_t g_iqpi_evt_pos        = 0;   /* 翻转时编码器计数 */
 volatile int32_t g_iqpi_evt_iq_ma      = 0;   /* 翻转时 iq (mA) */
 volatile int32_t g_iqpi_evt_vq_mv      = 0;   /* 翻转时 vq (mV) */
-volatile int32_t g_iqpi_evt_off_mrad   = 0;   /* 翻转后偏移基线 (mrad) */
+volatile int32_t g_iqpi_evt_off_deg    = 0;   /* 翻转后偏移基线 (deg) */
 
 /*******************************************************************************
  * mode 32 观察量定义（原 foc_lock_iq_pi.c）
@@ -56,7 +59,7 @@ volatile int32_t g_lockiq_track_err_cnts = 0; /* VERIFY 跟踪误差 (counts) */
 /* 锁定/失败事件快照（ISR 置 flag，Foc_Obs_Task 处理后清 flag） */
 volatile uint8_t g_lockiq_evt_flag     = 0;
 volatile uint8_t g_lockiq_evt_code     = 0;
-volatile int32_t g_lockiq_evt_off_mrad = 0;
+volatile int32_t g_lockiq_evt_off_deg  = 0;   /* 锁定的注入偏移 (deg) */
 
 /*******************************************************************************
  * Foc_Obs_IqpiHistClear - 清空 mode 31 状态历史（新的一次运行重新记录）
@@ -97,6 +100,11 @@ void Foc_Obs_IqpiRecordStep(iqpi_step_t s)
 void Foc_Obs_Task(void)
 {
 #if MOTOR_FOC_ENABLE
+    /* ---- 角度实时观测（读 TMRA_1 原始计数 + 扣 offset） ----
+     * mode 0 下维持 g_foc_if_rotor_rad / g_foc_mech_rad 实时更新；
+     * 活跃模式下 ISR 会覆盖 g_foc_if_rotor_rad，此写入无害。 */
+    Foc_Core_UpdateAngleObs();
+
     /* ---- FOC 故障打印 ---- */
     {
         static uint8_t s_foc_fault_printed = 0;
@@ -109,6 +117,61 @@ void Foc_Obs_Task(void)
             }
         } else {
             s_foc_fault_printed = 0;
+        }
+    }
+
+    /* ---- mode 20 校准事件（ISR 置 evt，此处打印；完成/过流自动回 mode 0） ---- */
+    if (g_cal_evt != 0u) {
+        uint8_t evt = g_cal_evt;
+        g_cal_evt = 0u;
+        switch (evt) {
+        case CAL_EVT_BETA_DONE:
+            CAL_DBG("BETA done hw=%d -> ALPHA 0deg", (int)g_cal_beta_hw);
+            break;
+        case CAL_EVT_LOCKED:
+            CAL_DBG("ALPHA done hw=%d moved=%d offset=%d cnts (%d deg)",
+                    (int)g_cal_alpha_hw, (int)g_cal_moved, (int)g_cal_offset,
+                    (int)((g_cal_offset * 360) / (int32_t)ENCODER_CPR));
+            CommRunner_SetMode(COMM_RUNNER_STOP);   /* 校准完成自动回 mode 0 */
+            break;
+        case CAL_EVT_OC:
+            CAL_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+            CommRunner_SetMode(COMM_RUNNER_STOP);
+            break;
+        default:
+            break;
+        }
+    }
+
+    /* ---- mode 25 手动角度吸附事件（ISR 置 evt，此处打印；仅 OC 自动回 mode 0，
+     *      LOCKED / DONE 均保持在 mode 25 等下一次输入） ---- */
+    if (g_calang_evt != 0u) {
+        uint8_t evt = g_calang_evt;
+        g_calang_evt = 0u;
+        switch (evt) {
+        case CALANG_EVT_BETA_DONE:
+            CALANG_DBG("BETA done -> ALPHA 0deg");
+            break;
+        case CALANG_EVT_LOCKED:
+            CALANG_DBG("LOCKED offset=%d deg",
+                    (int)((g_calang_offset * 360) / (int32_t)ENCODER_CPR));
+            break;
+        case CALANG_EVT_DONE_OK:
+            CALANG_DBG("HOLD ok target=%d meas=%d err=%d deg",
+                    (int)g_calang_target_deg, (int)g_calang_meas_deg,
+                    (int)g_calang_err_deg);
+            break;
+        case CALANG_EVT_DONE_FAIL:
+            CALANG_DBG("HOLD FAIL moved=%d cnts target=%d meas=%d deg",
+                    (int)g_calang_win_moved, (int)g_calang_target_deg,
+                    (int)g_calang_meas_deg);
+            break;
+        case CALANG_EVT_OC:
+            CALANG_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+            CommRunner_SetMode(COMM_RUNNER_STOP);
+            break;
+        default:
+            break;
         }
     }
 
@@ -146,13 +209,13 @@ void Foc_Obs_Task(void)
         uint32_t now = tickTimer_GetCount();
         if ((now - s_last_zz_dbg) >= 200u) {
             s_last_zz_dbg = now;
-            OBS_DBG("[ZIZENG_DBG] cnt=%d rpm=%d enc_dir=%d theta=%d mrad rotor=%d mrad diff=%d mrad",
+            OBS_DBG("[ZIZENG_DBG] cnt=%d rpm=%d enc_dir=%d theta=%d deg rotor=%d deg diff=%d deg",
                     (int)g_enc_count,                     /* 编码器累积计数(counts,4倍频,带符号) */
                     (int)g_enc_speed_rpm,                 /* 机械转速估算(RPM) */
                     (int)g_foc_enc_dir,                   /* 编码器方向符号(+1/-1) */
-                    (int)(g_foc_theta_rad * 1000.0f),     /* 磁场角theta(mrad,拖动角,递增) */
-                    (int)(g_foc_if_rotor_rad * 1000.0f),  /* 转子电角度(mrad,已扣mode30偏移) */
-                    (int)(g_foc_if_diff_rad * 1000.0f));  /* rotor-theta(mrad): 锁定后应≈0±0.2, 锁定前≈-1.57 */
+                    (int)(g_foc_theta_rad * 57.2958f),    /* 磁场角theta(deg,拖动角,递增) */
+                    (int)(g_foc_if_rotor_rad * 57.2958f), /* 转子电角度(deg,已扣mode30偏移,0-360) */
+                    (int)(g_foc_if_diff_rad * 57.2958f)); /* rotor-theta(deg): 锁定后应≈0 */
         }
     }
 
@@ -181,10 +244,10 @@ void Foc_Obs_Task(void)
     /* ---- mode 31 翻转事件（ISR 置 flag，此处打印一次后清零） ---- */
     if (g_iqpi_evt_flag) {
         g_iqpi_evt_flag = 0u;
-        OBS_DBG("[IQPI_FLIP] n=%d pos=%d iq=%d vq=%d off=%d cd=%d ed=%d rd=%d",
+        OBS_DBG("[IQPI_FLIP] n=%d pos=%d iq=%d vq=%d off=%d deg cd=%d ed=%d rd=%d",
                 (int)g_iqpi_evt_seq, (int)g_iqpi_evt_pos,
                 (int)g_iqpi_evt_iq_ma, (int)g_iqpi_evt_vq_mv,
-                (int)g_iqpi_evt_off_mrad,
+                (int)g_iqpi_evt_off_deg,
                 (int)g_iqpi_cur_dir, (int)g_iqpi_expect_dir,
                 (int)g_iqpi_ref_dir);
     }
@@ -194,14 +257,14 @@ void Foc_Obs_Task(void)
         uint8_t lock_code = g_lockiq_evt_code;
         g_lockiq_evt_flag = 0u;
         if ((lock_code == LOCKIQ_EVT_LOCKED) && g_lockiq_running) {
-            OBS_DBG("[LOCKIQ] locked off=%d mrad dir=%d -> handoff iqpi",
-                    (int)g_lockiq_evt_off_mrad, (int)g_foc_enc_dir);
+            OBS_DBG("[LOCKIQ] locked off=%d deg dir=%d -> handoff iqpi",
+                    (int)g_lockiq_evt_off_deg, (int)g_foc_enc_dir);
             g_lockiq_running = 0u;   /* 交接: ISR 停发 mode 32 */
             Foc_StartIqPi();         /* mode 31 接管（偏移/方向已注入） */
         } else if (lock_code == LOCKIQ_EVT_LOCKED) {
             /* 事件置位后、处理前模式已被切走（如已进 mode 0）：跳过交接 */
-            OBS_DBG("[LOCKIQ] locked off=%d mrad but mode moved, skip handoff",
-                    (int)g_lockiq_evt_off_mrad);
+            OBS_DBG("[LOCKIQ] locked off=%d deg but mode moved, skip handoff",
+                    (int)g_lockiq_evt_off_deg);
         } else {
             OBS_DBG("[LOCKIQ] FAIL code=%d step=%d moved=%d track_err=%d",
                     (int)lock_code, (int)g_lockiq_step,

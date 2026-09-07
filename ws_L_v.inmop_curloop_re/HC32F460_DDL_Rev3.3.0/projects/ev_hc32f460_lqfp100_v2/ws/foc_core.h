@@ -87,9 +87,13 @@ extern volatile float    g_foc_vlim_v;           /* current voltage envelope (V)
 extern volatile float    g_foc_openloop_freq_hz; /* electrical freq (Hz), Keil Watch editable */
 extern volatile float    g_foc_openloop_volt_v;  /* voltage amplitude (V), Keil Watch editable */
 
-/* 共享角度观测量（模式22 与模式30 均写入） */
+/* 共享角度观测量（模式22 / 模式30 / mode 0 角度观测 均写入）
+ * 控制内部用 rad；显示/Watch 用 deg（机械角 [0,360)，电角度 [0,360*极对数)） */
 extern volatile float    g_foc_if_rotor_rad;     /* rotor electrical angle, folded [0,2PI) (rad) */
 extern volatile float    g_foc_if_diff_rad;      /* encoder-elec angle - synthetic angle (rad) */
+extern volatile float    g_foc_mech_rad;         /* mechanical angle, folded [0,2PI) (rad) */
+extern volatile int32_t  g_foc_mech_deg;         /* mechanical angle [0,360) (deg, mode 0 观测) */
+extern volatile int32_t  g_foc_elec_deg;         /* electrical angle [0,360*POLE_PAIRS) (deg, mode 0 观测) */
 
 /* 对齐电零点：模式23 记录，模式22 I-F 交接沿用（编码器 electrical-zero count） */
 extern volatile int32_t  g_foc_align_offset;
@@ -144,6 +148,14 @@ void Foc_Core_SetStateMachine(foc_state_t state);
 /* 对齐零点托管（写入时同步刷新 g_foc_align_offset 观测量） */
 int32_t Foc_Core_GetAlignOffset(void);
 void Foc_Core_SetAlignOffset(int32_t offset);
+
+/* mode 0 / 空闲时实时更新角度观测量（主循环调用）：
+ * 读 TMRA_1 原始计数 mod CPR，扣对齐零点 offset，更新
+ * g_foc_if_rotor_rad / g_foc_mech_rad（rad，控制框架）与
+ * g_foc_mech_deg（机械角 [0,360)）/ g_foc_elec_deg（电角度
+ * [0,360*极对数)）（deg，显示/Watch 用）。
+ * 活跃模式下各 step 函数会覆盖 g_foc_if_rotor_rad，不冲突。 */
+void Foc_Core_UpdateAngleObs(void);
 
 /*******************************************************************************
  * 原有对外 API（实现移自 foc.c，名称不变）

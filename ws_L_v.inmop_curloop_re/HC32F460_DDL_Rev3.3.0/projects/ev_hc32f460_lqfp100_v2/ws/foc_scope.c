@@ -40,25 +40,25 @@ volatile int32_t g_motor_scope = (int32_t)MOTOR_SCOPE_KEY;
 typedef struct __attribute__((packed)) {
     uint32_t magic;
     uint32_t ms;
-    int32_t  rotor_mrad;
-    int32_t  theta_mrad;
+    int32_t  rotor_deg;        /* 转子电角度 [0,360*极对数) */
+    int32_t  theta_deg;        /* 磁场角 (deg, mode30 拖动递增) */
     int32_t  iq_ma;
     int32_t  id_ma;
     int32_t  vq_mv;
     int32_t  vd_mv;
     int32_t  spd_rpm;
-    int32_t  diff_mrad;
+    int32_t  diff_deg;         /* rotor - theta (deg, 带符号小值) */
     int32_t  freq_cHz;
     uint8_t  mode;
     uint8_t  phase;
     uint8_t  sync;
     uint8_t  rsv;
-    int32_t  mech_mrad;
+    int32_t  mech_deg;         /* 机械角度 [0,360) */
     int32_t  is_ma;
-    int32_t  is_angle_mrad;
+    int32_t  is_angle_deg;     /* 电流矢量角 (-180,180] */
     int32_t  v_mv;
-    int32_t  v_angle_mrad;
-    int32_t  theta_mech_mrad;
+    int32_t  v_angle_deg;      /* 电压矢量角 (-180,180] */
+    int32_t  theta_mech_deg;   /* 磁场角折算机械当量 (deg) */
     int32_t  cnt;
 } foc_rtt_frame_t;
 #endif
@@ -75,18 +75,27 @@ static float Foc_RotorAngleFromEncoderRad(void)
     return enc;
 }
 
-static int32_t Foc_MechAngleMrad(void)
+/* 角度通道统一用 deg：机械角 [0,360)，电角度 [0,360*极对数)，
+ * 直接从编码器 counts 整数换算（电角度 = 圈内位置 x 极对数） */
+static int32_t Foc_MechAngleDeg(void)
 {
-    float mech_rad = (float)((int32_t)g_enc_count * (int32_t)g_foc_enc_dir)
-                   * (FOC_MATH_2PI / (float)ENCODER_CPR);
-    return (int32_t)(mech_rad * 1000.0f);
+    return Foc_Core_ModPos((int32_t)g_enc_count * (int32_t)g_foc_enc_dir,
+                           (int32_t)ENCODER_CPR) * 360 / (int32_t)ENCODER_CPR;
 }
 
-static int32_t Foc_IsMagMa(void)       { return (int32_t)sqrtf(g_foc_id_ma * g_foc_id_ma + g_foc_iq_ma * g_foc_iq_ma); }
-static int32_t Foc_IsAngleMrad(void)   { return (int32_t)(atan2f(g_foc_iq_ma, g_foc_id_ma) * 1000.0f); }
-static int32_t Foc_VMagMv(void)        { return (int32_t)(sqrtf(g_foc_vd * g_foc_vd + g_foc_vq * g_foc_vq) * 1000.0f); }
-static int32_t Foc_VAngleMrad(void)    { return (int32_t)(atan2f(g_foc_vq, g_foc_vd) * 1000.0f); }
-static int32_t Foc_ThetaMechMrad(void) { return (int32_t)(g_foc_theta_rad * (1000.0f / (float)FOC_POLE_PAIRS)); }
+/* 转子电角度 = 机械圈内位置 x 极对数，[0, 360*极对数) */
+static int32_t Foc_RotorElecDeg(void)
+{
+    return Foc_Core_ModPos((int32_t)g_enc_count * (int32_t)g_foc_enc_dir,
+                           (int32_t)ENCODER_CPR) * 360 * (int32_t)FOC_POLE_PAIRS
+         / (int32_t)ENCODER_CPR;
+}
+
+static int32_t Foc_IsMagMa(void)      { return (int32_t)sqrtf(g_foc_id_ma * g_foc_id_ma + g_foc_iq_ma * g_foc_iq_ma); }
+static int32_t Foc_IsAngleDeg(void)   { return (int32_t)(atan2f(g_foc_iq_ma, g_foc_id_ma) * 57.2958f); }
+static int32_t Foc_VMagMv(void)       { return (int32_t)(sqrtf(g_foc_vd * g_foc_vd + g_foc_vq * g_foc_vq) * 1000.0f); }
+static int32_t Foc_VAngleDeg(void)    { return (int32_t)(atan2f(g_foc_vq, g_foc_vd) * 57.2958f); }
+static int32_t Foc_ThetaMechDeg(void) { return (int32_t)(g_foc_theta_rad * (57.2958f / (float)FOC_POLE_PAIRS)); }
 
 static uint64_t s_mot_scope_last_us    = 0u;
 static int32_t  s_mot_scope_last_mode  = -1;
@@ -167,33 +176,31 @@ void Foc_RttSend(uint64_t now_us)
     ms = (uint32_t)(now_us / 1000u);
 
     g_foc_if_rotor_rad = Foc_RotorAngleFromEncoderRad();
-    {
-        float rotor_rad = g_foc_if_rotor_rad;
 
 #if FOC_RTT_RATE_HZ > 2000u
     {
         foc_rtt_frame_t fr;
         fr.magic      = 0x46544F4Du;
         fr.ms         = ms;
-        fr.rotor_mrad = (int32_t)(rotor_rad * 1000.0f);
-        fr.theta_mrad = (int32_t)(g_foc_theta_rad  * 1000.0f);
+        fr.rotor_deg  = Foc_RotorElecDeg();
+        fr.theta_deg  = (int32_t)(g_foc_theta_rad  * 57.2958f);
         fr.iq_ma      = (int32_t)g_foc_iq_ma;
         fr.id_ma      = (int32_t)g_foc_id_ma;
         fr.vq_mv      = (int32_t)(g_foc_vq * 1000.0f);
         fr.vd_mv      = (int32_t)(g_foc_vd * 1000.0f);
         fr.spd_rpm    = (int32_t)g_enc_speed_rpm;
-        fr.diff_mrad  = (int32_t)(g_foc_if_diff_rad * 1000.0f);
+        fr.diff_deg   = (int32_t)(g_foc_if_diff_rad * 57.2958f);
         fr.freq_cHz   = (int32_t)(g_foc_if_freq_hz * 100.0f);
         fr.mode       = g_foc_mode;
         fr.phase      = g_foc_phase;
         fr.sync       = g_foc_if_sync;
         fr.rsv        = 0u;
-        fr.mech_mrad  = Foc_MechAngleMrad();
+        fr.mech_deg        = Foc_MechAngleDeg();
         fr.is_ma           = Foc_IsMagMa();
-        fr.is_angle_mrad   = Foc_IsAngleMrad();
+        fr.is_angle_deg    = Foc_IsAngleDeg();
         fr.v_mv            = Foc_VMagMv();
-        fr.v_angle_mrad    = Foc_VAngleMrad();
-        fr.theta_mech_mrad = Foc_ThetaMechMrad();
+        fr.v_angle_deg     = Foc_VAngleDeg();
+        fr.theta_mech_deg  = Foc_ThetaMechDeg();
         fr.cnt            = (int32_t)g_enc_count;
         SEGGER_RTT_Write(FOC_RTT_CH, (const char *)&fr, (unsigned)sizeof(fr));
     }
@@ -204,28 +211,27 @@ void Foc_RttSend(uint64_t now_us)
         n = snprintf(buf, sizeof(buf),
             "MOTF,%u,%u,%d,%d,%d,%d,%d,%d,%d,%u,%d,%d,%u,%d,%d,%d,%d,%d,%d,%d\r\n",
             (unsigned)g_foc_mode, (unsigned)g_foc_phase,
-            (int)(rotor_rad * 1000.0f),
-            (int)(g_foc_theta_rad  * 1000.0f),
+            (int)Foc_RotorElecDeg(),
+            (int)(g_foc_theta_rad  * 57.2958f),
             (int)g_foc_iq_ma, (int)g_foc_id_ma,
             (int)(g_foc_vq * 1000.0f), (int)(g_foc_vd * 1000.0f),
             (int)g_enc_speed_rpm,
             (unsigned)g_foc_if_sync,
-            (int)(g_foc_if_diff_rad * 1000.0f),
+            (int)(g_foc_if_diff_rad * 57.2958f),
             (int)(g_foc_if_freq_hz * 100.0f),
             (unsigned)ms,
-            (int)Foc_MechAngleMrad(),
+            (int)Foc_MechAngleDeg(),
             (int)Foc_IsMagMa(),
-            (int)Foc_IsAngleMrad(),
+            (int)Foc_IsAngleDeg(),
             (int)Foc_VMagMv(),
-            (int)Foc_VAngleMrad(),
-            (int)Foc_ThetaMechMrad(),
+            (int)Foc_VAngleDeg(),
+            (int)Foc_ThetaMechDeg(),
             (int)g_enc_count);
         if (n > 0 && n < (int)sizeof(buf)) {
             SEGGER_RTT_Write(FOC_RTT_CH, buf, (unsigned)n);
         }
     }
 #endif
-    }
 }
 #else
 void Foc_RttSend(uint64_t now_us) { (void)now_us; }

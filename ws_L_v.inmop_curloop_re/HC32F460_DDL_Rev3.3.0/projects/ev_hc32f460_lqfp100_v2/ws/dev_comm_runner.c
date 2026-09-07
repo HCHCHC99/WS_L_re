@@ -71,6 +71,12 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
     switch (mode) {
     case COMM_RUNNER_STOP:
         Commutation_Stop();
+        if (g_cal_running) {
+            Foc_Cal_Stop();   /* 自带 active 清零 + PwmStop */
+        }
+        if (g_calang_running) {
+            Foc_CalAngle_Stop();   /* 自带 active 清零 + PwmStop */
+        }
         if (g_foc_mode == FOC_MODE_ALIGN) {
             Foc_Stop();
         }
@@ -86,7 +92,55 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         RUNNER_DBG("STOP");
         break;
 
+    case COMM_RUNNER_CAL:
+        if (g_calang_running) {
+            Foc_CalAngle_Stop();
+        }
+        if (g_foc_mode == FOC_MODE_ALIGN) {
+            Foc_Stop();
+        }
+        if (g_zizeng_running) {
+            Foc_StopZizeng();
+        }
+        if (g_lockiq_running) {
+            Foc_LockIqPi_Stop();
+        }
+        if (g_iqpi_running) {
+            Foc_StopIqPi();
+        }
+        Commutation_Stop();
+        Foc_Cal_Start();
+        RUNNER_DBG("CAL (mode 20)");
+        break;
+
+    case COMM_RUNNER_CAL_ANGLE:
+        if (g_cal_running) {
+            Foc_Cal_Stop();
+        }
+        if (g_foc_mode == FOC_MODE_ALIGN) {
+            Foc_Stop();
+        }
+        if (g_zizeng_running) {
+            Foc_StopZizeng();
+        }
+        if (g_lockiq_running) {
+            Foc_LockIqPi_Stop();
+        }
+        if (g_iqpi_running) {
+            Foc_StopIqPi();
+        }
+        Commutation_Stop();
+        Foc_CalAngle_Start();
+        RUNNER_DBG("CAL_ANGLE (mode 25)");
+        break;
+
     case COMM_RUNNER_FOC_ALIGN:
+        if (g_cal_running) {
+            Foc_Cal_Stop();
+        }
+        if (g_calang_running) {
+            Foc_CalAngle_Stop();
+        }
         if (g_zizeng_running) {
             Foc_StopZizeng();
         }
@@ -102,6 +156,12 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         break;
 
     case COMM_RUNNER_ZIZENG:
+        if (g_cal_running) {
+            Foc_Cal_Stop();
+        }
+        if (g_calang_running) {
+            Foc_CalAngle_Stop();
+        }
         if (g_foc_mode == FOC_MODE_ALIGN) {
             Foc_Stop();
         }
@@ -117,6 +177,12 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         break;
 
     case COMM_RUNNER_IQ_PI:
+        if (g_cal_running) {
+            Foc_Cal_Stop();
+        }
+        if (g_calang_running) {
+            Foc_CalAngle_Stop();
+        }
         if (g_foc_mode == FOC_MODE_ALIGN) {
             Foc_Stop();
         }
@@ -132,6 +198,12 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         break;
 
     case COMM_RUNNER_LOCK_IQ_PI:
+        if (g_cal_running) {
+            Foc_Cal_Stop();
+        }
+        if (g_calang_running) {
+            Foc_CalAngle_Stop();
+        }
         if (g_foc_mode == FOC_MODE_ALIGN) {
             Foc_Stop();
         }

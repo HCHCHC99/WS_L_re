@@ -93,6 +93,7 @@ static int8_t s_ref_dir = 0;
 static uint16_t s_stall_tick    = 0;
 static int32_t  s_stall_enc_ref = 0;
 static uint8_t  s_stall_flag    = 0;
+static uint8_t  s_loop_started  = 0;   /* 闭环真正启动标志（首拍重对方向基准） */
 
 /*******************************************************************************
  * Iqpi_SetStep - 更新当前状态（状态变化时调用观察模块记录历史一条）
@@ -141,6 +142,7 @@ void Foc_StartIqPi(void)
     s_stall_tick    = 0;
     s_stall_enc_ref = 0;
     s_stall_flag    = 0;
+    s_loop_started  = 0;
     g_iqpi_flip_cnt = 0;
     /* 诊断观测量启动清零: 避免上次运行的残值混进本次日志 */
     g_iqpi_enc_pos    = 0;
@@ -170,8 +172,8 @@ void Foc_StartIqPi(void)
     PID_Reset(&s_pid_id);
     PID_Reset(&s_pid_iq);
 
-    IQPI_DBG("Started: off=%d mrad, iq_ref=%d mA, kp=%d m, ki=%d, ref_dir=%d",
-             (int)(s_zizeng_off_rad * 1000.0f), (int)g_iqpi_iq_ref_ma,
+    IQPI_DBG("Started: off=%d deg, iq_ref=%d mA, kp=%d m, ki=%d, ref_dir=%d",
+             (int)(s_zizeng_off_rad * 57.2958f), (int)g_iqpi_iq_ref_ma,
              (int)(g_iqpi_pid_iq_cfg.kp * 1000.0f),
              (int)g_iqpi_pid_iq_cfg.ki,
              (int)s_ref_dir);
@@ -245,6 +247,18 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
         g_foc_vq = 0.0f;
         Iqpi_SetStep(IQPI_STEP_PWM_ZERO_VECTOR);
         return;
+    }
+
+    /* ===== 1.5 闭环启动首拍：重对方向/堵转检测基准（只执行一次） =====
+     * 校准窗口里转子自由，会从 mode 32 对齐位滚走一段（Watch 里 pos 可见
+     * 漂移）。方向检测基准 s_stall_enc_ref 若从 mode 31 启动就起算，第一
+     * 窗会把"校准期漂移 + 闭环转动"混在一起：漂移与预期方向相反且够大时
+     * 触发误翻转 [IQPI_FLIP]——框架本来正确却被翻反，电机真反转。
+     * 此处在闭环真正启动的第一拍重新对基准，第一窗只测闭环自身运动。 */
+    if (!s_loop_started) {
+        s_loop_started  = 1u;
+        s_stall_tick    = 0;
+        s_stall_enc_ref = s_enc_pos;
     }
 
     /* ===== 2. 转子电角度（扣 ZIZENG 偏移基线，绝对化） ===== */
@@ -373,8 +387,8 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
                                 g_iqpi_evt_pos    = s_enc_pos;
                                 g_iqpi_evt_iq_ma  = (int32_t)g_foc_iq_ma;
                                 g_iqpi_evt_vq_mv  = (int32_t)(vq * 1000.0f);
-                                g_iqpi_evt_off_mrad = (int32_t)(s_zizeng_off_rad
-                                                                * 1000.0f);
+                                g_iqpi_evt_off_deg = (int32_t)(s_zizeng_off_rad
+                                                               * 57.2958f);
                                 g_iqpi_evt_flag   = 1u;
                             }
                         }

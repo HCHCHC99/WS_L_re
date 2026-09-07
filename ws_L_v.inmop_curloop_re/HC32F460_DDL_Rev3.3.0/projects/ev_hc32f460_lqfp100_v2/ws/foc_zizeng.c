@@ -305,9 +305,8 @@ void Foc_Zizeng_Step(const stc_i_data_t *pData)
                 g_zizeng_drag_dir = 0;      /* 转子基本没动(拖动异常/失步) */
             }
 
-            ZIZENG_DBG("Offset LOCKED: %d mrad (%d mdeg), samples=%lu, drag_dir=%d",
-                       (int)(s_zizeng_offset_locked * 1000.0f),
-                       (int)(s_zizeng_offset_locked * 57295.8f),
+            ZIZENG_DBG("Offset LOCKED: %d deg, samples=%lu, drag_dir=%d",
+                       (int)(s_zizeng_offset_locked * 57.2958f),
                        (unsigned long)s_zizeng_offset_cnt,
                        (int)g_zizeng_drag_dir);
         }

@@ -9,6 +9,8 @@
  *          foc_openloop.h 模式21 开环 V/f
  *          foc_curloop.h  模式22 编码器 FOC 电流环（I-F 启动 + RUN）
  *          foc_align.h    模式23 静止电角度对齐校准
+ *          foc_cal.h      模式20 编码器零点校准（BETA 2s + ALPHA 2s -> 锁 offset）
+ *          foc_cal_angle.h 模式25 手动角度吸附（自动校准 -> 刹车等待输入 -> 吸附+校验）
  *          foc_zizeng.h   模式30 磁场角度自增拖动（ZIZENG）
  *          foc_iq_pi.h    模式31 PI 电流环（编码器角度 + ZIZENG 偏移）
  *          foc_lock_iq_pi.h 模式32 自锁偏移（直流对齐）+ 自动交接 mode 31
@@ -30,6 +32,8 @@
 #include "foc_openloop.h"
 #include "foc_curloop.h"
 #include "foc_align.h"
+#include "foc_cal.h"
+#include "foc_cal_angle.h"
 #include "foc_zizeng.h"
 #include "foc_iq_pi.h"
 #include "foc_lock_iq_pi.h"
@@ -52,7 +56,8 @@ void Foc_Init(void);
 /* 20 kHz ISR callback (registered via I_RegisterFocCallback). Must be short:
  * no blocking, no prints, no malloc. 按模式分发：
  *   FOC_MODE_OPENLOOP -> Foc_OpenLoop_Step
- *   FOC_MODE_ALIGN    -> Foc_Align_Step
+ *   FOC_MODE_ALIGN    -> g_cal_running ? Foc_Cal_Step
+ *                        : (g_calang_running ? Foc_CalAngle_Step : Foc_Align_Step)
  *   FOC_MODE_CURLOOP  -> Foc_CurLoop_Step（内部再按状态机分派）
  *   g_zizeng_running  -> Foc_Zizeng_Step
  *   g_lockiq_running  -> Foc_LockIqPi_Step（锁定后由 main.c 交接 mode 31）

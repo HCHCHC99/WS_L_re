@@ -12,18 +12,24 @@
  *          theta_used = Θ（iq 电流矢量落在转子 d 轴前方 90°），必须：
  *              off = 90° - Θ_s31
  *
- *          ALPHA 直流对齐把转子 d 轴吸到静止系 0°——这是不依赖编码器的
- *          物理真值；锁定后至 mode 31 闭环起动前全程零矢量，转子保持在
- *          对齐位，故 Θ_s31 ≈ 0（残余仅为几度静摩擦滞后角）：
- *              off_inject = 90° = FOC_MATH_HALF_PI（恒定，与停位无关）
+ *          锁定发生在 VERIFY（磁场 90°）稳定之后：转子最后被 VERIFY 吸
+ *          到静止系 90° 电角度（不是 ALPHA 的 0°），锁定后至 mode 31
+ *          闭环起动前继续保持 90° 磁场吸住转子不放手，故 Θ_s31 ≈ 90°
+ *          （残余仅为几度静摩擦滞后角）：
+ *              off_inject = 90° - Θ_s31 ≈ 0（恒定，与停位无关）
  *
- *          警告：不可用 ElecFromPos(ALPHA 位置) 推 off。mode 32 的相对
+ *          历史教训：两段式时代（BETA→ALPHA 后锁定，转子停 0°）曾推导
+ *          出 off=90°；加入 VERIFY 第三段后未重新推导，沿用 90° 造成
+ *          交接后恰好 90° 框架差（iq 矢量落在真实 d 轴上，零转矩堵转），
+ *          叠加编码器噪声与 180° 方向翻转后表现为过流 —— 已修正为 0。
+ *
+ *          警告：不可用 ElecFromPos(ALPHA/VERIFY 位置) 推 off。mode 32 的相对
  *          计数零点在 mode 32 启动时刻，与 mode 31 的零点不同，任何由
  *          本模式计数推出的 off 都携带随机停位项——这正是此前 ±90° 两
  *          个版本都 OC 的根因。mode 30 锁定值编码的是上电位置，同理仅
  *          在转子恰好停在特定位置时对 mode 31 有效。
  *
- *          使用约束：off=90° 仅在 mode 32 -> 自动交接 mode 31 链路上
+ *          使用约束：off=0 仅在 mode 32 -> 自动交接 mode 31 链路上
  *          成立（转子必须仍停在对齐位）；交接后转子被动过再单独进
  *          mode 31 是无效的。
  *
@@ -33,9 +39,9 @@
  *          与 mode 30 五次拖动 drag_dir=-1 一致。
  *
  *        相位时序（沿用 mode 23 的两段式单侧逼近，破坏摩擦迟滞）：
- *          BETA(磁场 90°, 盲等) -> ALPHA(磁场 0°, 等静止, 取锁定位置)
+ *          BETA(磁场 90°, 盲等) -> ALPHA(磁场 0°, 等静止, 取基准位置)
  *          -> VERIFY(磁场 90°, 等静止, 校验位移 ≈ +90°电角度)
- *          -> 锁定注入 -> 零矢量等 main.c 交接。
+ *          -> 锁定注入 -> 零矢量等 foc_obs 交接。
  *
  *        注入通道：foc_zizeng 的 SetOffsetRad/SetDragDir（刻意复用
  *        mode 31 现有取值路径，foc_iq_pi.c 保持零改动）。
@@ -58,7 +64,7 @@
 volatile uint8_t g_lockiq_running  = 0;
 volatile lockiq_step_t g_lockiq_step = LOCKIQ_STEP_IDLE;
 volatile float   g_lockiq_align_volt_v = FOC_ALIGN_VOLT_V;
-volatile int32_t g_lockiq_off_mrad     = 0;
+volatile int32_t g_lockiq_off_deg     = 0;
 
 /* 注：窗口诊断量（g_lockiq_win_moved/win_evals/track_err_cnts）与
  * 锁定/失败事件快照（g_lockiq_evt_*）已集中迁移到 foc_obs.c/.h
@@ -127,20 +133,25 @@ static void LockIqPi_ResetWindow(void)
  ******************************************************************************/
 static void LockIqPi_LockAndSignal(void)
 {
-    /* off 恒为 90°：mode 31 清零自身计数后要求 off = 90° - Θ_s31，
-     * 对齐已把 Θ_s31 定义为 ≈0（静止系真值，见文件头推导），
-     * 与 mode 32 启动时的转子停位无关 */
-    float off_inject = FOC_MATH_HALF_PI;
+    /* off 恒为 0：mode 31 清零自身计数后要求 off = 90° - Θ_s31。
+     * 本流程锁定发生在 VERIFY（磁场 90°）稳定之后，交接时转子被吸停在
+     * 静止系 90° 电角度（不是 ALPHA 的 0°），故 Θ_s31 ≈ 90°，
+     * off = 90° - 90° = 0（与停位无关）。
+     * 历史教训：两段式时代（BETA→ALPHA 后锁定，转子停 0°）推导出
+     * off=90°；加入 VERIFY 第三段后未重新推导，沿用 90° 造成交接后
+     * 恰好 90° 框架差（iq 矢量落在真实 d 轴上 → 零转矩堵转），叠加
+     * 编码器噪声与 180° 翻转后发展为过流。 */
+    float off_inject = 0.0f;
 
     /* 注入 mode 31 取值路径（foc_iq_pi.c 零改动） */
     Foc_Zizeng_SetOffsetRad(off_inject);
     /* 本征方向基准：iq>0 => 计数增量符号 = sign(ENC_DIR)（见文件头推导） */
     Foc_Zizeng_SetDragDir((int8_t)FOC_ENC_DIR);
 
-    g_lockiq_off_mrad = (int32_t)(off_inject * 1000.0f);
+    g_lockiq_off_deg = (int32_t)(off_inject * 57.2958f);
 
     g_lockiq_evt_code     = LOCKIQ_EVT_LOCKED;
-    g_lockiq_evt_off_mrad = g_lockiq_off_mrad;
+    g_lockiq_evt_off_deg = g_lockiq_off_deg;
     g_lockiq_evt_flag     = 1u;
 
     g_lockiq_step = LOCKIQ_STEP_LOCKED_WAIT_HANDOFF;
@@ -159,13 +170,13 @@ void Foc_LockIqPi_Start(void)
     g_lockiq_running = 1;
     g_lockiq_step    = LOCKIQ_STEP_ALIGN_BETA;
 
-    g_lockiq_off_mrad       = 0;
+    g_lockiq_off_deg       = 0;
     g_lockiq_win_moved      = 0;
     g_lockiq_win_evals      = 0;
     g_lockiq_track_err_cnts = 0;
     g_lockiq_evt_flag       = 0;
     g_lockiq_evt_code       = 0;
-    g_lockiq_evt_off_mrad   = 0;
+    g_lockiq_evt_off_deg   = 0;
 
     s_phase_tick = 0u;
     s_enc_initialized = 0;
@@ -244,9 +255,17 @@ void Foc_LockIqPi_Step(const stc_i_data_t *pData)
     g_enc_count = s_enc_pos;
     g_enc_count_f = (float)s_enc_pos;
 
-    /* ===== 锁定/失败保持态：零矢量等待 main.c 交接或停机 ===== */
-    if ((g_lockiq_step == LOCKIQ_STEP_LOCKED_WAIT_HANDOFF) ||
-        (g_lockiq_step == LOCKIQ_STEP_LOCK_FAIL)) {
+    /* ===== 保持态分两种 =====
+     * LOCKED_WAIT_HANDOFF: 继续输出 90° 磁场吸住转子不放手 —— off=0 的
+     *   前提是 mode 31 启动清零计数那一瞬间转子仍停在对齐位。旧版这里
+     *   输出零矢量把转子放开，交接间隙转子会滚离对齐位（Watch 可见 pos
+     *   漂移），框架基准随之漂移，是"有时正转有时反转"的诱因之一。
+     * LOCK_FAIL: 零矢量等待 foc_obs 停机（不吸持）。 */
+    if (g_lockiq_step == LOCKIQ_STEP_LOCKED_WAIT_HANDOFF) {
+        LockIqPi_OutputVolt(pData, FOC_MATH_HALF_PI);
+        return;
+    }
+    if (g_lockiq_step == LOCKIQ_STEP_LOCK_FAIL) {
         TMR4_PWM_SetDuty3Phase(50.0f, 50.0f, 50.0f);
         g_foc_du = 50.0f;
         g_foc_dv = 50.0f;
@@ -336,7 +355,7 @@ void Foc_LockIqPi_Step(const stc_i_data_t *pData)
                         /* 转子跟踪失败（卡死/堵转/编码器异常）：
                          * 拒绝锁定，宁可不起动 */
                         g_lockiq_evt_code = LOCKIQ_EVT_FAIL_TRACK;
-                        g_lockiq_evt_off_mrad = 0;
+                        g_lockiq_evt_off_deg = 0;
                         g_lockiq_evt_flag = 1u;
                         g_lockiq_step = LOCKIQ_STEP_LOCK_FAIL;
                     }
@@ -348,7 +367,7 @@ void Foc_LockIqPi_Step(const stc_i_data_t *pData)
         /* 相位超时（ALPHA/VERIFY 各自独立计时） */
         if (s_phase_tick >= LOCKIQ_TIMEOUT_CNT) {
             g_lockiq_evt_code = LOCKIQ_EVT_FAIL_TIMEOUT;
-            g_lockiq_evt_off_mrad = 0;
+            g_lockiq_evt_off_deg = 0;
             g_lockiq_evt_flag = 1u;
             g_lockiq_step = LOCKIQ_STEP_LOCK_FAIL;
         }
