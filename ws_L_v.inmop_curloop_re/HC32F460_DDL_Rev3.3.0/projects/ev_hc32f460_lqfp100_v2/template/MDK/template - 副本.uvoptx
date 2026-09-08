@@ -369,12 +369,12 @@
         <Ww>
           <count>14</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_foc_mech_deg,0x0A</ItemText>
+          <ItemText>g_calang_meas_deg</ItemText>
         </Ww>
         <Ww>
           <count>15</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_foc_elec_deg,0x0A</ItemText>
+          <ItemText>g_foc_angle_input ,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>16</count>
