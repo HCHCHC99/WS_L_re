@@ -319,7 +319,7 @@
         <Ww>
           <count>4</count>
           <WinNumber>2</WinNumber>
-          <ItemText>flip_cnt </ItemText>
+          <ItemText>g_olf_volt_v</ItemText>
         </Ww>
         <Ww>
           <count>5</count>
@@ -329,17 +329,17 @@
         <Ww>
           <count>6</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_foc_vq</ItemText>
+          <ItemText>g_olf_freq_hz</ItemText>
         </Ww>
         <Ww>
           <count>7</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_iqpi_theta_rad </ItemText>
+          <ItemText>g_olf_step_010,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>8</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_foc_if_rotor_rad</ItemText>
+          <ItemText>g_olf_dir,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>9</count>

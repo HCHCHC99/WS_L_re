@@ -34,12 +34,12 @@
  *   1. 进入 mode 26：自动跑 mode 25 式校准（BETA 90° 吸 2s -> ALPHA
  *      0° 吸 2s -> 锁零点 offset）。
  *   2. 校准完成立即进入拖动：磁场角 theta 以 g_olf_freq_hz（默认
- *      3Hz，与 mode 30 相同）匀速自增，电压 g_olf_volt_v（默认
+ *      0.5Hz，低速起步）匀速自增，电压 g_olf_volt_v（默认
  *      0.6V，与 mode 30 相同）。输出约定 Vd=V/Vq=0（磁场角 = theta，
  *      与转子 N 极对齐时 delta=0，心智模型与 mode 25 一致）。
  *   3. 自增三要素（全部 Keil Watch 可调）：
  *      a) g_olf_freq_hz 磁场转速 (Hz)：SW1 每按 +0.5（手动斜坡防失步），
- *         Watch 直改阶跃生效，改动大会失步；重新进入恢复默认 3Hz
+ *         Watch 直改阶跃生效，改动大会失步；重新进入恢复默认 0.5Hz
  *      b) g_olf_step_010 自增步长 (×0.1°/步)：磁场角攒够一个步长跳一步，
  *         1 = 0.1°/步 ≈ 连续旋转（默认）；调大变"大步跳跃"实验
  *         （等效自增节拍 = 360×freq/step 次/秒）
@@ -52,13 +52,13 @@
  *         磁场转速   磁场角    转子角    负载角delta   真实转子系电流
  *
  * 实验预期数据曲线（低频段，0.6V）：
- *   f:  3Hz -> +0.5Hz x N
+ *   f:  0.5Hz -> SW1 每按 +0.5Hz x N
  *   diff: 5~15° 稳定 -> 缓升 -> 快速冲向 90° -> 锯齿崩塌振荡（失步）
  *   iq:   小 -> 随 diff 上升 -> 失步后剧烈振荡
  *   id:   ≈0 -> 转负（BEMF 去磁）-> 失步后剧烈振荡
  *
  * Watch 常用变量：
- *   g_olf_freq_hz  : 磁场角自增频率 (Hz)，Start 时复位为 3.0，SW1 每按 +0.5
+ *   g_olf_freq_hz  : 磁场角自增频率 (Hz)，Start 时复位为 0.5，SW1 每按 +0.5
  *   g_olf_volt_v   : 拖动电压 (V)，Start 时复位为 0.6（≈5A，量程内）
  *   g_olf_state    : 0=空闲 1=校准BETA 2=校准ALPHA 3=拖动 4=过流
  *   g_olf_diff_deg : 负载角 delta (deg, -180~180) —— 实验主指标
@@ -121,7 +121,7 @@ extern "C" {
 /*=============================================================================
  * Keil Watch 可调变量 / 观测量（定义见 foc_olf.c）
  *=============================================================================*/
-extern volatile float    g_olf_freq_hz;    /* 磁场角自增频率 (Hz, 默认 3.0 与 mode30 同) */
+extern volatile float    g_olf_freq_hz;    /* 磁场角自增频率 (Hz, 默认 0.5, Start 复位) */
 extern volatile int32_t  g_olf_step_010;   /* 自增步长 (×0.1°/步, 1≈连续旋转, 建议 1~3600) */
 extern volatile int32_t  g_olf_dir;        /* 自增方向 (+1=角度加 / -1=角度减, Start 复位 +1) */
 extern volatile float    g_olf_volt_v;     /* 拖动电压幅值 (V, 默认 0.6 与 mode30 同) */
