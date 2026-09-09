@@ -47,6 +47,11 @@ extern volatile float g_foc_align_volt_v;
 extern volatile float g_zizeng_freq_hz;
 extern volatile float g_zizeng_volt_v;
 
+/* mode 26 开环 VF 参数（Keil Watch 可调） */
+extern volatile float g_olf_freq_hz;     /* 磁场转速 Hz（SW1 每按 +0.5） */
+extern volatile int   g_olf_step_010;    /* 自增步长 ×0.1°/步（1≈连续旋转） */
+extern volatile int   g_olf_dir;         /* 自增方向 +1=加 / -1=减 */
+
 /*=============================================================================
  * 最小系统测试宏（电流采样抖动排查）
  *   0 = 正常固件（全部功能）
@@ -126,15 +131,19 @@ int main(void)
         /* ---- 按键扫描 + 短按处理（必须先于模式检查：末尾的"模式状态同步"
          *      会把 comm_mode 回写成实际模式，若放在其后会同一轮被覆盖丢失） ---- */
         Key_Scan();
-        if (Key_GetShortPress(KEY_ID_SW1)) {    /* SW1 短按：ZIZENG 启停切换（mode 0 ↔ 30） */
+        if (Key_GetShortPress(KEY_ID_SW1)) {    /* SW1 短按：进拖动模式；拖动中每按提频 +0.5Hz */
             if (comm_mode == 30) {
-                comm_mode = 0;                  /* mode 30 → 停转 */
+                g_zizeng_freq_hz += 0.5f;       /* mode 30：电频率 +0.5Hz（机械转速 = freq×6 rpm） */
+                MAIN_DBG("SW1: zizeng freq -> %d mHz", (int)(g_zizeng_freq_hz * 1000.0f));
+            } else if (comm_mode == 26) {
+                g_olf_freq_hz += 0.5f;          /* mode 26：负载角实验调频，小步防失步 */
+                MAIN_DBG("SW1: olf freq -> %d mHz", (int)(g_olf_freq_hz * 1000.0f));
             } else {
                 comm_mode = 30;                 /* 其他模式 → ZIZENG */
             }
         }
-        if (Key_GetShortPress(KEY_ID_SW2)) {    /* SW2 短按：停转（mode 0） */
-
+        if (Key_GetShortPress(KEY_ID_SW2)) {    /* SW2 短按：停转（mode 0），mode 30 的按键出口 */
+            comm_mode = 0;
         }
         if (Key_GetShortPress(KEY_ID_SW3)) {    /* SW3 短按： */
             /* 在此填写动作 */

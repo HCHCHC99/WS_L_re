@@ -62,11 +62,14 @@ void Foc_Isr(const stc_i_data_t *pData)
 
     if (g_foc_mode == FOC_MODE_ALIGN) {
         /* mode 20 校准优先（g_cal_running 托管），mode 25 次之
-         * （g_calang_running 托管），否则 mode 23 对齐 */
+         * （g_calang_running 托管），mode 26 再次（g_olf_running 托管），
+         * 否则 mode 23 对齐 */
         if (g_cal_running) {
             Foc_Cal_Step(pData);
         } else if (g_calang_running) {
             Foc_CalAngle_Step(pData);
+        } else if (g_olf_running) {
+            Foc_Olf_Step(pData);
         } else {
             Foc_Align_Step(pData);
         }

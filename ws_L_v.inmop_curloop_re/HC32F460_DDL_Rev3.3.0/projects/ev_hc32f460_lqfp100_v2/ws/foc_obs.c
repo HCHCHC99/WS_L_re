@@ -20,6 +20,7 @@
 #include "foc_align.h"
 #include "foc_cal.h"
 #include "foc_cal_angle.h"
+#include "foc_olf.h"
 #include "dev_comm_runner.h"   /* CommRunner_SetMode（mode 20 完成自动回 mode 0） */
 #include "encoder.h"
 #include "motor_config.h"
@@ -157,12 +158,12 @@ void Foc_Obs_Task(void)
                     (int)((g_calang_offset * 360) / (int32_t)ENCODER_CPR));
             break;
         case CALANG_EVT_DONE_OK:
-            CALANG_DBG("HOLD ok target=%d meas=%d err=%d deg",
+            CALANG_DBG("HOLD ok target=%d meas=%d err=%d x0.1deg",
                     (int)g_calang_target_deg, (int)g_calang_meas_deg,
                     (int)g_calang_err_deg);
             break;
         case CALANG_EVT_DONE_FAIL:
-            CALANG_DBG("HOLD FAIL moved=%d cnts target=%d meas=%d deg",
+            CALANG_DBG("HOLD FAIL moved=%d cnts target=%d meas=%d x0.1deg",
                     (int)g_calang_win_moved, (int)g_calang_target_deg,
                     (int)g_calang_meas_deg);
             break;
@@ -172,6 +173,44 @@ void Foc_Obs_Task(void)
             break;
         default:
             break;
+        }
+    }
+
+    /* ---- mode 26 开环 VF 事件（ISR 置 evt，此处打印；仅 OC 自动回 mode 0） ---- */
+    if (g_olf_evt != 0u) {
+        uint8_t evt = g_olf_evt;
+        g_olf_evt = 0u;
+        switch (evt) {
+        case OLF_EVT_BETA_DONE:
+            OLF_DBG("BETA done -> ALPHA 0deg");
+            break;
+        case OLF_EVT_LOCKED:
+            OLF_DBG("LOCKED offset=%d deg -> drag f=%d mHz",
+                    (int)((g_olf_offset * 360) / (int32_t)ENCODER_CPR),
+                    (int)(g_olf_freq_hz * 1000.0f));
+            break;
+        case OLF_EVT_OC:
+            OLF_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+            CommRunner_SetMode(COMM_RUNNER_STOP);
+            break;
+        default:
+            break;
+        }
+    }
+
+    /* ---- mode 26 拖动实验数据（200ms 周期，全整型；diff=负载角 delta） ---- */
+    if (g_olf_running && (g_olf_state == OLF_STEP_DRAG)) {
+        static uint32_t s_last_olf_dbg = 0u;
+        uint32_t now = tickTimer_GetCount();
+        if ((now - s_last_olf_dbg) >= 200u) {
+            s_last_olf_dbg = now;
+            OLF_DBG("f=%d mHz fld=%d deg rot=%d deg diff=%d deg id=%d iq=%d mA",
+                    (int)(g_olf_freq_hz * 1000.0f),   /* 磁场转速 (mHz) */
+                    (int)g_olf_field_deg,             /* 磁场电角度 (deg, 0~359) */
+                    (int)g_olf_rotor_deg,             /* 转子电角度 (deg, 0~359) */
+                    (int)g_olf_diff_deg,              /* 负载角 delta (deg, -180~180) */
+                    (int)g_olf_id_ma,                 /* 真实转子系 id (mA) */
+                    (int)g_olf_iq_ma);                /* 真实转子系 iq (mA) */
         }
     }
 

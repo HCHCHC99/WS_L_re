@@ -1014,6 +1014,11 @@
               <FilePath>..\..\ws\foc_obs.c</FilePath>
             </File>
             <File>
+              <FileName>foc_olf.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_olf.c</FilePath>
+            </File>
+            <File>
               <FileName>foc_cal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_cal.c</FilePath>
@@ -2033,6 +2038,11 @@
               <FileName>foc_obs.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_obs.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_olf.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_olf.c</FilePath>
             </File>
             <File>
               <FileName>foc_cal.c</FileName>

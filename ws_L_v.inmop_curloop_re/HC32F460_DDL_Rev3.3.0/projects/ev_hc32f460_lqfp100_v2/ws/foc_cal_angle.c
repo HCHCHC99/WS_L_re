@@ -6,6 +6,8 @@
  *        流程：自动校准 BETA(2s, 90°) -> ALPHA(2s, 0°, 锁零点 offset)
  *              -> 刹车 50/50/50 等输入
  *              -> 检测 g_foc_angle_input 改值 -> 吸附 2s（三段子阶段）：
+ *                 （用户角度单位统一 0.1°电角度：input/target/meas/err
+ *                   均为 ×0.1° 整型，0~3599；内部角度计算仍为 rad）
  *                   引导点 300ms（触发瞬间实测转子位置判来向，取转子一侧
  *                   15° 电角度，最后一段拉程短、到站动量小；±5° 内跳过）
  *                   -> 目标角 ±3° 抖动 400ms（50Hz，拔齿槽/破静摩擦）
@@ -46,8 +48,8 @@
 #define CALANG_ALPHA_TICKS   ((uint32_t)CALANG_ALPHA_MS   * (uint32_t)FOC_ISR_HZ / 1000u)
 #define CALANG_VERIFY_TICKS  ((uint32_t)CALANG_VERIFY_MS  * (uint32_t)FOC_ISR_HZ / 1000u)
 
-/* deg -> rad（目标角为电角度，静止系直接输出） */
-#define CALANG_DEG2RAD  (FOC_MATH_2PI / 360.0f)
+/* 0.1° -> rad（目标角为电角度，静止系直接输出；用户单位统一 0.1°=deci-degree） */
+#define CALANG_DDEG2RAD  (FOC_MATH_2PI / 3600.0f)
 
 /* 吸附三段子时长（引导 + 抖动 + 落座 = CALANG_HOLD_MS 2000） */
 #define CALANG_GUIDE_MS      300u     /* 引导点保持时长 */
@@ -58,9 +60,10 @@
 #define CALANG_DITHER_TICKS  ((uint32_t)CALANG_DITHER_MS  * (uint32_t)FOC_ISR_HZ / 1000u)
 #define CALANG_SETTLE_TICKS  ((uint32_t)CALANG_SETTLE_MS  * (uint32_t)FOC_ISR_HZ / 1000u)
 
-/* 引导点：偏离目标角 15° 电角度；触发瞬间转子已在目标 ±5° 内则跳过引导 */
-#define CALANG_GUIDE_OFF_DEG   15
-#define CALANG_GUIDE_DEAD_DEG  5
+/* 引导点：偏离目标角 15° 电角度；触发瞬间转子已在目标 ±5° 内则跳过引导
+ * （单位 0.1°电角度，与用户输入单位一致） */
+#define CALANG_GUIDE_OFF_DDEG   150   /* 15.0° */
+#define CALANG_GUIDE_DEAD_DDEG   50   /*  5.0° */
 
 /* 抖动：目标角 ±3° 电角度，50Hz 正弦（拔齿槽/破静摩擦） */
 #define CALANG_DITHER_AMP_RAD  (3.0f * FOC_MATH_PI / 180.0f)
@@ -74,15 +77,15 @@
 /*******************************************************************************
  * Watch 观测量 / 可调变量
  ******************************************************************************/
-volatile int32_t  g_foc_angle_input    = 0;                          /* 用户输入目标电角度 */
+volatile int32_t  g_foc_angle_input    = 0;                          /* 用户输入目标电角度 ×0.1°(0~3599, 改值即触发) */
 volatile float    g_calang_volt_v      = (float)FOC_ALIGN_VOLT_V;    /* 吸附电压 0.4V */
 volatile uint8_t  g_calang_running     = 0u;
 volatile uint8_t  g_calang_state       = CALANG_STEP_IDLE;
 volatile uint8_t  g_calang_evt         = 0u;
 volatile int32_t  g_calang_stable_cnts = 8;                          /* 校验窗静止判据 */
-volatile int32_t  g_calang_target_deg  = 0;
-volatile int32_t  g_calang_meas_deg    = 0;
-volatile int32_t  g_calang_err_deg     = 0;
+volatile int32_t  g_calang_target_deg  = 0;                          /* 快照：锁存目标电角度 ×0.1°(0~3599) */
+volatile int32_t  g_calang_meas_deg    = 0;                          /* 快照：校验结束实测电角度 ×0.1°(0~3599) */
+volatile int32_t  g_calang_err_deg     = 0;                          /* 快照：meas-target 折叠(-1800,1800] ×0.1° */
 volatile int32_t  g_calang_win_moved   = 0;
 volatile int32_t  g_calang_offset      = 0;
 volatile float    g_calang_du          = 50.0f;
@@ -94,7 +97,7 @@ static uint32_t s_phase_tick = 0u;    /* 当前阶段计时（tick） */
 static int32_t  s_last_input = 0;     /* 上次输入快照（改值检测基准） */
 static float    s_target_rad = 0.0f;  /* 锁存的目标电角度 (rad) */
 static uint8_t  s_hold_sub   = 0u;    /* 吸附子阶段: CALANG_SUB_xxx */
-static int32_t  s_guide_deg  = 0;     /* 引导点电角度 (deg, 0~360) */
+static int32_t  s_guide_deg  = 0;     /* 引导点电角度 ×0.1°(0~3599) */
 static uint16_t s_hw_prev    = 0u;    /* 校验窗上一拍编码器原始计数 */
 static int32_t  s_rel        = 0;     /* 校验窗内相对位移累积 (counts) */
 static int32_t  s_min        = 0;     /* 窗口内最小相对位移 */
@@ -150,19 +153,19 @@ static void CalAng_OutputBrake(void)
 }
 
 /*******************************************************************************
- * 内部助手：锁存目标角（wrap 到 [0,360)）+ 阶段计时清零
+ * 内部助手：锁存目标角（wrap 到 [0,3600)，单位 0.1°）+ 阶段计时清零
  ******************************************************************************/
 static void CalAng_LatchTarget(void)
 {
-    int32_t t = Foc_Core_ModPos(g_foc_angle_input, 360);
+    int32_t t = Foc_Core_ModPos(g_foc_angle_input, 3600);
 
     g_calang_target_deg = t;
-    s_target_rad        = (float)t * CALANG_DEG2RAD;
+    s_target_rad        = (float)t * CALANG_DDEG2RAD;
     s_phase_tick        = 0u;
 }
 
 /*******************************************************************************
- * 内部助手：读 TMRA_1 原始计数 -> 实测转子电角度 (deg, 0~360)
+ * 内部助手：读 TMRA_1 原始计数 -> 实测转子电角度 ×0.1° (0~3599)
  *   与 mode 0 观测同框架（原始计数×方向 - offset, mod CPR）
  ******************************************************************************/
 static int32_t CalAng_ReadElecDeg(void)
@@ -173,7 +176,7 @@ static int32_t CalAng_ReadElecDeg(void)
     diff = Foc_Core_ModPos((int32_t)hw * (int32_t)g_foc_enc_dir
                            - (int32_t)g_calang_offset,
                            (int32_t)ENCODER_CPR);
-    return (diff * 360 * (int32_t)FOC_POLE_PAIRS / (int32_t)ENCODER_CPR) % 360;
+    return (diff * 3600 * (int32_t)FOC_POLE_PAIRS / (int32_t)ENCODER_CPR) % 3600;
 }
 
 /*******************************************************************************
@@ -190,15 +193,15 @@ static void CalAng_StartHold(void)
     CalAng_LatchTarget();                            /* 锁存目标 + 计时清零 */
 
     rotor = CalAng_ReadElecDeg();
-    d     = rotor - g_calang_target_deg;             /* 转子在目标哪一侧 */
-    d     = 180 - Foc_Core_ModPos(180 - d, 360);     /* 折叠 (-180,180] */
+    d     = rotor - g_calang_target_deg;             /* 转子在目标哪一侧 (×0.1°) */
+    d     = 1800 - Foc_Core_ModPos(1800 - d, 3600);  /* 折叠 (-1800,1800] */
 
-    if ((d > -CALANG_GUIDE_DEAD_DEG) && (d < CALANG_GUIDE_DEAD_DEG)) {
+    if ((d > -CALANG_GUIDE_DEAD_DDEG) && (d < CALANG_GUIDE_DEAD_DDEG)) {
         s_hold_sub = CALANG_SUB_DITHER;              /* 已在目标附近，跳过引导 */
     } else {
         s_guide_deg = (d > 0)
-            ? Foc_Core_ModPos(g_calang_target_deg + CALANG_GUIDE_OFF_DEG, 360)
-            : Foc_Core_ModPos(g_calang_target_deg - CALANG_GUIDE_OFF_DEG, 360);
+            ? Foc_Core_ModPos(g_calang_target_deg + CALANG_GUIDE_OFF_DDEG, 3600)
+            : Foc_Core_ModPos(g_calang_target_deg - CALANG_GUIDE_OFF_DDEG, 3600);
         s_hold_sub  = CALANG_SUB_GUIDE;
     }
     s_phase_tick = 0u;
@@ -314,7 +317,7 @@ void Foc_CalAngle_Step(const stc_i_data_t *pData)
         }
         switch (s_hold_sub) {
         case CALANG_SUB_GUIDE:
-            CalAng_OutputField(pData, (float)s_guide_deg * CALANG_DEG2RAD);
+            CalAng_OutputField(pData, (float)s_guide_deg * CALANG_DDEG2RAD);
             if (++s_phase_tick >= CALANG_GUIDE_TICKS) {
                 s_phase_tick = 0u;
                 s_hold_sub   = CALANG_SUB_DITHER;
@@ -359,12 +362,12 @@ void Foc_CalAngle_Step(const stc_i_data_t *pData)
         if (++s_phase_tick >= CALANG_VERIFY_TICKS) {
             g_calang_win_moved = s_max - s_min;
 
-            /* 实测电角度 (0~360)：与 mode 0 观测同框架（原始计数 - offset） */
+            /* 实测电角度 ×0.1°(0~3599)：与 mode 0 观测同框架（原始计数 - offset） */
             g_calang_meas_deg = CalAng_ReadElecDeg();
 
-            /* err = meas - target，折叠到 (-180,180] */
+            /* err = meas - target，折叠到 (-1800,1800]（单位 0.1°） */
             e = g_calang_meas_deg - g_calang_target_deg;
-            g_calang_err_deg = 180 - Foc_Core_ModPos(180 - e, 360);
+            g_calang_err_deg = 1800 - Foc_Core_ModPos(1800 - e, 3600);
 
             s_phase_tick   = 0u;
             g_calang_state = CALANG_STEP_BRAKE_WAIT;   /* 无论成败回刹车 */

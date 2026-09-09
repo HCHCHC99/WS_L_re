@@ -6,7 +6,8 @@
  * ============================================================================
  * 【傻瓜式讲解：这个模式是干什么的】
  *
- * 一句话：你在 Watch 里写一个角度（0~360 电角度），磁场就指向那个方向，
+ * 一句话：你在 Watch 里写一个角度（电角度，单位 0.1°，范围 0~3599，
+ *         写 900 就是 90.0°），磁场就指向那个方向，
  *         把转子"吸"过去，吸 2 秒后用编码器检查有没有吸稳，然后回到刹车
  *         （50/50/50 零矢量），等你写下一个角度。
  *
@@ -41,22 +42,27 @@
  *   开环 SVPWM 教学了。
  *
  * g_foc_angle_input 的语义与陷阱（重要）：
- *   - 单位是电角度（0~360），静止系；校准后 0° = 转子 N 极零位
- *   - 渐进扫描（每步 <=90°）：90 -> mech 9°、180 -> 18°、270 -> 27°、
- *     0/360 -> 36°，每步 +9° 机械（360°/10 对极），四步一个电周期
- *   - 陷阱 1：跳变 >180° 电角度时转子走"短路径"（0° 直接设 270° 会
+ *   - 电角度，单位 0.1°（deci-degree），范围 0~3599，静止系；
+ *     校准后 0° = 转子 N 极零位；写 900 = 90.0°，写 3599 = 359.9°
+ *   - input/target/meas/err 全部同一单位（×0.1° 整型），Watch 直接对比
+ *   - 渐进扫描（每步 <=900 即 90°电）：900 -> mech 9°、1800 -> 18°、
+ *     2700 -> 27°、0/3600 -> 36°，每步 +9° 机械（360°/10 对极），
+ *     四步一个电周期
+ *   - 陷阱 1：跳变 >180°电（>1800）时转子走"短路径"（0 直接设 2700 会
  *     倒退到 mech -9°=351°，因为磁场在静止系没有"圈数"概念）
- *   - 陷阱 2：恰好 180° 跳变转矩为零（sin180°=0），死点，避开
- *   - 0° 与 360° 等价（代码内 wrap）
+ *   - 陷阱 2：恰好 180° 跳变（输入 1800）转矩为零（sin180°=0），死点，
+ *     转子不动或乱摆，避开
+ *   - 0 与 3600 等价（代码内 wrap 到 [0,3600)）
  *
  * Watch 常用变量：
- *   g_foc_angle_input : 你要写的目标电角度（deg，改值即触发）
+ *   g_foc_angle_input : 你要写的目标电角度（0.1°单位 0~3599，改值即触发）
  *   g_calang_volt_v   : 吸附电压（默认 0.4V ≈ 4A，运行中可调）
  *   g_calang_state    : 0=空闲 1=校准BETA 2=校准ALPHA 3=刹车等待
  *                       4=吸附2s 5=校验500ms 6=过流停机
  *   g_calang_du/dv/dw : 三相占空比（%，看 SVPWM 波形的重点变量）
  *   g_calang_target_deg / g_calang_meas_deg / g_calang_err_deg :
- *                       最近一次吸附的目标角/实测角/误差（deg 快照）
+ *                       最近一次吸附的目标角/实测角/误差快照
+ *                       （名字带 deg 但单位是 0.1°，历史命名保留）
  *   g_calang_win_moved: 校验窗内位移（counts，> g_calang_stable_cnts 即失败）
  *
  * ISR 约束：短小、无阻塞、无打印、无 malloc。打印全部由 foc_obs 在
@@ -116,15 +122,15 @@ extern "C" {
 /*=============================================================================
  * Keil Watch 可调变量 / 观测量（定义见 foc_cal_angle.c）
  *=============================================================================*/
-extern volatile int32_t  g_foc_angle_input;  /* 用户输入目标电角度 (deg, 改值即触发) */
+extern volatile int32_t  g_foc_angle_input;  /* 用户输入目标电角度 ×0.1° (0~3599, 改值即触发) */
 extern volatile float    g_calang_volt_v;    /* 吸附电压 (V, 默认 FOC_ALIGN_VOLT_V) */
 extern volatile uint8_t  g_calang_running;   /* 1 = 正在运行 */
 extern volatile uint8_t  g_calang_state;     /* CALANG_STEP_xxx */
 extern volatile uint8_t  g_calang_evt;       /* CALANG_EVT_xxx */
 extern volatile int32_t  g_calang_stable_cnts; /* 校验窗静止判据 (counts, 默认 8) */
-extern volatile int32_t  g_calang_target_deg;  /* 快照：锁存的目标角 (deg) */
-extern volatile int32_t  g_calang_meas_deg;    /* 快照：校验结束实测电角度 (deg, 0-360) */
-extern volatile int32_t  g_calang_err_deg;     /* 快照：meas-target 折叠 (-180,180] */
+extern volatile int32_t  g_calang_target_deg;  /* 快照：锁存的目标角 ×0.1° (0~3599) */
+extern volatile int32_t  g_calang_meas_deg;    /* 快照：校验结束实测电角度 ×0.1° (0~3599) */
+extern volatile int32_t  g_calang_err_deg;     /* 快照：meas-target 折叠 (-1800,1800] ×0.1° */
 extern volatile int32_t  g_calang_win_moved;   /* 快照：校验窗位移 (counts, max-min) */
 extern volatile int32_t  g_calang_offset;      /* 快照：校准锁定的零点 (counts) */
 extern volatile float    g_calang_du;          /* 三相占空比观测 (%) — SVPWM */
