@@ -21,6 +21,7 @@
 #include "foc_cal.h"
 #include "foc_cal_angle.h"
 #include "foc_olf.h"
+#include "foc_dcl.h"
 #include "dev_comm_runner.h"   /* CommRunner_SetMode（mode 20 完成自动回 mode 0） */
 #include "encoder.h"
 #include "motor_config.h"
@@ -211,6 +212,50 @@ void Foc_Obs_Task(void)
                     (int)g_olf_diff_deg,              /* 负载角 delta (deg, -180~180) */
                     (int)g_olf_id_ma,                 /* 真实转子系 id (mA) */
                     (int)g_olf_iq_ma);                /* 真实转子系 iq (mA) */
+        }
+    }
+
+    /* ---- mode 27 功角闭环事件（ISR 置 evt，此处打印；仅 OC 自动回 mode 0） ---- */
+    if (g_dcl_evt != 0u) {
+        uint8_t evt = g_dcl_evt;
+        g_dcl_evt = 0u;
+        switch (evt) {
+        case DCL_EVT_BETA_DONE:
+            DCL_DBG("BETA done -> ALPHA 0deg");
+            break;
+        case DCL_EVT_LOCKED:
+            DCL_DBG("LOCKED off=%d deg -> run dlt %d->%d deg tr=%d ms",
+                    (int)((g_dcl_offset * 360) / (int32_t)ENCODER_CPR),
+                    (int)g_dcl_dlt_init_deg, (int)g_dcl_dlt_targ_deg,
+                    (int)g_dcl_dlt_tr_ms);
+            break;
+        case DCL_EVT_RAMP_DONE:
+            DCL_DBG("ramp done dlt=%d deg spd=%d mHz",
+                    (int)g_dcl_dlt_now_deg, (int)(g_dcl_speed_hz * 1000.0f));
+            break;
+        case DCL_EVT_OC:
+            DCL_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+            CommRunner_SetMode(COMM_RUNNER_STOP);
+            break;
+        default:
+            break;
+        }
+    }
+
+    /* ---- mode 27 功角闭环运行数据（200ms 周期，全整型） ---- */
+    if (g_dcl_running && (g_dcl_state == DCL_STEP_RUN)) {
+        static uint32_t s_last_dcl_dbg = 0u;
+        uint32_t now = tickTimer_GetCount();
+        if ((now - s_last_dcl_dbg) >= 200u) {
+            s_last_dcl_dbg = now;
+            DCL_DBG("dlt=%d deg spd=%d mHz fld=%d deg rot=%d deg diff=%d deg id=%d iq=%d mA",
+                    (int)g_dcl_dlt_now_deg,           /* 当前 delta 指令 (deg) */
+                    (int)(g_dcl_speed_hz * 1000.0f),  /* 实测电频率 (mHz, 带符号) */
+                    (int)g_dcl_field_deg,             /* 磁场电角度 (deg, 0~359) */
+                    (int)g_dcl_rotor_deg,             /* 转子电角度 (deg, 0~359) */
+                    (int)g_dcl_diff_deg,              /* 功角实测 (deg, 应≈dlt) */
+                    (int)g_dcl_id_ma,                 /* 真实转子系 id (mA) */
+                    (int)g_dcl_iq_ma);                /* 真实转子系 iq (mA) */
         }
     }
 

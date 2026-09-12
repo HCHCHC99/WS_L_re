@@ -12,6 +12,7 @@
  *          foc_cal.h      模式20 编码器零点校准（BETA 2s + ALPHA 2s -> 锁 offset）
  *          foc_cal_angle.h 模式25 手动角度吸附（自动校准 -> 刹车等待输入 -> 吸附+校验）
  *          foc_olf.h      模式26 开环 VF 负载角实验（校准 -> 磁场自增拖动 -> delta/失步观测）
+ *          foc_dcl.h      模式27 功角闭环拖动（校准 -> 磁场=转子+delta，delta 爬坡可调）
  *          foc_zizeng.h   模式30 磁场角度自增拖动（ZIZENG）
  *          foc_iq_pi.h    模式31 PI 电流环（编码器角度 + ZIZENG 偏移）
  *          foc_lock_iq_pi.h 模式32 自锁偏移（直流对齐）+ 自动交接 mode 31
@@ -36,6 +37,7 @@
 #include "foc_cal.h"
 #include "foc_cal_angle.h"
 #include "foc_olf.h"
+#include "foc_dcl.h"
 #include "foc_zizeng.h"
 #include "foc_iq_pi.h"
 #include "foc_lock_iq_pi.h"
@@ -60,7 +62,8 @@ void Foc_Init(void);
  *   FOC_MODE_OPENLOOP -> Foc_OpenLoop_Step
  *   FOC_MODE_ALIGN    -> g_cal_running ? Foc_Cal_Step
  *                        : (g_calang_running ? Foc_CalAngle_Step
- *                        : (g_olf_running ? Foc_Olf_Step : Foc_Align_Step))
+ *                        : (g_olf_running ? Foc_Olf_Step
+ *                        : (g_dcl_running ? Foc_Dcl_Step : Foc_Align_Step)))
  *   FOC_MODE_CURLOOP  -> Foc_CurLoop_Step（内部再按状态机分派）
  *   g_zizeng_running  -> Foc_Zizeng_Step
  *   g_lockiq_running  -> Foc_LockIqPi_Step（锁定后由 main.c 交接 mode 31）

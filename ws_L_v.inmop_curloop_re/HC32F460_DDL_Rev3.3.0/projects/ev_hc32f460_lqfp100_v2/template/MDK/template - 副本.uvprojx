@@ -1028,6 +1028,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_cal_angle.c</FilePath>
             </File>
+            <File>
+              <FileName>foc_dcl.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_dcl.c</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>
@@ -2053,6 +2058,11 @@
               <FileName>foc_cal_angle.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_cal_angle.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_dcl.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_dcl.c</FilePath>
             </File>
           </Files>
         </Group>

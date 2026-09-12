@@ -25,6 +25,7 @@ typedef enum {
     COMM_RUNNER_CAL        = 20, /* 编码器零点校准（BETA 2s + ALPHA 2s -> 锁 offset 自动回 0） */
     COMM_RUNNER_CAL_ANGLE  = 25, /* 手动角度吸附（自动校准 -> 刹车等输入 -> 吸附2s+校验500ms） */
     COMM_RUNNER_OLF        = 26, /* 开环 VF 负载角实验（校准 -> 磁场自增拖动，SW1/Watch 调频） */
+    COMM_RUNNER_DCL        = 27, /* 功角闭环拖动（校准 -> 磁场=转子+delta，delta 爬坡可调） */
     COMM_RUNNER_FOC_ALIGN  = 23, /* FOC 对齐校准 */
     COMM_RUNNER_ZIZENG     = 30, /* 磁场角度自增拖动模式 */
     COMM_RUNNER_IQ_PI      = 31, /* PI 电流环模式（需先跑 mode 30 锁偏移） */
