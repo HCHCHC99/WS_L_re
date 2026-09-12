@@ -33,10 +33,13 @@
  * 工作过程（按时间顺序）：
  *   1. 进入 mode 26：自动跑 mode 25 式校准（BETA 90° 吸 2s -> ALPHA
  *      0° 吸 2s -> 锁零点 offset）。
- *   2. 校准完成立即进入拖动：磁场角 theta 以 g_olf_freq_hz（默认
- *      0.5Hz，低速起步）匀速自增，电压 g_olf_volt_v（默认
- *      0.6V，与 mode 30 相同）。输出约定 Vd=V/Vq=0（磁场角 = theta，
- *      与转子 N 极对齐时 delta=0，心智模型与 mode 25 一致）。
+ *   2. 校准完成立即进入拖动：theta 以 g_olf_freq_hz（默认
+ *      0.5Hz，低速起步）匀速自增（磁场角 = theta+90° 随之同速旋转），
+ *      电压 g_olf_volt_v（默认
+ *      0.6V，与 mode 30 相同）。输出约定 q 轴电压（与 mode 30 一致）：
+ *      theta 为控制系 d 轴角，电压矢量在 theta+90°，磁场角 = theta+90°，
+ *      与转子 N 极对齐时 delta=0；锁定时 g_foc_id_ma≈0, g_foc_iq_ma≈I
+ *      （真实转子系 g_olf_id/iq_ma 仍按物理分布 id≈I, iq 随 delta 增大）。
  *   3. 自增三要素（全部 Keil Watch 可调）：
  *      a) g_olf_freq_hz 磁场转速 (Hz)：SW1 每按 +0.5（手动斜坡防失步），
  *         Watch 直改阶跃生效，改动大会失步；重新进入恢复默认 0.5Hz
@@ -64,7 +67,7 @@
  *   g_olf_diff_deg : 负载角 delta (deg, -180~180) —— 实验主指标
  *   g_olf_field_deg / g_olf_rotor_deg : 磁场角/转子角 (deg, 0~359)
  *   g_olf_id_ma / g_olf_iq_ma : 真实转子系电流 (mA)
- *   g_olf_theta_rad : 磁场角 (rad, 内部值)
+ *   g_olf_theta_rad : 控制系 d 轴角 (rad, 磁场角 = theta+90°)
  *   g_olf_du/dv/dw : 三相占空比 (%)
  *
  * 与 mode 30 的区别：mode 30 目的是锁偏移（编码器只旁观）；本模式
@@ -134,7 +137,7 @@ extern volatile int32_t  g_olf_rotor_deg;  /* 转子电角度 (deg, 0~359, 已�
 extern volatile int32_t  g_olf_diff_deg;   /* 负载角 delta = field - rotor (deg, -180~180) */
 extern volatile float    g_olf_id_ma;      /* 真实转子系 id (mA, 磁链分量) */
 extern volatile float    g_olf_iq_ma;      /* 真实转子系 iq (mA, 力矩分量) */
-extern volatile float    g_olf_theta_rad;  /* 磁场角 (rad, [0,2π)) */
+extern volatile float    g_olf_theta_rad;  /* 控制系 d 轴角 (rad, 磁场角=theta+90°) */
 extern volatile float    g_olf_du;         /* 三相占空比观测 (%) */
 extern volatile float    g_olf_dv;
 extern volatile float    g_olf_dw;

@@ -4,11 +4,13 @@
  * @brief FOC 模式26 — 开环 VF 负载角实验实现。
  *
  *        流程：自动校准 BETA(2s, 90°) -> ALPHA(2s, 0°, 锁零点 offset)
- *              -> 拖动：磁场角 theta 以 g_olf_freq_hz 转速步长量化自增
+ *              -> 拖动：磁场角以 g_olf_freq_hz 转速步长量化自增
  *                 （每攒满 g_olf_step_010×0.1° 跳一步，方向 g_olf_dir ±1，
  *                 默认步长 1 ≈ 连续旋转），
- *                 Vd=V 约定（valpha=V·cos(theta), vbeta=V·sin(theta)，
- *                 磁场角 = theta 本身，与转子 N 极对齐时 delta=0），
+ *                 q 轴电压约定（与 mode 30 一致）：g_olf_theta_rad 为控制系
+ *                 d 轴角，电压矢量在 theta+90°（q 轴），磁场角 = theta+90°，
+ *                 与转子 N 极对齐时 delta=0；锁定时控制系 g_foc_id_ma≈0,
+ *                 g_foc_iq_ma≈I（真实转子系 g_olf_id/iq_ma 仍按物理分布），
  *              -> 用编码器真实转子角（扣校准零点）做 Park 变换得到
  *                 真实转子系 id/iq（实验核心观测量），
  *              -> 角度观测 field/rotor/diff(delta) 整型化供打印。
@@ -69,14 +71,17 @@ static int32_t  s_acc_mdeg   = 0;     /* 步长累积器（mdeg，攒满一个�
 
 /*******************************************************************************
  * 内部助手：输出指定电角度的固定磁场 + 刷新观测量（ISR 内调用）
- *   Vd=V 约定：valpha=V·cos(theta), vbeta=V·sin(theta)，磁场角 = theta
+ *   q 轴电压约定（与 mode 30 一致）：入参 theta 为控制系 d 轴角，
+ *   电压矢量在 theta+90°（q 轴）：valpha=-V·sin(theta), vbeta=V·cos(theta)，
+ *   磁场角 = theta+90°。锁定时控制系电流 g_foc_id_ma≈0, g_foc_iq_ma≈I。
  ******************************************************************************/
 static void Olf_OutputField(const stc_i_data_t *pData, float theta)
 {
-    float valpha, vbeta, du, dv, dw, id, iq;
+    float fa, valpha, vbeta, du, dv, dw, id, iq;
 
-    valpha = g_olf_volt_v * Foc_Math_Cos(theta);
-    vbeta  = g_olf_volt_v * Foc_Math_Sin(theta);
+    fa = theta + FOC_MATH_HALF_PI;          /* 磁场角 = d 轴角 + 90° */
+    valpha = g_olf_volt_v * Foc_Math_Cos(fa);
+    vbeta  = g_olf_volt_v * Foc_Math_Sin(fa);
     Foc_Svpwm(valpha, vbeta, FOC_VBUS_V, &du, &dv, &dw);
     TMR4_PWM_SetDuty3Phase(du, dv, dw);
 
@@ -92,7 +97,7 @@ static void Olf_OutputField(const stc_i_data_t *pData, float theta)
     g_olf_dv        = dv;
     g_olf_dw        = dw;
 
-    /* 控制系（磁场角框架）电流观察 */
+    /* 控制系（theta d 轴框架）电流观察：Vd=0/Vq=V -> 锁定时 id≈0, iq≈I */
     Foc_Core_GetDq(pData, theta, &id, &iq);
     g_foc_id_ma = id * 1000.0f;
     g_foc_iq_ma = iq * 1000.0f;
@@ -164,19 +169,20 @@ void Foc_Olf_Step(const stc_i_data_t *pData)
     }
 
     switch (g_olf_state) {
-    /* ===== 校准 BETA：磁场定 90°，2s ===== */
+    /* ===== 校准 BETA：磁场定 90°（theta=0, 场=theta+90°），2s ===== */
     case OLF_STEP_CAL_BETA:
-        Olf_OutputField(pData, FOC_MATH_HALF_PI);
+        Olf_OutputField(pData, 0.0f);
         if (++s_phase_tick >= OLF_BETA_TICKS) {
             s_phase_tick = 0u;
+            g_olf_theta_rad = -FOC_MATH_HALF_PI;   /* ALPHA 场 0° -> theta=-90° */
             g_olf_state  = OLF_STEP_CAL_ALPHA;
             g_olf_evt    = OLF_EVT_BETA_DONE;
         }
         break;
 
-    /* ===== 校准 ALPHA：磁场定 0°，2s，结束锁零点 -> 拖动 ===== */
+    /* ===== 校准 ALPHA：磁场定 0°（theta=-90°），2s，结束锁零点 -> 拖动 ===== */
     case OLF_STEP_CAL_ALPHA:
-        Olf_OutputField(pData, 0.0f);
+        Olf_OutputField(pData, -FOC_MATH_HALF_PI);
         if (++s_phase_tick >= OLF_ALPHA_TICKS) {
             /* 零点：ALPHA 结束时转子 d 轴在静止系 0°（与 mode 20/25 同框架） */
             hw  = TMRA_GetCountValue(CM_TMRA_1);
@@ -185,7 +191,7 @@ void Foc_Olf_Step(const stc_i_data_t *pData)
             Foc_Core_SetAlignOffset(off);
             g_olf_offset = off;
 
-            g_olf_theta_rad = 0.0f;   /* 拖动从磁场 0° 起步，与 ALPHA 末角度无缝衔接 */
+            g_olf_theta_rad = -FOC_MATH_HALF_PI;   /* 拖动起步场 0°（theta=-90°），与 ALPHA 末角度无缝衔接 */
             s_phase_tick    = 0u;
             g_olf_state     = OLF_STEP_DRAG;
             g_olf_evt       = OLF_EVT_LOCKED;
@@ -223,7 +229,7 @@ void Foc_Olf_Step(const stc_i_data_t *pData)
             g_olf_theta_rad = theta;
         }
 
-        /* 2. Vd=V 约定输出磁场 */
+        /* 2. q 轴电压约定输出磁场（场 = theta+90°，函数内处理） */
         Olf_OutputField(pData, theta);
 
         /* 3. 转子真实电角度（原始计数 - 校准零点，机械圈 -> 电角度） */
@@ -243,8 +249,13 @@ void Foc_Olf_Step(const stc_i_data_t *pData)
         g_olf_id_ma = id * 1000.0f;
         g_olf_iq_ma = iq * 1000.0f;
 
-        /* 5. 角度观测（整型电角度 deg）+ 负载角折叠 (-180,180] */
-        fld_deg = (int32_t)(theta * OLF_RAD2DEG);
+        /* 5. 角度观测（整型电角度 deg）+ 负载角折叠 (-180,180]
+         *    磁场角 = theta+90°（q 轴约定），theta∈[0,2π) -> fld∈[90,449]，
+         *    超 360 减一圈 */
+        fld_deg = (int32_t)((theta + FOC_MATH_HALF_PI) * OLF_RAD2DEG);
+        if (fld_deg >= 360) {
+            fld_deg -= 360;
+        }
         rot_deg = (int32_t)(rot_rad * OLF_RAD2DEG);
         dfd     = fld_deg - rot_deg;
         dfd     = 180 - Foc_Core_ModPos(180 - dfd, 360);
