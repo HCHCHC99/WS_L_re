@@ -4,7 +4,10 @@
  * @brief FOC 模式26 — 开环 VF 负载角实验实现。
  *
  *        流程：自动校准 BETA(2s, 90°) -> ALPHA(2s, 0°, 锁零点 offset)
- *              -> 拖动：磁场角以 g_olf_freq_hz 转速步长量化自增
+ *              -> 拖动：自增频率从 g_olf_freq_init_hz 线性爬坡到
+ *                 g_olf_freq_targ_hz（历时 g_olf_freq_tr_ms, 0=立即, 到点置
+ *                 RAMP_DONE 一次），当前频率实时写入 g_olf_freq_hz；
+ *                 磁场角以当前频率步长量化自增
  *                 （每攒满 g_olf_step_010×0.1° 跳一步，方向 g_olf_dir ±1，
  *                 默认步长 1 ≈ 连续旋转），
  *                 q 轴电压约定（与 mode 30 一致）：g_olf_theta_rad 为控制系
@@ -40,6 +43,7 @@
 /* 阶段时长 -> ISR tick 数 */
 #define OLF_BETA_TICKS    ((uint32_t)OLF_BETA_MS    * (uint32_t)FOC_ISR_HZ / 1000u)
 #define OLF_ALPHA_TICKS   ((uint32_t)OLF_ALPHA_MS   * (uint32_t)FOC_ISR_HZ / 1000u)
+#define OLF_PP_WIN_TICKS  ((uint32_t)OLF_PP_WIN_MS  * (uint32_t)FOC_ISR_HZ / 1000u)
 
 /* 电角度 rad -> deg 换算（观测显示用，取整） */
 #define OLF_RAD2DEG   57.2958f
@@ -47,7 +51,10 @@
 /*******************************************************************************
  * Watch 观测量 / 可调变量
  ******************************************************************************/
-volatile float    g_olf_freq_hz   = 1.0f;   /* 磁场角自增频率（低速起步，防大功角） */
+volatile float    g_olf_freq_hz      = 0.2f;  /* 当前自增频率（斜坡实时输出，只读观察） */
+volatile float    g_olf_freq_init_hz = 0.2f;  /* 斜坡起点频率（低速起步，防大功角） */
+volatile float    g_olf_freq_targ_hz = 150.0f;  /* 斜坡目标频率（扫频实验改此值，如 25.0） */
+volatile uint32_t g_olf_freq_tr_ms   = 20000u;    /* 斜坡过渡时间（0=立即；扫频如 50000=50s 爬到目标） */
 volatile int32_t  g_olf_step_010  = 1;      /* 自增步长 ×0.1°/步（1≈连续旋转，同旧模型） */
 volatile int32_t  g_olf_dir       = 1;      /* 自增方向：+1=角度加，-1=角度减 */
 volatile float    g_olf_volt_v    = 0.6f;   /* 拖动电压，与 mode 30 默认相同 (≈5A) */
@@ -60,6 +67,8 @@ volatile int32_t  g_olf_rotor_deg = 0;
 volatile int32_t  g_olf_diff_deg  = 0;
 volatile float    g_olf_id_ma     = 0.0f;
 volatile float    g_olf_iq_ma     = 0.0f;
+volatile float    g_olf_id_pp_ma  = 0.0f;   /* id 峰峰值 (mA, 每 OLF_PP_WIN_MS 刷新) */
+volatile float    g_olf_iq_pp_ma  = 0.0f;   /* iq 峰峰值 (mA, 同上) */
 volatile float    g_olf_theta_rad = 0.0f;
 volatile float    g_olf_du        = 50.0f;
 volatile float    g_olf_dv        = 50.0f;
@@ -67,7 +76,43 @@ volatile float    g_olf_dw        = 50.0f;
 
 /* 内部状态 */
 static uint32_t s_phase_tick = 0u;    /* 当前阶段计时（tick） */
+static uint32_t s_run_tick   = 0u;    /* 拖动阶段计时（tick），频率斜坡时基 */
+static uint8_t  s_ramp_done  = 0u;    /* 频率斜坡完成事件已置位（每次运行只置一次） */
 static int32_t  s_acc_mdeg   = 0;     /* 步长累积器（mdeg，攒满一个步长跳一步） */
+
+/* id/iq 峰峰值统计（仅拖动态喂数，窗口无缝衔接） */
+static uint32_t s_pp_tick = 0u;       /* 窗口计时（tick） */
+static uint8_t  s_pp_init = 0u;       /* 首样本初始化标志 */
+static float    s_id_min  = 0.0f;
+static float    s_id_max  = 0.0f;
+static float    s_iq_min  = 0.0f;
+static float    s_iq_max  = 0.0f;
+
+/*******************************************************************************
+ * 内部助手：峰峰值喂数（ISR 内调用）
+ *   每拍更新窗口内 min/max，满 OLF_PP_WIN_TICKS 时锁存峰峰值并以下一拍
+ *   样本为新窗口起点（窗口无缝衔接，无重叠无遗漏）。入参单位 A。
+ ******************************************************************************/
+static void Olf_PpFeed(float id, float iq)
+{
+    if (s_pp_init == 0u) {
+        s_id_min = s_id_max = id;
+        s_iq_min = s_iq_max = iq;
+        s_pp_init = 1u;
+    } else {
+        if (id < s_id_min) { s_id_min = id; }
+        if (id > s_id_max) { s_id_max = id; }
+        if (iq < s_iq_min) { s_iq_min = iq; }
+        if (iq > s_iq_max) { s_iq_max = iq; }
+    }
+    if (++s_pp_tick >= OLF_PP_WIN_TICKS) {
+        s_pp_tick = 0u;
+        g_olf_id_pp_ma = (s_id_max - s_id_min) * 1000.0f;
+        g_olf_iq_pp_ma = (s_iq_max - s_iq_min) * 1000.0f;
+        s_id_min = s_id_max = id;   /* 新窗口从当前样本重新起步 */
+        s_iq_min = s_iq_max = iq;
+    }
+}
 
 /*******************************************************************************
  * 内部助手：输出指定电角度的固定磁场 + 刷新观测量（ISR 内调用）
@@ -127,15 +172,22 @@ void Foc_Olf_Start(void)
     g_olf_state     = OLF_STEP_CAL_BETA;
     g_olf_evt       = 0u;
     s_phase_tick    = 0u;
+    s_run_tick      = 0u;
+    s_ramp_done     = 0u;
     g_olf_theta_rad = 0.0f;
     g_olf_field_deg = 0;
     g_olf_rotor_deg = 0;
     g_olf_diff_deg  = 0;
     g_olf_id_ma     = 0.0f;
     g_olf_iq_ma     = 0.0f;
-    /* 频率/电压复位为默认（清除上次实验残留，防止启动即高速失步；
-     * 拖动中用 SW1/Watch 调频，重新进入则重新从 0.5Hz 开始） */
-    g_olf_freq_hz   = 0.5f;
+    g_olf_id_pp_ma  = 0.0f;
+    g_olf_iq_pp_ma  = 0.0f;
+    s_pp_tick       = 0u;
+    s_pp_init       = 0u;
+    /* 电压复位为默认；当前频率复位为斜坡起点。
+     * 频率斜坡三参数 init/targ/tr 不复位（与 mode 27 一致，便于预设后启动），
+     * 拖动中 SW1/Watch 改 targ/tr 即按新参数重算轨迹 */
+    g_olf_freq_hz   = g_olf_freq_init_hz;
     g_olf_volt_v    = 0.6f;
     /* 步长/方向同步复位（防上次实验残留的 dir=-1 或大步长） */
     g_olf_step_010  = 1;
@@ -145,8 +197,9 @@ void Foc_Olf_Start(void)
 
     Foc_Core_PwmStart();   /* 零矢量起 PWM（g_foc_active=1），下一拍开始吸附 */
 
-    OLF_DBG("start calib BETA 90deg f=%d mHz volt=%d mV step=%d010deg dir=%d",
-            (int)(g_olf_freq_hz * 1000.0f), (int)(g_olf_volt_v * 1000.0f),
+    OLF_DBG("start calib BETA 90deg f %d->%d mHz tr=%d ms volt=%d mV step=%d010deg dir=%d",
+            (int)(g_olf_freq_init_hz * 1000.0f), (int)(g_olf_freq_targ_hz * 1000.0f),
+            (int)g_olf_freq_tr_ms, (int)(g_olf_volt_v * 1000.0f),
             (int)g_olf_step_010, (int)g_olf_dir);
 }
 
@@ -155,8 +208,9 @@ void Foc_Olf_Start(void)
  ******************************************************************************/
 void Foc_Olf_Step(const stc_i_data_t *pData)
 {
-    float theta, rot_rad, id, iq, frq;
+    float theta, rot_rad, id, iq, frq, w;
     uint16_t hw;
+    uint32_t tr_ticks;
     int32_t diff, off, fld_deg, rot_deg, dfd, step_mdeg, jumps;
 
     /* ===== OC 保护（原始 pData，去抖在 Foc_Core_OverCurrent 内） ===== */
@@ -193,20 +247,42 @@ void Foc_Olf_Step(const stc_i_data_t *pData)
 
             g_olf_theta_rad = -FOC_MATH_HALF_PI;   /* 拖动起步场 0°（theta=-90°），与 ALPHA 末角度无缝衔接 */
             s_phase_tick    = 0u;
+            s_run_tick      = 0u;
+            s_ramp_done     = 0u;
             g_olf_state     = OLF_STEP_DRAG;
             g_olf_evt       = OLF_EVT_LOCKED;
         }
         break;
 
-    /* ===== 拖动：磁场角自增 + 真实转子系观测（实验主体） ===== */
+    /* ===== 拖动：频率斜坡 + 磁场角自增 + 真实转子系观测（实验主体） ===== */
     case OLF_STEP_DRAG:
+        /* 0. 频率斜坡：f = init + (targ-init)×w，w = elapsed/tr 线性，
+         *    init/targ/tr 每拍实时读 Watch（运行中改 = 按新值重算轨迹）。
+         *    tr=0 立即到目标；到点置 RAMP_DONE 一次（与 mode 27 同语义）。 */
+        tr_ticks = g_olf_freq_tr_ms * (FOC_ISR_HZ / 1000u);
+        if (tr_ticks == 0u) {
+            w = 1.0f;
+        } else {
+            w = (float)s_run_tick / (float)tr_ticks;
+            if (w > 1.0f) {
+                w = 1.0f;
+            }
+        }
+        frq = g_olf_freq_init_hz
+            + (g_olf_freq_targ_hz - g_olf_freq_init_hz) * w;
+        g_olf_freq_hz = frq;
+        if ((s_ramp_done == 0u) && (s_run_tick >= tr_ticks)) {
+            s_ramp_done = 1u;
+            g_olf_evt   = OLF_EVT_RAMP_DONE;
+        }
+        s_run_tick++;
+
         /* 1. 磁场角步长量化自增：
          *    目标转速 = 360°×freq /s -> 每拍累积 mdeg，攒满一个步长
          *    (g_olf_step_010×0.1°) 沿 g_olf_dir 方向跳一步。
          *    等效自增节拍 = 360×freq/step 次/秒；step=1 时≈连续旋转。
-         *    阶跃改 freq 立即生效，大改动会失步。 */
+         *    tr=0 或斜坡已完成时改 targ 阶跃生效，大改动会失步。 */
         theta = g_olf_theta_rad;
-        frq = g_olf_freq_hz;
         if (frq < 0.0f) {
             frq = -frq;   /* 转速取绝对值，方向只由 g_olf_dir 决定 */
         }
@@ -248,6 +324,7 @@ void Foc_Olf_Step(const stc_i_data_t *pData)
         Foc_Core_GetDq(pData, rot_rad, &id, &iq);
         g_olf_id_ma = id * 1000.0f;
         g_olf_iq_ma = iq * 1000.0f;
+        Olf_PpFeed(id, iq);   /* 峰峰值统计（5s 窗口刷新） */
 
         /* 5. 角度观测（整型电角度 deg）+ 负载角折叠 (-180,180]
          *    磁场角 = theta+90°（q 轴约定），theta∈[0,2π) -> fld∈[90,449]，

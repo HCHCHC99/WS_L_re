@@ -33,16 +33,21 @@
  * 工作过程（按时间顺序）：
  *   1. 进入 mode 26：自动跑 mode 25 式校准（BETA 90° 吸 2s -> ALPHA
  *      0° 吸 2s -> 锁零点 offset）。
- *   2. 校准完成立即进入拖动：theta 以 g_olf_freq_hz（默认
- *      0.5Hz，低速起步）匀速自增（磁场角 = theta+90° 随之同速旋转），
+ *   2. 校准完成立即进入拖动：自增频率从 g_olf_freq_init_hz 线性爬坡到
+ *      g_olf_freq_targ_hz（历时 g_olf_freq_tr_ms，0=立即），当前频率实时
+ *      写入 g_olf_freq_hz，磁场角（= theta+90°）按当前频率匀速自增，
  *      电压 g_olf_volt_v（默认
  *      0.6V，与 mode 30 相同）。输出约定 q 轴电压（与 mode 30 一致）：
  *      theta 为控制系 d 轴角，电压矢量在 theta+90°，磁场角 = theta+90°，
  *      与转子 N 极对齐时 delta=0；锁定时 g_foc_id_ma≈0, g_foc_iq_ma≈I
  *      （真实转子系 g_olf_id/iq_ma 仍按物理分布 id≈I, iq 随 delta 增大）。
- *   3. 自增三要素（全部 Keil Watch 可调）：
- *      a) g_olf_freq_hz 磁场转速 (Hz)：SW1 每按 +0.5（手动斜坡防失步），
- *         Watch 直改阶跃生效，改动大会失步；重新进入恢复默认 0.5Hz
+ *   3. 自增参数（全部 Keil Watch 可调）：
+ *      a) 频率斜坡三件套（与 mode 27 功角爬坡同语义）：
+ *         g_olf_freq_init_hz 起点频率 (Hz, Start 不复位)
+ *         g_olf_freq_targ_hz 目标频率 (Hz, Start 不复位, SW1 每按 +0.5)
+ *         g_olf_freq_tr_ms   过渡时间 (ms, 0=立即到目标, Start 不复位)
+ *         当前实际频率实时写入 g_olf_freq_hz（只读，打印/VOFA 用）；
+ *         运行中改 targ/tr 即按新参数重算轨迹（斜坡自动跟随）
  *      b) g_olf_step_010 自增步长 (×0.1°/步)：磁场角攒够一个步长跳一步，
  *         1 = 0.1°/步 ≈ 连续旋转（默认）；调大变"大步跳跃"实验
  *         （等效自增节拍 = 360×freq/step 次/秒）
@@ -55,13 +60,15 @@
  *         磁场转速   磁场角    转子角    负载角delta   真实转子系电流
  *
  * 实验预期数据曲线（低频段，0.6V）：
- *   f:  0.5Hz -> SW1 每按 +0.5Hz x N
+ *   f: 0.5Hz -> SW1 每按 +0.5Hz x N（或预设斜坡自动扫频到失步）
  *   diff: 5~15° 稳定 -> 缓升 -> 快速冲向 90° -> 锯齿崩塌振荡（失步）
  *   iq:   小 -> 随 diff 上升 -> 失步后剧烈振荡
  *   id:   ≈0 -> 转负（BEMF 去磁）-> 失步后剧烈振荡
  *
  * Watch 常用变量：
- *   g_olf_freq_hz  : 磁场角自增频率 (Hz)，Start 时复位为 0.5，SW1 每按 +0.5
+ *   g_olf_freq_hz  : 当前磁场自增频率 (Hz, 斜坡实时输出只读)，SW1 调的是目标
+ *   g_olf_freq_init_hz / g_olf_freq_targ_hz / g_olf_freq_tr_ms :
+ *                    频率斜坡 起点/目标/过渡时间（Start 不复位，扫频预设用）
  *   g_olf_volt_v   : 拖动电压 (V)，Start 时复位为 0.6（≈5A，量程内）
  *   g_olf_state    : 0=空闲 1=校准BETA 2=校准ALPHA 3=拖动 4=过流
  *   g_olf_diff_deg : 负载角 delta (deg, -180~180) —— 实验主指标
@@ -104,6 +111,7 @@ extern "C" {
  *=============================================================================*/
 #define OLF_BETA_MS     2000u  /* 校准 BETA 吸附时长 */
 #define OLF_ALPHA_MS    2000u  /* 校准 ALPHA 吸附时长 */
+#define OLF_PP_WIN_MS   5000u  /* id/iq 峰峰值统计窗口 */
 
 /*=============================================================================
  * 状态机（g_olf_state）
@@ -120,11 +128,15 @@ extern "C" {
 #define OLF_EVT_BETA_DONE  1u
 #define OLF_EVT_LOCKED     2u
 #define OLF_EVT_OC         3u
+#define OLF_EVT_RAMP_DONE  4u
 
 /*=============================================================================
  * Keil Watch 可调变量 / 观测量（定义见 foc_olf.c）
  *=============================================================================*/
-extern volatile float    g_olf_freq_hz;    /* 磁场角自增频率 (Hz, 默认 0.5, Start 复位) */
+extern volatile float    g_olf_freq_hz;      /* 当前磁场自增频率 (Hz, 斜坡实时输出, Start 复位为 init) */
+extern volatile float    g_olf_freq_init_hz; /* 斜坡起点频率 (Hz, 默认 0.5, Start 不复位) */
+extern volatile float    g_olf_freq_targ_hz; /* 斜坡目标频率 (Hz, 默认 0.5, Start 不复位, SW1 每按 +0.5) */
+extern volatile uint32_t g_olf_freq_tr_ms;   /* 斜坡过渡时间 (ms, 0=立即, Start 不复位, 如 50000=50s 扫频) */
 extern volatile int32_t  g_olf_step_010;   /* 自增步长 (×0.1°/步, 1≈连续旋转, 建议 1~3600) */
 extern volatile int32_t  g_olf_dir;        /* 自增方向 (+1=角度加 / -1=角度减, Start 复位 +1) */
 extern volatile float    g_olf_volt_v;     /* 拖动电压幅值 (V, 默认 0.6 与 mode30 同) */
@@ -137,6 +149,8 @@ extern volatile int32_t  g_olf_rotor_deg;  /* 转子电角度 (deg, 0~359, 已�
 extern volatile int32_t  g_olf_diff_deg;   /* 负载角 delta = field - rotor (deg, -180~180) */
 extern volatile float    g_olf_id_ma;      /* 真实转子系 id (mA, 磁链分量) */
 extern volatile float    g_olf_iq_ma;      /* 真实转子系 iq (mA, 力矩分量) */
+extern volatile float    g_olf_id_pp_ma;   /* id 峰峰值 (mA, OLF_PP_WIN_MS 窗口每 5s 刷新) */
+extern volatile float    g_olf_iq_pp_ma;   /* iq 峰峰值 (mA, 同上) */
 extern volatile float    g_olf_theta_rad;  /* 控制系 d 轴角 (rad, 磁场角=theta+90°) */
 extern volatile float    g_olf_du;         /* 三相占空比观测 (%) */
 extern volatile float    g_olf_dv;

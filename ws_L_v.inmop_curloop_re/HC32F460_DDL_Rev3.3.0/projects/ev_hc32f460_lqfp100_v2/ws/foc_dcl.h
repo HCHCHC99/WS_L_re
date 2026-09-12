@@ -55,6 +55,7 @@
  *   g_dcl_speed_hz    : 实测电频率（200ms 窗口，带符号）
  *   g_dcl_diff_deg    : 功角实测 = 磁场角-转子角（应≈dlt_now，验证用）
  *   g_dcl_id_ma / g_dcl_iq_ma : 真实转子系电流（id≈I·cosδ, iq≈I·sinδ）
+ *   g_dcl_id_pp_ma / g_dcl_iq_pp_ma : id/iq 峰峰值（5s 窗口刷新，抖动量化）
  *   g_dcl_state       : 0 空闲 1 校准BETA 2 校准ALPHA 3 运行 4 过流
  *   g_dcl_enc_pos     : 编码器相对计数镜像（毛刺/限幅排查用）
  *
@@ -95,6 +96,7 @@ extern "C" {
 #define DCL_BETA_MS       2000u  /* 校准 BETA 吸附时长 */
 #define DCL_ALPHA_MS      2000u  /* 校准 ALPHA 吸附时长 */
 #define DCL_SPEED_WIN_MS  200u   /* 转速测量窗口 */
+#define DCL_PP_WIN_MS     5000u  /* id/iq 峰峰值统计窗口 */
 
 /*=============================================================================
  * 编码器增量限幅（物理极限 7800rpm -> 单拍真实增量上限 ≈26.6 counts，
@@ -137,6 +139,8 @@ extern volatile int32_t  g_dcl_rotor_deg;     /* 转子电角度 (deg, 0~359, �
 extern volatile int32_t  g_dcl_diff_deg;      /* 功角实测 = field-rotor (deg, -180~180) */
 extern volatile float    g_dcl_id_ma;         /* 真实转子系 id (mA, 磁链分量) */
 extern volatile float    g_dcl_iq_ma;         /* 真实转子系 iq (mA, 力矩分量) */
+extern volatile float    g_dcl_id_pp_ma;      /* id 峰峰值 (mA, DCL_PP_WIN_MS 窗口每 5s 刷新) */
+extern volatile float    g_dcl_iq_pp_ma;      /* iq 峰峰值 (mA, 同上) */
 extern volatile int32_t  g_dcl_enc_pos;       /* 编码器相对计数镜像 (毛刺排查用) */
 extern volatile float    g_dcl_du;            /* 三相占空比观测 (%) */
 extern volatile float    g_dcl_dv;

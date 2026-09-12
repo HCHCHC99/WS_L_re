@@ -28,8 +28,8 @@
 
 /* Keil Watch 可调变量 */
 volatile float   g_zizeng_theta_rad  = 0.0f;
-volatile float   g_zizeng_freq_hz    = 3.0f;
-volatile float   g_zizeng_volt_v     = 0.6f;
+volatile float   g_zizeng_freq_hz    = 0.5f;
+volatile float   g_zizeng_volt_v     = 0.7f;
 volatile float   g_zizeng_du         = 50.0f;
 volatile float   g_zizeng_dv         = 50.0f;
 volatile float   g_zizeng_dw         = 50.0f;

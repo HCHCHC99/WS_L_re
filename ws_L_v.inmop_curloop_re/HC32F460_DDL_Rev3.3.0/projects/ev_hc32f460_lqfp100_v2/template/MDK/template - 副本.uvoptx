@@ -319,22 +319,22 @@
         <Ww>
           <count>4</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_olf_volt_v</ItemText>
+          <ItemText>g_dcl_volt_v</ItemText>
         </Ww>
         <Ww>
           <count>5</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_iqpi_step_hist</ItemText>
+          <ItemText>g_dcl_dlt_init_deg</ItemText>
         </Ww>
         <Ww>
           <count>6</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_olf_freq_hz</ItemText>
+          <ItemText>g_dcl_dlt_targ_deg</ItemText>
         </Ww>
         <Ww>
           <count>7</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_olf_step_010,0x0A</ItemText>
+          <ItemText>g_dcl_dlt_tr_ms,0x0A</ItemText>
         </Ww>
         <Ww>
           <count>8</count>
@@ -354,12 +354,12 @@
         <Ww>
           <count>11</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_lockiq_evt_off_deg</ItemText>
+          <ItemText>g_olf_freq_hz</ItemText>
         </Ww>
         <Ww>
           <count>12</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_iqpi_evt_off_deg</ItemText>
+          <ItemText>g_olf_freq_targ_hz</ItemText>
         </Ww>
         <Ww>
           <count>13</count>

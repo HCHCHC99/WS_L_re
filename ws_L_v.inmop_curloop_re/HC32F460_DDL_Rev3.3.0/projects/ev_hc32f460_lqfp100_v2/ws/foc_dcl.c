@@ -42,6 +42,7 @@
 #define DCL_BETA_TICKS    ((uint32_t)DCL_BETA_MS    * (uint32_t)FOC_ISR_HZ / 1000u)
 #define DCL_ALPHA_TICKS   ((uint32_t)DCL_ALPHA_MS   * (uint32_t)FOC_ISR_HZ / 1000u)
 #define DCL_SPEED_WIN_TICKS ((uint32_t)DCL_SPEED_WIN_MS * (uint32_t)FOC_ISR_HZ / 1000u)
+#define DCL_PP_WIN_TICKS  ((uint32_t)DCL_PP_WIN_MS  * (uint32_t)FOC_ISR_HZ / 1000u)
 
 /* 角度换算（观测/控制用） */
 #define DCL_RAD2DEG   57.2958f
@@ -65,6 +66,8 @@ volatile int32_t  g_dcl_rotor_deg   = 0;
 volatile int32_t  g_dcl_diff_deg    = 0;
 volatile float    g_dcl_id_ma       = 0.0f;
 volatile float    g_dcl_iq_ma       = 0.0f;
+volatile float    g_dcl_id_pp_ma    = 0.0f;  /* id 峰峰值 (mA, 每 DCL_PP_WIN_MS 刷新) */
+volatile float    g_dcl_iq_pp_ma    = 0.0f;  /* iq 峰峰值 (mA, 同上) */
 volatile int32_t  g_dcl_enc_pos     = 0;
 volatile float    g_dcl_du          = 50.0f;
 volatile float    g_dcl_dv          = 50.0f;
@@ -80,6 +83,40 @@ static uint8_t  s_enc_init    = 0u;    /* 首拍基准初始化标志 */
 static int32_t  s_off_rel     = 0;     /* 锁零点瞬间的相对计数（控制帧零点） */
 static uint32_t s_speed_tick  = 0u;    /* 转速窗口计时（tick） */
 static int32_t  s_speed_acc   = 0;     /* 转速窗口内计数累积 */
+
+/* id/iq 峰峰值统计（仅 RUN 态喂数，窗口无缝衔接） */
+static uint32_t s_pp_tick = 0u;        /* 窗口计时（tick） */
+static uint8_t  s_pp_init = 0u;        /* 首样本初始化标志 */
+static float    s_id_min  = 0.0f;
+static float    s_id_max  = 0.0f;
+static float    s_iq_min  = 0.0f;
+static float    s_iq_max  = 0.0f;
+
+/*******************************************************************************
+ * 内部助手：峰峰值喂数（ISR 内调用）
+ *   每拍更新窗口内 min/max，满 DCL_PP_WIN_TICKS 时锁存峰峰值并以下一拍
+ *   样本为新窗口起点（窗口无缝衔接，无重叠无遗漏）。入参单位 A。
+ ******************************************************************************/
+static void Dcl_PpFeed(float id, float iq)
+{
+    if (s_pp_init == 0u) {
+        s_id_min = s_id_max = id;
+        s_iq_min = s_iq_max = iq;
+        s_pp_init = 1u;
+    } else {
+        if (id < s_id_min) { s_id_min = id; }
+        if (id > s_id_max) { s_id_max = id; }
+        if (iq < s_iq_min) { s_iq_min = iq; }
+        if (iq > s_iq_max) { s_iq_max = iq; }
+    }
+    if (++s_pp_tick >= DCL_PP_WIN_TICKS) {
+        s_pp_tick = 0u;
+        g_dcl_id_pp_ma = (s_id_max - s_id_min) * 1000.0f;
+        g_dcl_iq_pp_ma = (s_iq_max - s_iq_min) * 1000.0f;
+        s_id_min = s_id_max = id;   /* 新窗口从当前样本重新起步 */
+        s_iq_min = s_iq_max = iq;
+    }
+}
 
 /*******************************************************************************
  * 内部助手：输出指定磁场电角度 + 刷新观测量（ISR 内调用）
@@ -160,6 +197,10 @@ void Foc_Dcl_Start(void)
     g_dcl_diff_deg    = 0;
     g_dcl_id_ma       = 0.0f;
     g_dcl_iq_ma       = 0.0f;
+    g_dcl_id_pp_ma    = 0.0f;
+    g_dcl_iq_pp_ma    = 0.0f;
+    s_pp_tick         = 0u;
+    s_pp_init         = 0u;
     g_dcl_enc_pos     = 0;
     g_dcl_volt_v      = 0.6f;
     /* g_dcl_offset 保留上次锁定值（校准完成后覆盖刷新） */
@@ -290,6 +331,7 @@ void Foc_Dcl_Step(const stc_i_data_t *pData)
         Foc_Core_GetDq(pData, rot_rad, &id, &iq);
         g_dcl_id_ma = id * 1000.0f;
         g_dcl_iq_ma = iq * 1000.0f;
+        Dcl_PpFeed(id, iq);   /* 峰峰值统计（5s 窗口刷新） */
 
         /* 6. 转速测量（200ms 窗口，带符号）：Hz = counts×极对数×窗口率/CPR */
         s_speed_acc += delta;

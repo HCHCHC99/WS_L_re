@@ -48,7 +48,8 @@ extern volatile float g_zizeng_freq_hz;
 extern volatile float g_zizeng_volt_v;
 
 /* mode 26 开环 VF 参数（Keil Watch 可调） */
-extern volatile float g_olf_freq_hz;     /* 磁场转速 Hz（SW1 每按 +0.5） */
+extern volatile float g_olf_freq_hz;      /* 当前磁场转速 Hz（斜坡实时输出，只读） */
+extern volatile float g_olf_freq_targ_hz; /* 斜坡目标频率 Hz（SW1 每按 +0.5） */
 extern volatile int   g_olf_step_010;    /* 自增步长 ×0.1°/步（1≈连续旋转） */
 extern volatile int   g_olf_dir;         /* 自增方向 +1=加 / -1=减 */
 
@@ -136,8 +137,8 @@ int main(void)
                 g_zizeng_freq_hz += 0.5f;       /* mode 30：电频率 +0.5Hz（机械转速 = freq×6 rpm） */
                 MAIN_DBG("SW1: zizeng freq -> %d mHz", (int)(g_zizeng_freq_hz * 1000.0f));
             } else if (comm_mode == 26) {
-                g_olf_freq_hz += 0.5f;          /* mode 26：负载角实验调频，小步防失步 */
-                MAIN_DBG("SW1: olf freq -> %d mHz", (int)(g_olf_freq_hz * 1000.0f));
+                g_olf_freq_targ_hz += 0.5f;     /* mode 26：抬目标频率，斜坡自动跟随 */
+                MAIN_DBG("SW1: olf targ -> %d mHz", (int)(g_olf_freq_targ_hz * 1000.0f));
             } else {
                 comm_mode = 30;                 /* 其他模式 → ZIZENG */
             }

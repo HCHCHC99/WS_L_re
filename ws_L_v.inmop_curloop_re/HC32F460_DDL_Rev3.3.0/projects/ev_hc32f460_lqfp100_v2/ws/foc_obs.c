@@ -186,9 +186,15 @@ void Foc_Obs_Task(void)
             OLF_DBG("BETA done -> ALPHA 0deg");
             break;
         case OLF_EVT_LOCKED:
-            OLF_DBG("LOCKED offset=%d deg -> drag f=%d mHz",
+            OLF_DBG("LOCKED offset=%d deg -> drag f %d->%d mHz tr=%d ms",
                     (int)((g_olf_offset * 360) / (int32_t)ENCODER_CPR),
-                    (int)(g_olf_freq_hz * 1000.0f));
+                    (int)(g_olf_freq_init_hz * 1000.0f),
+                    (int)(g_olf_freq_targ_hz * 1000.0f),
+                    (int)g_olf_freq_tr_ms);
+            break;
+        case OLF_EVT_RAMP_DONE:
+            OLF_DBG("freq ramp done f=%d mHz diff=%d deg",
+                    (int)(g_olf_freq_hz * 1000.0f), (int)g_olf_diff_deg);
             break;
         case OLF_EVT_OC:
             OLF_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
@@ -212,6 +218,20 @@ void Foc_Obs_Task(void)
                     (int)g_olf_diff_deg,              /* 负载角 delta (deg, -180~180) */
                     (int)g_olf_id_ma,                 /* 真实转子系 id (mA) */
                     (int)g_olf_iq_ma);                /* 真实转子系 iq (mA) */
+        }
+    }
+
+    /* ---- mode 26 峰峰值记录（foc_olf 内部 5s 窗口刷新，此处检测变化打印） ---- */
+    if (g_olf_running && (g_olf_state == OLF_STEP_DRAG)) {
+        static float s_last_olf_id_pp = -1.0f;
+        static float s_last_olf_iq_pp = -1.0f;
+        if ((g_olf_id_pp_ma != s_last_olf_id_pp)
+                || (g_olf_iq_pp_ma != s_last_olf_iq_pp)) {
+            s_last_olf_id_pp = g_olf_id_pp_ma;
+            s_last_olf_iq_pp = g_olf_iq_pp_ma;
+            OLF_DBG("idPP=%d iqPP=%d mA (%d s window)",
+                    (int)g_olf_id_pp_ma, (int)g_olf_iq_pp_ma,
+                    (int)(OLF_PP_WIN_MS / 1000u));
         }
     }
 
@@ -256,6 +276,20 @@ void Foc_Obs_Task(void)
                     (int)g_dcl_diff_deg,              /* 功角实测 (deg, 应≈dlt) */
                     (int)g_dcl_id_ma,                 /* 真实转子系 id (mA) */
                     (int)g_dcl_iq_ma);                /* 真实转子系 iq (mA) */
+        }
+    }
+
+    /* ---- mode 27 峰峰值记录（foc_dcl 内部 5s 窗口刷新，此处检测变化打印） ---- */
+    if (g_dcl_running && (g_dcl_state == DCL_STEP_RUN)) {
+        static float s_last_dcl_id_pp = -1.0f;
+        static float s_last_dcl_iq_pp = -1.0f;
+        if ((g_dcl_id_pp_ma != s_last_dcl_id_pp)
+                || (g_dcl_iq_pp_ma != s_last_dcl_iq_pp)) {
+            s_last_dcl_id_pp = g_dcl_id_pp_ma;
+            s_last_dcl_iq_pp = g_dcl_iq_pp_ma;
+            DCL_DBG("idPP=%d iqPP=%d mA (%d s window)",
+                    (int)g_dcl_id_pp_ma, (int)g_dcl_iq_pp_ma,
+                    (int)(DCL_PP_WIN_MS / 1000u));
         }
     }
 
