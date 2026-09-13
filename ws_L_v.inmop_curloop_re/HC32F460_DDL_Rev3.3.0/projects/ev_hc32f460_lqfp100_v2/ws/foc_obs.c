@@ -327,20 +327,23 @@ void Foc_Obs_Task(void)
         }
     }
 
-    /* ---- mode 28 功角闭环运行数据（200ms 周期，全整型） ---- */
+    /* ---- mode 28 功角闭环运行数据（200ms 周期，全整型；电流环版） ---- */
     if (g_dci_running && (g_dci_state == DCI_STEP_RUN)) {
         static uint32_t s_last_dci_dbg = 0u;
         uint32_t now = tickTimer_GetCount();
         if ((now - s_last_dci_dbg) >= 200u) {
             s_last_dci_dbg = now;
-            DCI_DBG("dlt=%d deg spd=%d mHz fld=%d deg rot=%d deg diff=%d deg id=%d iq=%d mA",
+            DCI_DBG("dlt=%d deg spd=%d mHz diff=%d deg idRef=%d iqRef=%d mA id=%d iq=%d mA vd=%d mV vq=%d mV sat=%d",
                     (int)g_dci_dlt_now_deg,           /* 当前 delta 指令 (deg) */
                     (int)(g_dci_speed_hz * 1000.0f),  /* 实测电频率 (mHz, 带符号) */
-                    (int)g_dci_field_deg,             /* 磁场电角度 (deg, 0~359) */
-                    (int)g_dci_rotor_deg,             /* 转子电角度 (deg, 0~359) */
-                    (int)g_dci_diff_deg,              /* 功角实测 (deg, 应≈dlt) */
-                    (int)g_dci_id_ma,                 /* 真实转子系 id (mA, 零偏校正后) */
-                    (int)g_dci_iq_ma);                /* 真实转子系 iq (mA, 零偏校正后) */
+                    (int)g_dci_diff_deg,              /* 参考功角 (deg, =dlt) */
+                    (int)g_dci_id_ref_ma,             /* d 轴电流参考 (mA) */
+                    (int)g_dci_iq_ref_ma,             /* q 轴电流参考 (mA) */
+                    (int)g_dci_id_ma,                 /* id 反馈 (mA, 零偏校正后) */
+                    (int)g_dci_iq_ma,                 /* iq 反馈 (mA, 零偏校正后) */
+                    (int)(g_foc_vd * 1000.0f),        /* PI 输出 vd (mV) */
+                    (int)(g_foc_vq * 1000.0f),        /* PI 输出 vq (mV) */
+                    (int)g_dci_vsat);                 /* 电压饱和标志 */
         }
     }
 
@@ -369,6 +372,22 @@ void Foc_Obs_Task(void)
             DCI_DBG("idMean=%d iqMean=%d mA (%d s window)",
                     (int)g_dci_id_mean_ma, (int)g_dci_iq_mean_ma,
                     (int)(DCI_MEAN_WIN_MS / 1000u));
+        }
+    }
+
+    /* ---- mode 28 误差统计（foc_dci 内部 5s 窗口刷新，P 调参主判据） ---- */
+    if (g_dci_running && (g_dci_state == DCI_STEP_RUN)) {
+        static float s_last_dci_ed = 1e9f;
+        static float s_last_dci_eq = 1e9f;
+        if ((g_dci_ed_mean_ma != s_last_dci_ed)
+                || (g_dci_eq_mean_ma != s_last_dci_eq)) {
+            s_last_dci_ed = g_dci_ed_mean_ma;
+            s_last_dci_eq = g_dci_eq_mean_ma;
+            DCI_DBG("edMean=%d eqMean=%d edPP=%d eqPP=%d mA (%d s win)%s",
+                    (int)g_dci_ed_mean_ma, (int)g_dci_eq_mean_ma,
+                    (int)g_dci_ed_pp_ma, (int)g_dci_eq_pp_ma,
+                    (int)(DCI_ERR_WIN_MS / 1000u),
+                    g_dci_vsat ? " [SAT]" : "");
         }
     }
 

@@ -74,7 +74,7 @@ extern volatile int   g_olf_dir;         /* 自增方向 +1=加 / -1=减 */
  * main
  *=============================================================================*/
 int main(void)
-{
+	{
     Hardware_Init();
     MAIN_DBG("System started (MINIMAL: mode23/30 only)");
 
@@ -192,14 +192,18 @@ int main(void)
          * 电流通道传整数 mA -> 显示 A（1mA 分辨率，µA 精度已舍弃）；
          * 电压通道传 mV -> 显示 V；角度通道传 mrad -> 显示 rad。
          * CH0~2  : 三相原始电流（含上电校准残余零偏，mode 0 下用于观察温漂/噪声）
-         * CH3~4  : 静止系 ialpha / ibeta（瞬时值，无 EMA）
-         * CH5~6  : 控制系 iq / id（mode 30 内已经过 foc_calib 零偏校正）
-         * CH7    : 自增电压幅值 g_zizeng_volt_v
-         * CH8    : 控制系总电流幅值 = sqrt(iq^2+id^2)
-         * CH9    : 控制系角度（ZIZENG 磁场角）
-         * CH10   : 静止系电流幅值 sqrt(ialpha^2+ibeta^2)（应≈CH8）
+         * CH3    : 静止系 ialpha（瞬时值，无 EMA）
+         * CH4    : 静止系 ibeta；mode28 时 = id 反馈 (A)
+         * CH5    : 控制系 iq（mode28 = iq 反馈）
+         * CH6    : 控制系 id；mode28 时 = id 参考 (A)
+         * CH7    : 自增电压幅值 g_zizeng_volt_v；mode28 时 = iq 参考 (A)
+         * CH8    : 控制系总电流幅值 = sqrt(iq^2+id^2)；mode28 时 = PI 输出 vd (V)
+         * CH9    : 控制系角度（ZIZENG 磁场角）；mode28 时 = PI 输出 vq (V)
+         *          （mode28 通道顺序：反馈 id/iq -> 参考 idRef/iqRef -> 输出 vd/vq）
+         * CH10   : 静止系电流幅值 sqrt(ialpha^2+ibeta^2)（应≈CH8）；mode28 时 = iq 3s均值 (A)
          * CH11   : 母线直流电流估算 = 1.5*(vd*id+vq*iq)/Vbus（无母线采样，
-         *          由功率守恒估算，含铜损前的电功率；mode 0 下为 0）
+         *          由功率守恒估算，含铜损前的电功率；mode 0 下为 0）；
+         *          mode28 时 = id 3s均值 (A)
          * CH12   : mode31 iq 参考（斜坡后）
          * CH13   : mode26 负载角 delta（deg，其他模式下恒 0） */
 #if 1
@@ -210,16 +214,22 @@ int main(void)
             cur[1] = (int32_t)(g_i_iv_ma);            /* V 相电流 (mA -> A) */
             cur[2] = (int32_t)(g_i_iw_ma);            /* W 相电流 (mA -> A) */
             cur[3] = (int32_t)(g_foc_ialpha * 1000.0f); /* 静止系 ialpha (mA -> A) */
-            cur[4] = (int32_t)(g_foc_ibeta * 1000.0f);  /* 静止系 ibeta (mA -> A) */
-            cur[5] = (int32_t)(g_foc_iq_ma);          /* 控制系 iq (mA -> A) */
-            cur[6] = (int32_t)(g_foc_id_ma);          /* 控制系 id (mA -> A) */
+            cur[4] = g_dci_running ? (int32_t)(g_foc_id_ma)            /* mode28: id 反馈 (mA -> A) */
+                                   : (int32_t)(g_foc_ibeta * 1000.0f); /* 静止系 ibeta (mA -> A) */
+            cur[5] = (int32_t)(g_foc_iq_ma);          /* 控制系 iq / mode28: iq 反馈 (mA -> A) */
+            cur[6] = g_dci_running ? (int32_t)(g_dci_id_ref_ma)        /* mode28: id 参考 (mA -> A) */
+                                   : (int32_t)(g_foc_id_ma);           /* 控制系 id (mA -> A) */
 
-            cur[7] = (int32_t)(g_zizeng_volt_v * 1000.0f); /* 电压幅值 (mV -> V) */
-            cur[8] = (int32_t)sqrtf(g_foc_iq_ma * g_foc_iq_ma
-                              + g_foc_id_ma * g_foc_id_ma);   /* 控制系合成 (mA -> A) */
-            cur[9] = (int32_t)(g_zizeng_theta_rad * 1000.0f); /* 控制系角度 (mrad -> rad) */
+            cur[7] = g_dci_running ? (int32_t)(g_dci_iq_ref_ma)        /* mode28: iq 参考 (mA -> A) */
+                                   : (int32_t)(g_zizeng_volt_v * 1000.0f); /* mode30: 电压幅值 (mV -> V) */
+            cur[8] = g_dci_running ? (int32_t)(g_foc_vd * 1000.0f)     /* mode28: PI 输出 vd (V) */
+                                   : (int32_t)sqrtf(g_foc_iq_ma * g_foc_iq_ma
+                                      + g_foc_id_ma * g_foc_id_ma);    /* 控制系合成 (mA -> A) */
+            cur[9] = g_dci_running ? (int32_t)(g_foc_vq * 1000.0f)     /* mode28: PI 输出 vq (V) */
+                                   : (int32_t)(g_zizeng_theta_rad * 1000.0f); /* mode30: 控制系角度 (mrad -> rad) */
 
-            cur[10] = (int32_t)(g_foc_iab_mag * 1000.0f); /* 静止系幅值 (mA -> A) */
+            cur[10] = g_dci_running ? (int32_t)(g_dci_iq_mean_ma)      /* mode28: iq 3s均值 (mA -> A，慢速水平线) */
+                                    : (int32_t)(g_foc_iab_mag * 1000.0f); /* 静止系幅值 (mA -> A) */
 #if ZIZENG_VOLT_ON_Q_AXIS
             /* P = 1.5*vq*iq，iq_ma 已是 mA，结果直接为 mA -> 显示 A */
             cur[11] = (int32_t)(1.5f * g_zizeng_volt_v
@@ -229,6 +239,9 @@ int main(void)
             cur[11] = (int32_t)(1.5f * g_zizeng_volt_v
                                 * (float)g_foc_id_ma / FOC_VBUS_V);
 #endif
+            if (g_dci_running) {
+                cur[11] = (int32_t)(g_dci_id_mean_ma); /* mode28: id 3s均值 (mA -> A) */
+            }
             cur[12] = (int32_t)(g_iqpi_iq_ref_ramp_ma); /* mode31 iq 参考(斜坡后), mA -> A */
             cur[13] = g_olf_diff_deg * 1000;          /* mode26 负载角 delta (mdeg -> deg) */
             Usart3_Vofa_SendScaled(cur, 14, USART3_VOFA_SCALE_MILLI);

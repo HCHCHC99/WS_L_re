@@ -78,8 +78,9 @@
 #define FOC_ALIGN_HOLD_MS       2000
 
 /* 过流阈值：必须在电流传感器量程内（±10A 传感器 → 阈值 ≤9A，留 10% 余量），
- * 否则削顶后保护失明 */
-#define FOC_OC_LIMIT_A          5.5f
+ * 否则削顶后保护失明（ADC 削顶点 = (3300-1650)/132mV/A = ±12.5A）。
+ * 当前 9A = 传感器额定的 90%，标准保护值 */
+#define FOC_OC_LIMIT_A          9.0f
 #define FOC_CUR_SIGN            -1
 #define FOC_ENC_DIR             -1
 #define FOC_PI_OFF_180          0

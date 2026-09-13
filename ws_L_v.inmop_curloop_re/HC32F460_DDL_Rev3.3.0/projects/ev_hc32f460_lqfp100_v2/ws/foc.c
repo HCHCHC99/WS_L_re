@@ -42,6 +42,7 @@ void Foc_Init(void)
     Foc_Math_Init();
     Foc_CurLoop_InitPids();
     Foc_IqPi_InitPids();
+    Foc_Dci_InitPids();
     I_RegisterFocCallback(Foc_Isr);
     s_bInited = 1u;
 }
