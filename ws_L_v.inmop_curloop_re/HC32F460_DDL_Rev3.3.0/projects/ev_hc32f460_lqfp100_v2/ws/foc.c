@@ -15,6 +15,7 @@
  *          foc_align.c    模式23 对齐校准
  *          foc_cal.c      模式20 编码器零点校准（BETA 2s + ALPHA 2s -> 锁 offset）
  *          foc_dcl.c      模式27 功角闭环拖动（磁场 = 转子 + delta，delta 爬坡）
+ *          foc_dci.c      模式28 功角参考电流闭环（复刻27 + foc_calib 零偏窗）
  *          foc_zizeng.c   模式30 ZIZENG 自增拖动
  *          foc_iq_pi.c    模式31 PI 电流环（ZIZENG 偏移 + 编码器角度）
  *          foc_lock_iq_pi.c 模式32 自锁偏移 + 自动交接 mode 31
@@ -64,7 +65,8 @@ void Foc_Isr(const stc_i_data_t *pData)
     if (g_foc_mode == FOC_MODE_ALIGN) {
         /* mode 20 校准优先（g_cal_running 托管），mode 25 次之
          * （g_calang_running 托管），mode 26 再次（g_olf_running 托管），
-         * mode 27 再次之（g_dcl_running 托管），否则 mode 23 对齐 */
+         * mode 27 再次之（g_dcl_running 托管），mode 28 再次之
+         * （g_dci_running 托管），否则 mode 23 对齐 */
         if (g_cal_running) {
             Foc_Cal_Step(pData);
         } else if (g_calang_running) {
@@ -73,6 +75,8 @@ void Foc_Isr(const stc_i_data_t *pData)
             Foc_Olf_Step(pData);
         } else if (g_dcl_running) {
             Foc_Dcl_Step(pData);
+        } else if (g_dci_running) {
+            Foc_Dci_Step(pData);
         } else {
             Foc_Align_Step(pData);
         }

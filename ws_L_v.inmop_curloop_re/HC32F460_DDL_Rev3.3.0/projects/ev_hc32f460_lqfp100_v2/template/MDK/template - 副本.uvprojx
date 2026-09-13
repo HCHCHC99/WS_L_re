@@ -1033,6 +1033,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_dcl.c</FilePath>
             </File>
+            <File>
+              <FileName>foc_dci.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_dci.c</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>
@@ -2063,6 +2068,11 @@
               <FileName>foc_dcl.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_dcl.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_dci.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_dci.c</FilePath>
             </File>
           </Files>
         </Group>

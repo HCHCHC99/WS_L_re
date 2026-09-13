@@ -22,6 +22,8 @@
 #include "foc_cal_angle.h"
 #include "foc_olf.h"
 #include "foc_dcl.h"
+#include "foc_dci.h"
+#include "foc_calib.h"
 #include "dev_comm_runner.h"   /* CommRunner_SetMode（mode 20 完成自动回 mode 0） */
 #include "encoder.h"
 #include "motor_config.h"
@@ -290,6 +292,83 @@ void Foc_Obs_Task(void)
             DCL_DBG("idPP=%d iqPP=%d mA (%d s window)",
                     (int)g_dcl_id_pp_ma, (int)g_dcl_iq_pp_ma,
                     (int)(DCL_PP_WIN_MS / 1000u));
+        }
+    }
+
+    /* ---- mode 28 功角电流闭环事件（ISR 置 evt，此处打印；仅 OC 自动回 mode 0） ---- */
+    if (g_dci_evt != 0u) {
+        uint8_t evt = g_dci_evt;
+        g_dci_evt = 0u;
+        switch (evt) {
+        case DCI_EVT_CALIB_DONE:
+            DCI_DBG("zero-offset locked iu=%d iv=%d iw=%d mA",
+                    (int)g_calib_iu_off_ma, (int)g_calib_iv_off_ma,
+                    (int)g_calib_iw_off_ma);
+            break;
+        case DCI_EVT_BETA_DONE:
+            DCI_DBG("BETA done -> ALPHA 0deg");
+            break;
+        case DCI_EVT_LOCKED:
+            DCI_DBG("LOCKED off=%d deg -> run dlt %d->%d deg tr=%d ms",
+                    (int)((g_dci_offset * 360) / (int32_t)ENCODER_CPR),
+                    (int)g_dci_dlt_init_deg, (int)g_dci_dlt_targ_deg,
+                    (int)g_dci_dlt_tr_ms);
+            break;
+        case DCI_EVT_RAMP_DONE:
+            DCI_DBG("ramp done dlt=%d deg spd=%d mHz",
+                    (int)g_dci_dlt_now_deg, (int)(g_dci_speed_hz * 1000.0f));
+            break;
+        case DCI_EVT_OC:
+            DCI_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+            CommRunner_SetMode(COMM_RUNNER_STOP);
+            break;
+        default:
+            break;
+        }
+    }
+
+    /* ---- mode 28 功角闭环运行数据（200ms 周期，全整型） ---- */
+    if (g_dci_running && (g_dci_state == DCI_STEP_RUN)) {
+        static uint32_t s_last_dci_dbg = 0u;
+        uint32_t now = tickTimer_GetCount();
+        if ((now - s_last_dci_dbg) >= 200u) {
+            s_last_dci_dbg = now;
+            DCI_DBG("dlt=%d deg spd=%d mHz fld=%d deg rot=%d deg diff=%d deg id=%d iq=%d mA",
+                    (int)g_dci_dlt_now_deg,           /* 当前 delta 指令 (deg) */
+                    (int)(g_dci_speed_hz * 1000.0f),  /* 实测电频率 (mHz, 带符号) */
+                    (int)g_dci_field_deg,             /* 磁场电角度 (deg, 0~359) */
+                    (int)g_dci_rotor_deg,             /* 转子电角度 (deg, 0~359) */
+                    (int)g_dci_diff_deg,              /* 功角实测 (deg, 应≈dlt) */
+                    (int)g_dci_id_ma,                 /* 真实转子系 id (mA, 零偏校正后) */
+                    (int)g_dci_iq_ma);                /* 真实转子系 iq (mA, 零偏校正后) */
+        }
+    }
+
+    /* ---- mode 28 峰峰值记录（foc_dci 内部 5s 窗口刷新，此处检测变化打印） ---- */
+    if (g_dci_running && (g_dci_state == DCI_STEP_RUN)) {
+        static float s_last_dci_id_pp = -1.0f;
+        static float s_last_dci_iq_pp = -1.0f;
+        if ((g_dci_id_pp_ma != s_last_dci_id_pp)
+                || (g_dci_iq_pp_ma != s_last_dci_iq_pp)) {
+            s_last_dci_id_pp = g_dci_id_pp_ma;
+            s_last_dci_iq_pp = g_dci_iq_pp_ma;
+            DCI_DBG("idPP=%d iqPP=%d mA (%d s window)",
+                    (int)g_dci_id_pp_ma, (int)g_dci_iq_pp_ma,
+                    (int)(DCI_PP_WIN_MS / 1000u));
+        }
+    }
+
+    /* ---- mode 28 均值记录（foc_dci 内部 3s 窗口刷新，此处检测变化打印） ---- */
+    if (g_dci_running && (g_dci_state == DCI_STEP_RUN)) {
+        static float s_last_dci_id_mean = 1e9f;
+        static float s_last_dci_iq_mean = 1e9f;
+        if ((g_dci_id_mean_ma != s_last_dci_id_mean)
+                || (g_dci_iq_mean_ma != s_last_dci_iq_mean)) {
+            s_last_dci_id_mean = g_dci_id_mean_ma;
+            s_last_dci_iq_mean = g_dci_iq_mean_ma;
+            DCI_DBG("idMean=%d iqMean=%d mA (%d s window)",
+                    (int)g_dci_id_mean_ma, (int)g_dci_iq_mean_ma,
+                    (int)(DCI_MEAN_WIN_MS / 1000u));
         }
     }
 

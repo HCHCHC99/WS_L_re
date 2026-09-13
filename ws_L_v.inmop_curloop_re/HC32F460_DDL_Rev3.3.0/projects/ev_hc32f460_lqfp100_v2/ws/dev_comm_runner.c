@@ -83,6 +83,9 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         if (g_dcl_running) {
             Foc_Dcl_Stop();
         }
+        if (g_dci_running) {
+            Foc_Dci_Stop();
+        }
         if (g_foc_mode == FOC_MODE_ALIGN) {
             Foc_Stop();
         }
@@ -107,6 +110,9 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         }
         if (g_dcl_running) {
             Foc_Dcl_Stop();
+        }
+        if (g_dci_running) {
+            Foc_Dci_Stop();
         }
         if (g_foc_mode == FOC_MODE_ALIGN) {
             Foc_Stop();
@@ -135,6 +141,9 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         if (g_dcl_running) {
             Foc_Dcl_Stop();
         }
+        if (g_dci_running) {
+            Foc_Dci_Stop();
+        }
         if (g_foc_mode == FOC_MODE_ALIGN) {
             Foc_Stop();
         }
@@ -161,6 +170,9 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         }
         if (g_dcl_running) {
             Foc_Dcl_Stop();
+        }
+        if (g_dci_running) {
+            Foc_Dci_Stop();
         }
         if (g_foc_mode == FOC_MODE_ALIGN) {
             Foc_Stop();
@@ -192,6 +204,9 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         if (g_dcl_running) {
             Foc_Dcl_Stop();
         }
+        if (g_dci_running) {
+            Foc_Dci_Stop();
+        }
         if (g_zizeng_running) {
             Foc_StopZizeng();
         }
@@ -218,6 +233,9 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         }
         if (g_dcl_running) {
             Foc_Dcl_Stop();
+        }
+        if (g_dci_running) {
+            Foc_Dci_Stop();
         }
         if (g_foc_mode == FOC_MODE_ALIGN) {
             Foc_Stop();
@@ -246,6 +264,9 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         if (g_dcl_running) {
             Foc_Dcl_Stop();
         }
+        if (g_dci_running) {
+            Foc_Dci_Stop();
+        }
         if (g_foc_mode == FOC_MODE_ALIGN) {
             Foc_Stop();
         }
@@ -272,6 +293,9 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         }
         if (g_dcl_running) {
             Foc_Dcl_Stop();
+        }
+        if (g_dci_running) {
+            Foc_Dci_Stop();
         }
         if (g_foc_mode == FOC_MODE_ALIGN) {
             Foc_Stop();
@@ -312,6 +336,36 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         Commutation_Stop();
         Foc_Dcl_Start();
         RUNNER_DBG("DCL (mode 27)");
+        break;
+
+    case COMM_RUNNER_DCI:
+        if (g_cal_running) {
+            Foc_Cal_Stop();
+        }
+        if (g_calang_running) {
+            Foc_CalAngle_Stop();
+        }
+        if (g_olf_running) {
+            Foc_Olf_Stop();
+        }
+        if (g_dcl_running) {
+            Foc_Dcl_Stop();
+        }
+        if (g_foc_mode == FOC_MODE_ALIGN) {
+            Foc_Stop();
+        }
+        if (g_zizeng_running) {
+            Foc_StopZizeng();
+        }
+        if (g_lockiq_running) {
+            Foc_LockIqPi_Stop();
+        }
+        if (g_iqpi_running) {
+            Foc_StopIqPi();
+        }
+        Commutation_Stop();
+        Foc_Dci_Start();
+        RUNNER_DBG("DCI (mode 28)");
         break;
 
     default:
