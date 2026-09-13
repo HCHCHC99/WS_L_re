@@ -368,6 +368,66 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         RUNNER_DBG("DCI (mode 28)");
         break;
 
+    case COMM_RUNNER_DCAL:
+        if (g_cal_running) {
+            Foc_Cal_Stop();
+        }
+        if (g_calang_running) {
+            Foc_CalAngle_Stop();
+        }
+        if (g_olf_running) {
+            Foc_Olf_Stop();
+        }
+        if (g_dcl_running) {
+            Foc_Dcl_Stop();
+        }
+        if (g_foc_mode == FOC_MODE_ALIGN) {
+            Foc_Stop();
+        }
+        if (g_zizeng_running) {
+            Foc_StopZizeng();
+        }
+        if (g_lockiq_running) {
+            Foc_LockIqPi_Stop();
+        }
+        if (g_iqpi_running) {
+            Foc_StopIqPi();
+        }
+        Commutation_Stop();
+        Foc_Dcal24_Start();
+        RUNNER_DBG("DCAL (mode 24, cal-only)");
+        break;
+
+    case COMM_RUNNER_DRUN:
+        if (g_cal_running) {
+            Foc_Cal_Stop();
+        }
+        if (g_calang_running) {
+            Foc_CalAngle_Stop();
+        }
+        if (g_olf_running) {
+            Foc_Olf_Stop();
+        }
+        if (g_dcl_running) {
+            Foc_Dcl_Stop();
+        }
+        if (g_foc_mode == FOC_MODE_ALIGN) {
+            Foc_Stop();
+        }
+        if (g_zizeng_running) {
+            Foc_StopZizeng();
+        }
+        if (g_lockiq_running) {
+            Foc_LockIqPi_Stop();
+        }
+        if (g_iqpi_running) {
+            Foc_StopIqPi();
+        }
+        Commutation_Stop();
+        Foc_Drun29_Start();
+        RUNNER_DBG("DRUN (mode 29, run-only)");
+        break;
+
     default:
         break;
     }

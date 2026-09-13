@@ -13,7 +13,8 @@
  *          foc_cal_angle.h 模式25 手动角度吸附（自动校准 -> 刹车等待输入 -> 吸附+校验）
  *          foc_olf.h      模式26 开环 VF 负载角实验（校准 -> 磁场自增拖动 -> delta/失步观测）
  *          foc_dcl.h      模式27 功角闭环拖动（校准 -> 磁场=转子+delta，delta 爬坡可调）
- *          foc_dci.h      模式28 功角参考电流闭环（第1步：复刻27 + foc_calib 零偏窗）
+ *          foc_dci.h      模式24/28/29 功角参考电流闭环（28=校准+闭环一体化；
+ *                         24=仅校准自动回0；29=纯闭环复用offset。P重调中 i_valid=false）
  *          foc_zizeng.h   模式30 磁场角度自增拖动（ZIZENG）
  *          foc_iq_pi.h    模式31 PI 电流环（编码器角度 + ZIZENG 偏移）
  *          foc_lock_iq_pi.h 模式32 自锁偏移（直流对齐）+ 自动交接 mode 31

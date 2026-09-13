@@ -1,12 +1,11 @@
 /**
  *******************************************************************************
  * @file  foc_dci.h
- * @brief FOC 模式28 — 功角参考电流闭环 (comm_mode 28, Delta Current loop)。
- *        第 1 步（已完成）：复刻 mode 27（电压开环）+ foc_calib 零偏窗。
- *        第 2 步（当前）：RUN 态电压源替换为 P-only 电流环——
- *                        id_ref = I_ref·cosδ, iq_ref = I_ref·sinδ，
- *                        vd/vq = PI 输出（i_valid=0 仅 P），反 Park 在转子角。
- *                        先 Watch 扫 P，调好再开 I。
+ * @brief FOC 模式24/28/29 — 功角参考电流闭环族 (Delta Current loop)。
+ *        mode 28 = 校准 + 闭环 一体化；mode 24 = 仅校准（锁完自动回 mode 0）；
+ *        mode 29 = 纯闭环（复用已锁 offset/零偏，直接 RUN）。
+ *        当前阶段：P 重调（i_valid=false）——转子捏死（BEMF=0）下调 P，
+ *        判据 = 快速接近目标电流且不超过（不振铃）；合格后再开 I。
  *
  * ============================================================================
  * 【第 2 步：电流环语义（与电压版的本质差异）】
@@ -19,23 +18,18 @@
  *     力矩回落到摩擦平衡 -> 稳定在饱和限速（与电压版完全不同的平衡机理）。
  *   δ=90° 即 id_ref=0 的经典 FOC（id=0 MTPA）。
  *
- * 【P 调参协议（建议，2026-09-13 依据实测修正）】
- *   0. 重要认知：P-only 的稳态落差（eq_mean 大）是天性——P 输出 = kp×误差，
- *      要产出克服 R+BEMF 的电压就必须留误差。I 的职责就是清零这个落差。
- *      所以 P 阶段的判据不是"落差小"，而是"不振铃、不饱和、能转"。
- *   1. 起步工况：g_dci_i_ref_ma=1000、g_dci_dlt_targ_deg=20（iq_ref 最大
- *      342mA ≈ 摩擦电流 210mA，慢转不飞车）
- *   2. kp 扫参（Watch 改 g_dci_pid_*_cfg.kp 实时生效）：0.25 -> 0.5 -> 1.0
- *      （kp<0.5 时 P 环产不出足够电压，电机不动或极慢——那是 P 太小不是失步；
- *      kp=1.0 附近若 L 小会触及采样延迟振铃）
- *      每档看三判据：
- *      - g_dci_eq_pp_ma / g_dci_ed_pp_ma（突然增大/持续不落 = 振铃，P 过大）
- *      - g_dci_vsat（=1 时调参数据作废）
- *      - 转速应随 kp 上升（droop 减小 -> 同力矩下可达到更高转速）
- *   3. P ok = 不振铃的最大 kp（预计 0.5 上下）。
- *   4. 开 I：g_dci_pid_*_cfg.i_valid 置 1，ki 起点用零极点对消
- *      ki ≈ kp×(R/L)（mode 31 验证值 R/L≈2333），从小往大，看阶跃超调，
- *      预期 eq_mean 收敛到 ≈0。
+ * 【P 重调工作流（mode 24 + mode 29，转子捏死工况）】
+ *   0. 为什么拆分：mode 28 校准时转子要动（吸附），捏转子的时机难掌握。
+ *      mode 24 校准完自动回 mode 0（offset 是"零点基准"，转子随便捏/移动
+ *      依然有效），从容捏好后 mode 29 直接进电流环。
+ *   1. comm_mode=24：等 RTT 打印 "cal-only done ... back to mode 0"
+ *   2. mode 0 下捏住转子（foc_obs 主循环持续刷新 g_foc_mech_deg/g_foc_elec_deg，
+ *      可观察转子是否稳定）
+ *   3. comm_mode=29：直接进电流环（无校准动作）。g_dci_i_ref_ma=250 起步
+ *   4. kp 扫参（Watch 改 g_dci_pid_*_cfg.kp）：0.5 → 1.0 → 2.0
+ *      判据：CH5(iq) 快速接近 CH7(iq_ref) 且不超过（不振铃、eq_pp 不发散）
+ *      注意 P-only 稳态差距 = R·i_ref/(kp+R) 属正常（BEMF=0、kp=0.5 → 77%）
+ *   5. P 合格后：Watch 置 i_valid=1 + ki=DCI_PI_KI 收尾，eq_mean → 0
  *
  * ============================================================================
  * 【与 mode 27 的关系（第 1 步遗留说明）】
@@ -119,8 +113,9 @@ extern "C" {
 #define DCI_ERR_WIN_MS    5000u  /* 电流环误差统计窗口 */
 
 /*=============================================================================
- * 电流环参数（第 3 步：PI 完整环，I 已启用。字段 volatile，Watch 可实时修改；
- * 调 P 对比：Watch 把 g_dci_pid_*_cfg.i_valid 置 0 即回到纯 P）
+ * 电流环参数（P 重调阶段：i_valid=false 纯 P。转子捏死（BEMF=0）下调 P：
+ * 判据 = 快速接近目标电流且不超过（不振铃）。
+ * P 合格后 Watch 置 g_dci_pid_*_cfg.i_valid=1 + ki=DCI_PI_KI 收尾）
  *=============================================================================*/
 #define DCI_PI_KP         0.5f   /* PI 比例增益 (V/A)。P-only 门槛 kp≈(3~7)×R≈0.5~1；
                                     kp 过小 P 环产不出克服 R+BEMF 的电压（电机不动）；
@@ -130,7 +125,7 @@ extern "C" {
 #define DCI_PI_UMAX_V     3.5f   /* PI 输出限幅 (V)，|vd/vq| ≤ UMAX（与 mode 31 同款；
                                     3A 矢量可保持至 ~5300rpm，再高触及饱和限速） */
 #define DCI_ITERM_MAX_V   3.2f   /* 积分项限幅 (V)，必须 > 最大 BEMF 3.05V @ 891Hz 天花板 */
-#define DCI_I_REF_MA      250.0f /* 电流矢量幅值参考 (mA) —— 调 I 阶段默认 ≈摩擦电流；
+#define DCI_I_REF_MA      500.0f /* 电流矢量幅值参考 (mA) —— 调 I 阶段默认 ≈摩擦电流；
                                     eq_mean≈0 后 Watch 逐步上调 250→500→1000→3000 */
 
 /*=============================================================================
@@ -141,7 +136,17 @@ extern "C" {
 
 /*=============================================================================
  * 状态机（g_dci_state）
+ *  变体（g_dci_variant）：三模式共用一套状态机/参数/观测量
+ *   mode 28 = FULL（校准+闭环一体化）
+ *   mode 24 = CAL （仅校准：锁完 offset 自动回 mode 0，转子从此可随便捏）
+ *   mode 29 = RUN （仅电流环：复用已锁 offset/零偏，Start 直接进 RUN）
+ *   校准后 offset 是"零点基准"而非"当前位置"——转子在 mode 0 被移动/捏住，
+ *   电角度公式依然正确（TMRA_1 硬件计数 mode 0 下照常走，手速不丢计数）。
  *=============================================================================*/
+#define DCI_VARIANT_FULL  0u  /* mode 28：校准 + 闭环 一体化 */
+#define DCI_VARIANT_CAL   1u  /* mode 24：仅校准 */
+#define DCI_VARIANT_RUN   2u  /* mode 29：仅电流环 */
+
 #define DCI_STEP_IDLE       0u  /* 未运行 */
 #define DCI_STEP_CALIB      1u  /* 零矢量电流零偏校准（foc_calib，~210ms） */
 #define DCI_STEP_CAL_BETA   2u  /* 校准：磁场 90°，2s */
@@ -157,6 +162,7 @@ extern "C" {
 #define DCI_EVT_LOCKED      3u
 #define DCI_EVT_RAMP_DONE   4u
 #define DCI_EVT_OC          5u
+#define DCI_EVT_CAL24_DONE  6u  /* mode 24 校准完成（foc_obs 打印后自动回 mode 0） */
 
 /*=============================================================================
  * Keil Watch 可调变量 / 观测量（定义见 foc_dci.c）
@@ -165,7 +171,9 @@ extern volatile float    g_dci_dlt_init_deg;  /* 功角爬坡起点 (deg, 默认
 extern volatile float    g_dci_dlt_targ_deg;  /* 功角爬坡终点 (deg, 默认45, Start不复位) */
 extern volatile uint32_t g_dci_dlt_tr_ms;     /* 功角爬坡过渡时间 (ms, 0=立即, Start不复位) */
 extern volatile float    g_dci_volt_v;        /* 电压幅值 (V, 默认0.6, Start复位; =调速旋钮) */
-extern volatile uint8_t  g_dci_running;       /* 1 = 正在运行 */
+extern volatile uint8_t  g_dci_running;       /* 1 = 正在运行（mode 24/28/29 共用） */
+extern volatile uint8_t  g_dci_variant;       /* DCI_VARIANT_xxx（当前运行的变体） */
+extern volatile uint8_t  g_dcal_offset_valid; /* 1 = 校准 offset 已锁定（mode 24/28 置位，粘滞） */
 extern volatile uint8_t  g_dci_state;         /* DCI_STEP_xxx */
 extern volatile uint8_t  g_dci_evt;           /* DCI_EVT_xxx */
 extern volatile int32_t  g_dci_offset;        /* 校准锁零点 (hw绝对帧counts, 显示/对比用) */
@@ -199,11 +207,21 @@ extern volatile float    g_dci_dw;
  * API
  *=============================================================================*/
 
-/* mode 28 入口：清故障 -> 零矢量起 PWM -> foc_calib 零偏校准（~210ms）
- * -> 自动校准（BETA 2s + ALPHA 2s 锁零点）-> 功角参考电流闭环（P-only）。
+/* mode 28 入口（FULL 变体）：清故障 -> 零矢量起 PWM -> foc_calib 零偏校准
+ * （~210ms）-> 自动校准（BETA 2s + ALPHA 2s 锁零点）-> 功角参考电流闭环。
  * 主循环上下文调用（dev_comm_runner）。g_dci_volt_v 复位 0.6V，
  * 功角三参数与 g_dci_i_ref_ma 不复位（便于预设后启动）。 */
 void Foc_Dci_Start(void);
+
+/* mode 24 入口（CAL 变体）：只跑校准（零偏窗 + BETA + ALPHA + 锁 offset），
+ * 完成后自动停机回 mode 0 —— 此后转子可随意捏住/移动，offset 依然有效。
+ * 需在 mode 29 之前运行（提供零偏与 offset）。 */
+void Foc_Dcal24_Start(void);
+
+/* mode 29 入口（RUN 变体）：跳过校准，复用 mode 24/28 已锁的零偏与 offset，
+ * 锚定当前编码器帧后直接进 RUN（电流环）。前置条件：foc_calib 已锁定且
+ * g_dcal_offset_valid=1（先跑 mode 24 或 28），否则拒绝启动并打印 ERR。 */
+void Foc_Drun29_Start(void);
 
 /* PI 实例绑定（Foc_Init 调用一次，与 mode 31 的 InitPids 同模式） */
 void Foc_Dci_InitPids(void);

@@ -322,6 +322,11 @@ void Foc_Obs_Task(void)
             DCI_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
             CommRunner_SetMode(COMM_RUNNER_STOP);
             break;
+        case DCI_EVT_CAL24_DONE:
+            DCI_DBG("cal-only (mode 24) done: offset=%d deg locked -> back to mode 0, rotor free to hold",
+                    (int)((g_dci_offset * 360) / (int32_t)ENCODER_CPR));
+            CommRunner_SetMode(COMM_RUNNER_STOP);
+            break;
         default:
             break;
         }
