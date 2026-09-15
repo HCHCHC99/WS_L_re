@@ -23,6 +23,8 @@
 #include "foc_olf.h"
 #include "foc_dcl.h"
 #include "foc_dci.h"
+#include "foc_dcal24.h"
+#include "foc_drun29.h"
 #include "foc_calib.h"
 #include "dev_comm_runner.h"   /* CommRunner_SetMode（mode 20 完成自动回 mode 0） */
 #include "encoder.h"
@@ -295,6 +297,35 @@ void Foc_Obs_Task(void)
         }
     }
 
+    /* ---- mode 24 独立校准事件（ISR 置 evt；完成/过流自动回 mode 0） ---- */
+    if (g_dcal24_evt != 0u) {
+        uint8_t evt = g_dcal24_evt;
+        g_dcal24_evt = 0u;
+        switch (evt) {
+        case DCAL24_EVT_ZERO_DONE:
+            DCAL24_LOG("zero-offset locked iu=%d iv=%d iw=%d mA",
+                       (int)g_dcal24_zero_u_ma, (int)g_dcal24_zero_v_ma,
+                       (int)g_dcal24_zero_w_ma);
+            break;
+        case DCAL24_EVT_BETA_DONE:
+            DCAL24_LOG("BETA done hw=%d -> ALPHA 0deg", (int)g_dcal24_beta_hw);
+            break;
+        case DCAL24_EVT_DONE:
+            DCAL24_LOG("done: beta=%d alpha=%d moved=%d offset=%d cnts (%d deg) -> mode 0",
+                       (int)g_dcal24_beta_hw, (int)g_dcal24_alpha_hw,
+                       (int)g_dcal24_moved, (int)g_dcal24_offset,
+                       (int)((g_dcal24_offset * 360) / (int32_t)ENCODER_CPR));
+            CommRunner_SetMode(COMM_RUNNER_STOP);
+            break;
+        case DCAL24_EVT_OC:
+            DCAL24_LOG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+            CommRunner_SetMode(COMM_RUNNER_STOP);
+            break;
+        default:
+            break;
+        }
+    }
+
     /* ---- mode 28 功角电流闭环事件（ISR 置 evt，此处打印；仅 OC 自动回 mode 0） ---- */
     if (g_dci_evt != 0u) {
         uint8_t evt = g_dci_evt;
@@ -320,11 +351,6 @@ void Foc_Obs_Task(void)
             break;
         case DCI_EVT_OC:
             DCI_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
-            CommRunner_SetMode(COMM_RUNNER_STOP);
-            break;
-        case DCI_EVT_CAL24_DONE:
-            DCI_DBG("cal-only (mode 24) done: offset=%d deg locked -> back to mode 0, rotor free to hold",
-                    (int)((g_dci_offset * 360) / (int32_t)ENCODER_CPR));
             CommRunner_SetMode(COMM_RUNNER_STOP);
             break;
         default:
@@ -393,6 +419,62 @@ void Foc_Obs_Task(void)
                     (int)g_dci_ed_pp_ma, (int)g_dci_eq_pp_ma,
                     (int)(DCI_ERR_WIN_MS / 1000u),
                     g_dci_vsat ? " [SAT]" : "");
+        }
+    }
+
+    /* ---- mode 29 独立电流环事件 ---- */
+    if (g_drun29_evt != 0u) {
+        uint8_t evt = g_drun29_evt;
+        g_drun29_evt = 0u;
+        switch (evt) {
+        case DRUN29_EVT_RAMP_DONE:
+            DRUN29_LOG("ramp done dlt=%d deg spd=%d mHz rot=%d cnt",
+                       (int)g_drun29_dlt_now_deg,
+                       (int)(g_drun29_speed_hz * 1000.0f),
+                       (int)g_drun29_rotor_count);
+            break;
+        case DRUN29_EVT_OC:
+            DRUN29_LOG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+            CommRunner_SetMode(COMM_RUNNER_STOP);
+            break;
+        default:
+            break;
+        }
+    }
+
+    /* ---- mode 29 独立电流环运行数据（200ms 周期） ---- */
+    if (g_drun29_running && (g_drun29_state == DRUN29_STEP_RUN)) {
+        static uint32_t s_last_drun29_dbg = 0u;
+        uint32_t now = tickTimer_GetCount();
+        if ((now - s_last_drun29_dbg) >= 200u) {
+            s_last_drun29_dbg = now;
+            DRUN29_LOG("dlt=%d deg spd=%d mHz rot=%d cnt idRef=%d iqRef=%d mA id=%d iq=%d mA vd=%d mV vq=%d mV sat=%d",
+                       (int)g_drun29_dlt_now_deg,
+                       (int)(g_drun29_speed_hz * 1000.0f),
+                       (int)g_drun29_rotor_count,
+                       (int)g_drun29_id_ref_ma,
+                       (int)g_drun29_iq_ref_ma,
+                       (int)g_drun29_id_ma,
+                       (int)g_drun29_iq_ma,
+                       (int)(g_foc_vd * 1000.0f),
+                       (int)(g_foc_vq * 1000.0f),
+                       (int)g_drun29_vsat);
+        }
+    }
+
+    /* ---- mode 29 独立误差统计 ---- */
+    if (g_drun29_running && (g_drun29_state == DRUN29_STEP_RUN)) {
+        static float s_last_drun29_ed = 1e9f;
+        static float s_last_drun29_eq = 1e9f;
+        if ((g_drun29_ed_mean_ma != s_last_drun29_ed)
+                || (g_drun29_eq_mean_ma != s_last_drun29_eq)) {
+            s_last_drun29_ed = g_drun29_ed_mean_ma;
+            s_last_drun29_eq = g_drun29_eq_mean_ma;
+            DRUN29_LOG("edMean=%d eqMean=%d edPP=%d eqPP=%d mA (%d s win)%s",
+                       (int)g_drun29_ed_mean_ma, (int)g_drun29_eq_mean_ma,
+                       (int)g_drun29_ed_pp_ma, (int)g_drun29_eq_pp_ma,
+                       (int)(DRUN29_ERR_WIN_MS / 1000u),
+                       g_drun29_vsat ? " [SAT]" : "");
         }
     }
 

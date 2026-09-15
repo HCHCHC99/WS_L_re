@@ -55,7 +55,48 @@ void CommRunner_Init(const comm_runner_config_t *cfg)
     s_mode = COMM_RUNNER_STOP;
     s_initialized = 1;
 
-    RUNNER_DBG("Init done (MINIMAL: modes 23/30/31/32), freq=%u Hz", cfg->pwm_freq_hz);
+    RUNNER_DBG("Init done, freq=%u Hz", cfg->pwm_freq_hz);
+}
+
+/*=============================================================================
+ * Stop every FOC mode owned by CommRunner. Stop calls are no-ops for modules
+ * that are not active, so each mode switch can use the same explicit cleanup.
+ *=============================================================================*/
+static void CommRunner_StopFocModes(void)
+{
+    if (g_cal_running) {
+        Foc_Cal_Stop();
+    }
+    if (g_calang_running) {
+        Foc_CalAngle_Stop();
+    }
+    if (g_olf_running) {
+        Foc_Olf_Stop();
+    }
+    if (g_dcl_running) {
+        Foc_Dcl_Stop();
+    }
+    if (g_dcal24_running) {
+        Foc_Dcal24_Stop();
+    }
+    if (g_dci_running) {
+        Foc_Dci_Stop();
+    }
+    if (g_drun29_running) {
+        Foc_Drun29_Stop();
+    }
+    if (g_foc_mode == FOC_MODE_ALIGN) {
+        Foc_Stop();
+    }
+    if (g_zizeng_running) {
+        Foc_StopZizeng();
+    }
+    if (g_lockiq_running) {
+        Foc_LockIqPi_Stop();
+    }
+    if (g_iqpi_running) {
+        Foc_StopIqPi();
+    }
 }
 
 /*=============================================================================
@@ -70,359 +111,83 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
 
     switch (mode) {
     case COMM_RUNNER_STOP:
+        CommRunner_StopFocModes();
         Commutation_Stop();
-        if (g_cal_running) {
-            Foc_Cal_Stop();   /* 自带 active 清零 + PwmStop */
-        }
-        if (g_calang_running) {
-            Foc_CalAngle_Stop();   /* 自带 active 清零 + PwmStop */
-        }
-        if (g_olf_running) {
-            Foc_Olf_Stop();
-        }
-        if (g_dcl_running) {
-            Foc_Dcl_Stop();
-        }
-        if (g_dci_running) {
-            Foc_Dci_Stop();
-        }
-        if (g_foc_mode == FOC_MODE_ALIGN) {
-            Foc_Stop();
-        }
-        if (g_zizeng_running) {
-            Foc_StopZizeng();
-        }
-        if (g_lockiq_running) {
-            Foc_LockIqPi_Stop();
-        }
-        if (g_iqpi_running) {
-            Foc_StopIqPi();
-        }
         RUNNER_DBG("STOP");
         break;
 
     case COMM_RUNNER_CAL:
-        if (g_calang_running) {
-            Foc_CalAngle_Stop();
-        }
-        if (g_olf_running) {
-            Foc_Olf_Stop();
-        }
-        if (g_dcl_running) {
-            Foc_Dcl_Stop();
-        }
-        if (g_dci_running) {
-            Foc_Dci_Stop();
-        }
-        if (g_foc_mode == FOC_MODE_ALIGN) {
-            Foc_Stop();
-        }
-        if (g_zizeng_running) {
-            Foc_StopZizeng();
-        }
-        if (g_lockiq_running) {
-            Foc_LockIqPi_Stop();
-        }
-        if (g_iqpi_running) {
-            Foc_StopIqPi();
-        }
+        CommRunner_StopFocModes();
         Commutation_Stop();
         Foc_Cal_Start();
         RUNNER_DBG("CAL (mode 20)");
         break;
 
     case COMM_RUNNER_CAL_ANGLE:
-        if (g_cal_running) {
-            Foc_Cal_Stop();
-        }
-        if (g_olf_running) {
-            Foc_Olf_Stop();
-        }
-        if (g_dcl_running) {
-            Foc_Dcl_Stop();
-        }
-        if (g_dci_running) {
-            Foc_Dci_Stop();
-        }
-        if (g_foc_mode == FOC_MODE_ALIGN) {
-            Foc_Stop();
-        }
-        if (g_zizeng_running) {
-            Foc_StopZizeng();
-        }
-        if (g_lockiq_running) {
-            Foc_LockIqPi_Stop();
-        }
-        if (g_iqpi_running) {
-            Foc_StopIqPi();
-        }
+        CommRunner_StopFocModes();
         Commutation_Stop();
         Foc_CalAngle_Start();
         RUNNER_DBG("CAL_ANGLE (mode 25)");
         break;
 
     case COMM_RUNNER_OLF:
-        if (g_cal_running) {
-            Foc_Cal_Stop();
-        }
-        if (g_calang_running) {
-            Foc_CalAngle_Stop();
-        }
-        if (g_dcl_running) {
-            Foc_Dcl_Stop();
-        }
-        if (g_dci_running) {
-            Foc_Dci_Stop();
-        }
-        if (g_foc_mode == FOC_MODE_ALIGN) {
-            Foc_Stop();
-        }
-        if (g_zizeng_running) {
-            Foc_StopZizeng();
-        }
-        if (g_lockiq_running) {
-            Foc_LockIqPi_Stop();
-        }
-        if (g_iqpi_running) {
-            Foc_StopIqPi();
-        }
+        CommRunner_StopFocModes();
         Commutation_Stop();
         Foc_Olf_Start();
         RUNNER_DBG("OLF (mode 26)");
         break;
 
     case COMM_RUNNER_FOC_ALIGN:
-        if (g_cal_running) {
-            Foc_Cal_Stop();
-        }
-        if (g_calang_running) {
-            Foc_CalAngle_Stop();
-        }
-        if (g_olf_running) {
-            Foc_Olf_Stop();
-        }
-        if (g_dcl_running) {
-            Foc_Dcl_Stop();
-        }
-        if (g_dci_running) {
-            Foc_Dci_Stop();
-        }
-        if (g_zizeng_running) {
-            Foc_StopZizeng();
-        }
-        if (g_lockiq_running) {
-            Foc_LockIqPi_Stop();
-        }
-        if (g_iqpi_running) {
-            Foc_StopIqPi();
-        }
+        CommRunner_StopFocModes();
         Commutation_Stop();
         Foc_StartAlign();
         RUNNER_DBG("FOC_ALIGN (mode 23)");
         break;
 
     case COMM_RUNNER_ZIZENG:
-        if (g_cal_running) {
-            Foc_Cal_Stop();
-        }
-        if (g_calang_running) {
-            Foc_CalAngle_Stop();
-        }
-        if (g_olf_running) {
-            Foc_Olf_Stop();
-        }
-        if (g_dcl_running) {
-            Foc_Dcl_Stop();
-        }
-        if (g_dci_running) {
-            Foc_Dci_Stop();
-        }
-        if (g_foc_mode == FOC_MODE_ALIGN) {
-            Foc_Stop();
-        }
-        if (g_lockiq_running) {
-            Foc_LockIqPi_Stop();
-        }
-        if (g_iqpi_running) {
-            Foc_StopIqPi();
-        }
+        CommRunner_StopFocModes();
         Commutation_Stop();
         Foc_StartZizeng();
         RUNNER_DBG("ZIZENG (mode 30)");
         break;
 
     case COMM_RUNNER_IQ_PI:
-        if (g_cal_running) {
-            Foc_Cal_Stop();
-        }
-        if (g_calang_running) {
-            Foc_CalAngle_Stop();
-        }
-        if (g_olf_running) {
-            Foc_Olf_Stop();
-        }
-        if (g_dcl_running) {
-            Foc_Dcl_Stop();
-        }
-        if (g_dci_running) {
-            Foc_Dci_Stop();
-        }
-        if (g_foc_mode == FOC_MODE_ALIGN) {
-            Foc_Stop();
-        }
-        if (g_zizeng_running) {
-            Foc_StopZizeng();
-        }
-        if (g_lockiq_running) {
-            Foc_LockIqPi_Stop();
-        }
+        CommRunner_StopFocModes();
         Commutation_Stop();
         Foc_StartIqPi();
         RUNNER_DBG("IQ_PI (mode 31)");
         break;
 
     case COMM_RUNNER_LOCK_IQ_PI:
-        if (g_cal_running) {
-            Foc_Cal_Stop();
-        }
-        if (g_calang_running) {
-            Foc_CalAngle_Stop();
-        }
-        if (g_olf_running) {
-            Foc_Olf_Stop();
-        }
-        if (g_dcl_running) {
-            Foc_Dcl_Stop();
-        }
-        if (g_dci_running) {
-            Foc_Dci_Stop();
-        }
-        if (g_foc_mode == FOC_MODE_ALIGN) {
-            Foc_Stop();
-        }
-        if (g_zizeng_running) {
-            Foc_StopZizeng();
-        }
-        if (g_iqpi_running) {
-            Foc_StopIqPi();
-        }
+        CommRunner_StopFocModes();
         Commutation_Stop();
         Foc_LockIqPi_Start();
         RUNNER_DBG("LOCK_IQ_PI (mode 32)");
         break;
 
     case COMM_RUNNER_DCL:
-        if (g_cal_running) {
-            Foc_Cal_Stop();
-        }
-        if (g_calang_running) {
-            Foc_CalAngle_Stop();
-        }
-        if (g_olf_running) {
-            Foc_Olf_Stop();
-        }
-        if (g_foc_mode == FOC_MODE_ALIGN) {
-            Foc_Stop();
-        }
-        if (g_zizeng_running) {
-            Foc_StopZizeng();
-        }
-        if (g_lockiq_running) {
-            Foc_LockIqPi_Stop();
-        }
-        if (g_iqpi_running) {
-            Foc_StopIqPi();
-        }
+        CommRunner_StopFocModes();
         Commutation_Stop();
         Foc_Dcl_Start();
         RUNNER_DBG("DCL (mode 27)");
         break;
 
     case COMM_RUNNER_DCI:
-        if (g_cal_running) {
-            Foc_Cal_Stop();
-        }
-        if (g_calang_running) {
-            Foc_CalAngle_Stop();
-        }
-        if (g_olf_running) {
-            Foc_Olf_Stop();
-        }
-        if (g_dcl_running) {
-            Foc_Dcl_Stop();
-        }
-        if (g_foc_mode == FOC_MODE_ALIGN) {
-            Foc_Stop();
-        }
-        if (g_zizeng_running) {
-            Foc_StopZizeng();
-        }
-        if (g_lockiq_running) {
-            Foc_LockIqPi_Stop();
-        }
-        if (g_iqpi_running) {
-            Foc_StopIqPi();
-        }
+        CommRunner_StopFocModes();
         Commutation_Stop();
         Foc_Dci_Start();
         RUNNER_DBG("DCI (mode 28)");
         break;
 
     case COMM_RUNNER_DCAL:
-        if (g_cal_running) {
-            Foc_Cal_Stop();
-        }
-        if (g_calang_running) {
-            Foc_CalAngle_Stop();
-        }
-        if (g_olf_running) {
-            Foc_Olf_Stop();
-        }
-        if (g_dcl_running) {
-            Foc_Dcl_Stop();
-        }
-        if (g_foc_mode == FOC_MODE_ALIGN) {
-            Foc_Stop();
-        }
-        if (g_zizeng_running) {
-            Foc_StopZizeng();
-        }
-        if (g_lockiq_running) {
-            Foc_LockIqPi_Stop();
-        }
-        if (g_iqpi_running) {
-            Foc_StopIqPi();
-        }
+        CommRunner_StopFocModes();
         Commutation_Stop();
         Foc_Dcal24_Start();
         RUNNER_DBG("DCAL (mode 24, cal-only)");
         break;
 
     case COMM_RUNNER_DRUN:
-        if (g_cal_running) {
-            Foc_Cal_Stop();
-        }
-        if (g_calang_running) {
-            Foc_CalAngle_Stop();
-        }
-        if (g_olf_running) {
-            Foc_Olf_Stop();
-        }
-        if (g_dcl_running) {
-            Foc_Dcl_Stop();
-        }
-        if (g_foc_mode == FOC_MODE_ALIGN) {
-            Foc_Stop();
-        }
-        if (g_zizeng_running) {
-            Foc_StopZizeng();
-        }
-        if (g_lockiq_running) {
-            Foc_LockIqPi_Stop();
-        }
-        if (g_iqpi_running) {
-            Foc_StopIqPi();
-        }
+        CommRunner_StopFocModes();
         Commutation_Stop();
         Foc_Drun29_Start();
         RUNNER_DBG("DRUN (mode 29, run-only)");

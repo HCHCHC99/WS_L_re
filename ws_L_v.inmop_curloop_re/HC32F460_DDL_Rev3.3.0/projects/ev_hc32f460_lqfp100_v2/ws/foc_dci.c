@@ -68,8 +68,6 @@ volatile float    g_dci_dlt_targ_deg = 90.0f;  /* 功角爬坡终点 */
 volatile uint32_t g_dci_dlt_tr_ms   = 0u;   /* 功角爬坡过渡时间 */
 volatile float    g_dci_volt_v      = 0.8f;    /* 电压（=调速旋钮），Start 复位 */
 volatile uint8_t  g_dci_running     = 0u;
-volatile uint8_t  g_dci_variant     = DCI_VARIANT_FULL;  /* 当前变体（24=CAL/28=FULL/29=RUN） */
-volatile uint8_t  g_dcal_offset_valid = 0u;              /* 1 = 校准 offset 已锁定（粘滞） */
 volatile uint8_t  g_dci_state       = DCI_STEP_IDLE;
 volatile uint8_t  g_dci_evt         = 0u;
 volatile int32_t  g_dci_offset      = 0;
@@ -251,11 +249,9 @@ void Foc_Dci_InitPids(void)
 }
 
 /*******************************************************************************
- * Foc_Dci_StartWithVariant - 共用启动骨架（主循环上下文，允许打印）
- *   variant = FULL (mode 28)：校准 + 闭环 一体化
- *   variant = CAL  (mode 24)：仅校准，ALPHA 锁零点后自动停机回 mode 0
+ * Foc_Dci_Start - mode 28 入口：校准 + 闭环 一体化（主循环上下文，允许打印）
  ******************************************************************************/
-static void Foc_Dci_StartWithVariant(uint8_t variant)
+void Foc_Dci_Start(void)
 {
     Foc_Core_ClearFault();
     g_foc_mode        = FOC_MODE_ALIGN;   /* 复用 ALIGN 分发路径（按 g_dci_running 区分） */
@@ -272,7 +268,6 @@ static void Foc_Dci_StartWithVariant(uint8_t variant)
     g_foc_align_state = 1u;
 
     g_dci_running     = 1u;
-    g_dci_variant     = variant;
     g_dci_state       = DCI_STEP_CALIB;
     g_dci_evt         = 0u;
     s_phase_tick      = 0u;
@@ -321,119 +316,7 @@ static void Foc_Dci_StartWithVariant(uint8_t variant)
     Foc_Calib_Start();     /* 零偏校准状态机复位，CALIB 态逐拍喂样 */
     Foc_Core_PwmStart();   /* 零矢量起 PWM（g_foc_active=1），下一拍开始校准 */
 
-    if (variant == DCI_VARIANT_CAL) {
-        DCI_DBG("cal-only start (mode 24): zero-offset -> BETA -> ALPHA -> lock -> auto mode 0");
-    } else {
-        DCI_DBG("start calib zero-offset -> run dlt %d->%d deg tr=%d ms Iref=%d mA kp=%d m iValid=%d",
-                (int)g_dci_dlt_init_deg, (int)g_dci_dlt_targ_deg,
-                (int)g_dci_dlt_tr_ms, (int)g_dci_i_ref_ma,
-                (int)(g_dci_pid_iq_cfg.kp * 1000.0f),
-                (int)g_dci_pid_iq_cfg.i_valid);
-    }
-}
-
-/*******************************************************************************
- * Foc_Dci_Start - mode 28 入口（FULL 变体：校准 + 闭环 一体化）
- ******************************************************************************/
-void Foc_Dci_Start(void)
-{
-    Foc_Dci_StartWithVariant(DCI_VARIANT_FULL);
-}
-
-/*******************************************************************************
- * Foc_Dcal24_Start - mode 24 入口（CAL 变体：仅校准，锁完自动回 mode 0）
- *   完成后转子可随意捏住/移动——offset 是零点基准，与当前位置无关。
- ******************************************************************************/
-void Foc_Dcal24_Start(void)
-{
-    Foc_Dci_StartWithVariant(DCI_VARIANT_CAL);
-}
-
-/*******************************************************************************
- * Foc_Drun29_Start - mode 29 入口（RUN 变体：跳过校准，直接电流环）
- *   前置：foc_calib 已锁定 且 g_dcal_offset_valid=1（先跑 mode 24 或 28）。
- *   编码器帧锚定：s_enc_pos 从 0 起算，s_off_rel 使 Start 瞬间
- *   rel = mod(hw_now×dir − g_dci_offset, CPR)（当前真实相对电角度）。
- ******************************************************************************/
-void Foc_Drun29_Start(void)
-{
-    uint16_t hw_now;
-    int32_t rel_start;
-
-    if (!Foc_Calib_IsLocked() || (g_dcal_offset_valid == 0u)) {
-        DCI_DBG("ERROR: calib/offset not locked, run mode 24 (or 28) first");
-        g_dci_state = DCI_STEP_IDLE;
-        return;
-    }
-
-    Foc_Core_ClearFault();
-    g_foc_mode        = FOC_MODE_ALIGN;   /* 复用 ALIGN 分发路径（按 g_dci_running 区分） */
-    g_foc_phase       = 4u;
-    g_foc_theta_rad   = FOC_MATH_HALF_PI;
-    g_foc_id_ma       = 0.0f;
-    g_foc_iq_ma       = 0.0f;
-    g_foc_vd          = 0.0f;
-    g_foc_vq          = 0.0f;
-
-    Foc_Core_SetStateMachine(FOC_STATE_ALIGN);
-    Foc_Core_ResetVoltageEnvelope();
-    Foc_Core_ResetEma();
-    g_foc_align_state = 1u;
-
-    /* 编码器帧锚定（不重新校准，复用 mode 24/28 锁定的零偏与 offset） */
-    hw_now    = TMRA_GetCountValue(CM_TMRA_1);
-    rel_start = Foc_Core_ModPos((int32_t)hw_now * (int32_t)g_foc_enc_dir
-                                - (int32_t)g_dci_offset, (int32_t)ENCODER_CPR);
-    s_enc_pos     = 0;
-    s_enc_prev_hw = hw_now;
-    s_enc_init    = 1u;
-    s_off_rel     = Foc_Core_ModPos(-rel_start * (int32_t)g_foc_enc_dir,
-                                    (int32_t)ENCODER_CPR);
-
-    s_run_tick        = 0u;
-    s_ramp_done       = 0u;
-    s_i_ref_ramp      = 0.0f;
-    s_speed_tick      = 0u;
-    s_speed_acc       = 0;
-    g_dci_dlt_now_deg = g_dci_dlt_init_deg;
-    g_dci_speed_hz    = 0.0f;
-    g_dci_field_deg   = 0;
-    g_dci_rotor_deg   = 0;
-    g_dci_diff_deg    = 0;
-    g_dci_id_ma       = 0.0f;
-    g_dci_iq_ma       = 0.0f;
-    g_dci_id_pp_ma    = 0.0f;
-    g_dci_iq_pp_ma    = 0.0f;
-    g_dci_id_mean_ma  = 0.0f;
-    g_dci_iq_mean_ma  = 0.0f;
-    g_dci_id_ref_ma   = 0.0f;
-    g_dci_iq_ref_ma   = 0.0f;
-    g_dci_vsat        = 0u;
-    g_dci_ed_mean_ma  = 0.0f;
-    g_dci_eq_mean_ma  = 0.0f;
-    g_dci_ed_pp_ma    = 0.0f;
-    g_dci_eq_pp_ma    = 0.0f;
-    s_pp_tick         = 0u;
-    s_pp_init         = 0u;
-    s_mean_tick       = 0u;
-    s_id_sum_ma       = 0;
-    s_iq_sum_ma       = 0;
-    s_err_tick        = 0u;
-    s_err_init        = 0u;
-    s_ed_sum_ma       = 0;
-    s_eq_sum_ma       = 0;
-    /* g_dci_i_ref_ma / 功角三参数 不复位（预设后启动） */
-    PID_Reset(&s_pid_id);
-    PID_Reset(&s_pid_iq);
-    g_dci_enc_pos     = 0;
-
-    g_dci_variant     = DCI_VARIANT_RUN;
-    g_dci_running     = 1u;
-    g_dci_state       = DCI_STEP_RUN;
-    Foc_Core_PwmStart();   /* 起 PWM，下一拍直接进 RUN 电流环 */
-
-    DCI_DBG("run-only start (mode 29): rel=%d deg dlt %d->%d deg tr=%d ms Iref=%d mA kp=%d m iValid=%d",
-            (int)((int32_t)rel_start * 360 / (int32_t)ENCODER_CPR),
+    DCI_DBG("start calib zero-offset -> run dlt %d->%d deg tr=%d ms Iref=%d mA kp=%d m iValid=%d",
             (int)g_dci_dlt_init_deg, (int)g_dci_dlt_targ_deg,
             (int)g_dci_dlt_tr_ms, (int)g_dci_i_ref_ma,
             (int)(g_dci_pid_iq_cfg.kp * 1000.0f),
@@ -520,22 +403,6 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
             s_off_rel     = s_enc_pos;
             s_enc_prev_hw = hw0;      /* 编码器基准锚定在锁零点瞬间 */
             s_enc_init    = 1u;
-            g_dcal_offset_valid = 1u; /* offset 已锁定（mode 24/28 共用粘滞标志） */
-
-            if (g_dci_variant == DCI_VARIANT_CAL) {
-                /* mode 24：校准完成即收工，foc_obs 打印后自动回 mode 0。
-                 * 此后转子可随意捏住/移动——offset 是零点基准，与位置无关 */
-                g_dci_running     = 0u;
-                g_foc_align_state = 0u;
-                if (g_foc_active) {
-                    g_foc_active = 0u;
-                    Foc_Core_PwmStop();
-                    Foc_Core_SetStateMachine(FOC_STATE_IDLE);
-                }
-                s_phase_tick = 0u;
-                g_dci_evt    = DCI_EVT_CAL24_DONE;
-                break;
-            }
 
             s_phase_tick = 0u;
             s_run_tick   = 0u;

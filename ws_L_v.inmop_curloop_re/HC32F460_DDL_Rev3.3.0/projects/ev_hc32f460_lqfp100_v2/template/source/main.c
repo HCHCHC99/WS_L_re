@@ -214,22 +214,28 @@ int main(void)
             cur[1] = (int32_t)(g_i_iv_ma);            /* V 相电流 (mA -> A) */
             cur[2] = (int32_t)(g_i_iw_ma);            /* W 相电流 (mA -> A) */
             cur[3] = (int32_t)(g_foc_ialpha * 1000.0f); /* 静止系 ialpha (mA -> A) */
-            cur[4] = g_dci_running ? (int32_t)(g_foc_id_ma)            /* mode28: id 反馈 (mA -> A) */
+            cur[4] = (g_drun29_running || g_dci_running)
+                                   ? (int32_t)(g_foc_id_ma)            /* mode28/29: id 反馈 (mA -> A) */
                                    : (int32_t)(g_foc_ibeta * 1000.0f); /* 静止系 ibeta (mA -> A) */
             cur[5] = (int32_t)(g_foc_iq_ma);          /* 控制系 iq / mode28: iq 反馈 (mA -> A) */
-            cur[6] = g_dci_running ? (int32_t)(g_dci_id_ref_ma)        /* mode28: id 参考 (mA -> A) */
-                                   : (int32_t)(g_foc_id_ma);           /* 控制系 id (mA -> A) */
+            cur[6] = g_drun29_running ? (int32_t)(g_drun29_id_ref_ma)  /* mode29: id 参考 (mA -> A) */
+                    : g_dci_running    ? (int32_t)(g_dci_id_ref_ma)    /* mode28: id 参考 (mA -> A) */
+                                       : (int32_t)(g_foc_id_ma);       /* 控制系 id (mA -> A) */
 
-            cur[7] = g_dci_running ? (int32_t)(g_dci_iq_ref_ma)        /* mode28: iq 参考 (mA -> A) */
-                                   : (int32_t)(g_zizeng_volt_v * 1000.0f); /* mode30: 电压幅值 (mV -> V) */
-            cur[8] = g_dci_running ? (int32_t)(g_foc_vd * 1000.0f)     /* mode28: PI 输出 vd (V) */
+            cur[7] = g_drun29_running ? (int32_t)(g_drun29_iq_ref_ma)  /* mode29: iq 参考 (mA -> A) */
+                    : g_dci_running    ? (int32_t)(g_dci_iq_ref_ma)    /* mode28: iq 参考 (mA -> A) */
+                                       : (int32_t)(g_zizeng_volt_v * 1000.0f); /* mode30: 电压幅值 (mV -> V) */
+            cur[8] = (g_drun29_running || g_dci_running)
+                                   ? (int32_t)(g_foc_vd * 1000.0f)     /* mode28/29: PI 输出 vd (V) */
                                    : (int32_t)sqrtf(g_foc_iq_ma * g_foc_iq_ma
                                       + g_foc_id_ma * g_foc_id_ma);    /* 控制系合成 (mA -> A) */
-            cur[9] = g_dci_running ? (int32_t)(g_foc_vq * 1000.0f)     /* mode28: PI 输出 vq (V) */
+            cur[9] = (g_drun29_running || g_dci_running)
+                                   ? (int32_t)(g_foc_vq * 1000.0f)     /* mode28/29: PI 输出 vq (V) */
                                    : (int32_t)(g_zizeng_theta_rad * 1000.0f); /* mode30: 控制系角度 (mrad -> rad) */
 
-            cur[10] = g_dci_running ? (int32_t)(g_dci_iq_mean_ma)      /* mode28: iq 3s均值 (mA -> A，慢速水平线) */
-                                    : (int32_t)(g_foc_iab_mag * 1000.0f); /* 静止系幅值 (mA -> A) */
+            cur[10] = g_drun29_running ? (int32_t)(g_drun29_iq_mean_ma) /* mode29: iq 3s均值 (mA -> A) */
+                     : g_dci_running    ? (int32_t)(g_dci_iq_mean_ma)   /* mode28: iq 3s均值 (mA -> A) */
+                                        : (int32_t)(g_foc_iab_mag * 1000.0f); /* 静止系幅值 (mA -> A) */
 #if ZIZENG_VOLT_ON_Q_AXIS
             /* P = 1.5*vq*iq，iq_ma 已是 mA，结果直接为 mA -> 显示 A */
             cur[11] = (int32_t)(1.5f * g_zizeng_volt_v
@@ -239,7 +245,9 @@ int main(void)
             cur[11] = (int32_t)(1.5f * g_zizeng_volt_v
                                 * (float)g_foc_id_ma / FOC_VBUS_V);
 #endif
-            if (g_dci_running) {
+            if (g_drun29_running) {
+                cur[11] = (int32_t)(g_drun29_id_mean_ma); /* mode29: id 3s均值 (mA -> A) */
+            } else if (g_dci_running) {
                 cur[11] = (int32_t)(g_dci_id_mean_ma); /* mode28: id 3s均值 (mA -> A) */
             }
             cur[12] = (int32_t)(g_iqpi_iq_ref_ramp_ma); /* mode31 iq 参考(斜坡后), mA -> A */

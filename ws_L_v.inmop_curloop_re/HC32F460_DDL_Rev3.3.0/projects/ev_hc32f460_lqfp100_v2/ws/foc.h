@@ -41,6 +41,8 @@
 #include "foc_olf.h"
 #include "foc_dcl.h"
 #include "foc_dci.h"
+#include "foc_dcal24.h"
+#include "foc_drun29.h"
 #include "foc_zizeng.h"
 #include "foc_iq_pi.h"
 #include "foc_lock_iq_pi.h"
@@ -67,7 +69,10 @@ void Foc_Init(void);
  *                        : (g_calang_running ? Foc_CalAngle_Step
  *                        : (g_olf_running ? Foc_Olf_Step
  *                        : (g_dcl_running ? Foc_Dcl_Step
- *                        : (g_dci_running ? Foc_Dci_Step : Foc_Align_Step))))
+ *                        : (g_dcal24_running ? Foc_Dcal24_Step
+ *                        : (g_dci_running ? Foc_Dci_Step
+ *                        : (g_drun29_running ? Foc_Drun29_Step
+ *                        : Foc_Align_Step)))))
  *   FOC_MODE_CURLOOP  -> Foc_CurLoop_Step（内部再按状态机分派）
  *   g_zizeng_running  -> Foc_Zizeng_Step
  *   g_lockiq_running  -> Foc_LockIqPi_Step（锁定后由 main.c 交接 mode 31）

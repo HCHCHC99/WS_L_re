@@ -1038,6 +1038,16 @@
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_dci.c</FilePath>
             </File>
+            <File>
+              <FileName>foc_dcal24.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_dcal24.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_drun29.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_drun29.c</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>
@@ -2073,6 +2083,16 @@
               <FileName>foc_dci.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_dci.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_dcal24.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_dcal24.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_drun29.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_drun29.c</FilePath>
             </File>
           </Files>
         </Group>

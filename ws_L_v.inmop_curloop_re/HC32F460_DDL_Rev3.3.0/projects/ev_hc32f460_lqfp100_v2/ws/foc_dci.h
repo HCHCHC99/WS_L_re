@@ -1,9 +1,8 @@
 /**
  *******************************************************************************
  * @file  foc_dci.h
- * @brief FOC 模式24/28/29 — 功角参考电流闭环族 (Delta Current loop)。
- *        mode 28 = 校准 + 闭环 一体化；mode 24 = 仅校准（锁完自动回 mode 0）；
- *        mode 29 = 纯闭环（复用已锁 offset/零偏，直接 RUN）。
+ * @brief FOC 模式28 — 校准 + 功角参考电流闭环 (Delta Current loop)。
+ *        mode 24 和 mode 29 已分别拆入 foc_dcal24 与 foc_drun29。
  *        当前阶段：P 重调（i_valid=false）——转子捏死（BEMF=0）下调 P，
  *        判据 = 快速接近目标电流且不超过（不振铃）；合格后再开 I。
  *
@@ -18,14 +17,8 @@
  *     力矩回落到摩擦平衡 -> 稳定在饱和限速（与电压版完全不同的平衡机理）。
  *   δ=90° 即 id_ref=0 的经典 FOC（id=0 MTPA）。
  *
- * 【P 重调工作流（mode 24 + mode 29，转子捏死工况）】
- *   0. 为什么拆分：mode 28 校准时转子要动（吸附），捏转子的时机难掌握。
- *      mode 24 校准完自动回 mode 0（offset 是"零点基准"，转子随便捏/移动
- *      依然有效），从容捏好后 mode 29 直接进电流环。
- *   1. comm_mode=24：等 RTT 打印 "cal-only done ... back to mode 0"
- *   2. mode 0 下捏住转子（foc_obs 主循环持续刷新 g_foc_mech_deg/g_foc_elec_deg，
- *      可观察转子是否稳定）
- *   3. comm_mode=29：直接进电流环（无校准动作）。g_dci_i_ref_ma=250 起步
+ * 【P 重调工作流（mode 28 一体化）】
+ *   1. comm_mode=28：自动完成零偏/BETA/ALPHA 后直接进入电流环。
  *   4. kp 扫参（Watch 改 g_dci_pid_*_cfg.kp）：0.5 → 1.0 → 2.0
  *      判据：CH5(iq) 快速接近 CH7(iq_ref) 且不超过（不振铃、eq_pp 不发散）
  *      注意 P-only 稳态差距 = R·i_ref/(kp+R) 属正常（BEMF=0、kp=0.5 → 77%）
@@ -139,17 +132,8 @@ extern "C" {
 #define DCI_ENC_DELTA_MAX 32
 
 /*=============================================================================
- * 状态机（g_dci_state）
- *  变体（g_dci_variant）：三模式共用一套状态机/参数/观测量
- *   mode 28 = FULL（校准+闭环一体化）
- *   mode 24 = CAL （仅校准：锁完 offset 自动回 mode 0，转子从此可随便捏）
- *   mode 29 = RUN （仅电流环：复用已锁 offset/零偏，Start 直接进 RUN）
- *   校准后 offset 是"零点基准"而非"当前位置"——转子在 mode 0 被移动/捏住，
- *   电角度公式依然正确（TMRA_1 硬件计数 mode 0 下照常走，手速不丢计数）。
+ * 状态机（g_dci_state）：mode 28 专用，校准后固定进入 RUN。
  *=============================================================================*/
-#define DCI_VARIANT_FULL  0u  /* mode 28：校准 + 闭环 一体化 */
-#define DCI_VARIANT_CAL   1u  /* mode 24：仅校准 */
-#define DCI_VARIANT_RUN   2u  /* mode 29：仅电流环 */
 
 #define DCI_STEP_IDLE       0u  /* 未运行 */
 #define DCI_STEP_CALIB      1u  /* 零矢量电流零偏校准（foc_calib，~210ms） */
@@ -166,7 +150,6 @@ extern "C" {
 #define DCI_EVT_LOCKED      3u
 #define DCI_EVT_RAMP_DONE   4u
 #define DCI_EVT_OC          5u
-#define DCI_EVT_CAL24_DONE  6u  /* mode 24 校准完成（foc_obs 打印后自动回 mode 0） */
 
 /*=============================================================================
  * Keil Watch 可调变量 / 观测量（定义见 foc_dci.c）
@@ -175,9 +158,7 @@ extern volatile float    g_dci_dlt_init_deg;  /* 功角爬坡起点 (deg, 默认
 extern volatile float    g_dci_dlt_targ_deg;  /* 功角爬坡终点 (deg, 默认45, Start不复位) */
 extern volatile uint32_t g_dci_dlt_tr_ms;     /* 功角爬坡过渡时间 (ms, 0=立即, Start不复位) */
 extern volatile float    g_dci_volt_v;        /* 电压幅值 (V, 默认0.6, Start复位; =调速旋钮) */
-extern volatile uint8_t  g_dci_running;       /* 1 = 正在运行（mode 24/28/29 共用） */
-extern volatile uint8_t  g_dci_variant;       /* DCI_VARIANT_xxx（当前运行的变体） */
-extern volatile uint8_t  g_dcal_offset_valid; /* 1 = 校准 offset 已锁定（mode 24/28 置位，粘滞） */
+extern volatile uint8_t  g_dci_running;       /* 1 = mode 28 正在运行 */
 extern volatile uint8_t  g_dci_state;         /* DCI_STEP_xxx */
 extern volatile uint8_t  g_dci_evt;           /* DCI_EVT_xxx */
 extern volatile int32_t  g_dci_offset;        /* 校准锁零点 (hw绝对帧counts, 显示/对比用) */
@@ -212,21 +193,11 @@ extern volatile float    g_dci_dw;
  * API
  *=============================================================================*/
 
-/* mode 28 入口（FULL 变体）：清故障 -> 零矢量起 PWM -> foc_calib 零偏校准
+/* mode 28 入口：清故障 -> 零矢量起 PWM -> foc_calib 零偏校准
  * （~210ms）-> 自动校准（BETA 2s + ALPHA 2s 锁零点）-> 功角参考电流闭环。
  * 主循环上下文调用（dev_comm_runner）。g_dci_volt_v 复位 0.6V，
  * 功角三参数与 g_dci_i_ref_ma 不复位（便于预设后启动）。 */
 void Foc_Dci_Start(void);
-
-/* mode 24 入口（CAL 变体）：只跑校准（零偏窗 + BETA + ALPHA + 锁 offset），
- * 完成后自动停机回 mode 0 —— 此后转子可随意捏住/移动，offset 依然有效。
- * 需在 mode 29 之前运行（提供零偏与 offset）。 */
-void Foc_Dcal24_Start(void);
-
-/* mode 29 入口（RUN 变体）：跳过校准，复用 mode 24/28 已锁的零偏与 offset，
- * 锚定当前编码器帧后直接进 RUN（电流环）。前置条件：foc_calib 已锁定且
- * g_dcal_offset_valid=1（先跑 mode 24 或 28），否则拒绝启动并打印 ERR。 */
-void Foc_Drun29_Start(void);
 
 /* PI 实例绑定（Foc_Init 调用一次，与 mode 31 的 InitPids 同模式） */
 void Foc_Dci_InitPids(void);
