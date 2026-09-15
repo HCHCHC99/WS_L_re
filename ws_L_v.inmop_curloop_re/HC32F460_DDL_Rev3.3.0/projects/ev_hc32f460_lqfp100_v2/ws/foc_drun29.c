@@ -136,6 +136,7 @@ static float s_eq_max;
 
 typedef struct {
     uint8_t  state;
+    uint8_t  entry_armed;
     float    target_ma;
     float    prev_ref_ma;
     uint32_t start_us;
@@ -181,6 +182,7 @@ static void Drun29_ResetLoopState(void)
     s_eq_min = 0.0f;
     s_eq_max = 0.0f;
     s_id_step.state = DRUN29_STEP_ST_IDLE;
+    s_id_step.entry_armed = 1u;
     s_id_step.target_ma = 0.0f;
     s_id_step.prev_ref_ma = 0.0f;
     s_id_step.start_us = 0u;
@@ -218,7 +220,7 @@ static void Drun29_ClearObservables(void)
     g_drun29_dv = 50.0f;
     g_drun29_dw = 50.0f;
     g_drun29_time_us = 0u;
-    g_drun29_step_frac_pct = 90.0f;
+    g_drun29_step_frac_pct = 75.0f;
     g_drun29_id_step_state = DRUN29_STEP_ST_IDLE;
     g_drun29_iq_step_state = DRUN29_STEP_ST_IDLE;
     g_drun29_id_step_target_ma = 0.0f;
@@ -302,16 +304,9 @@ static void Drun29_StepFeed(drun29_step_track_t *track,
     }
 
     if (track->state == DRUN29_STEP_ST_WAIT) {
-        /* A second command change re-arms the measurement. */
-        if ((track->target_ma - ref_ma > DRUN29_STEP_DEADBAND_MA)
-                || (ref_ma - track->target_ma > DRUN29_STEP_DEADBAND_MA)) {
-            track->target_ma = ref_ma;
-            track->start_us = now_us;
-            track->cross_us = 0u;
-            track->cross_tick = 0u;
-            *time_out = 0u;
-            *target_out = ref_ma;
-        } else if ((now_us - track->start_us) >= DRUN29_STEP_TIMEOUT_US) {
+        /* The measurement is armed only by the first ISR after entering
+         * mode 29. Later Watch changes do not restart this timer. */
+        if ((now_us - track->start_us) >= DRUN29_STEP_TIMEOUT_US) {
             track->state = DRUN29_STEP_ST_TIMEOUT;
             *time_out = DRUN29_STEP_TIME_TIMEOUT;
         } else {
@@ -336,11 +331,11 @@ static void Drun29_StepFeed(drun29_step_track_t *track,
                 track->cross_us = 0u;
             }
         }
-    } else if (((track->target_ma - ref_ma > DRUN29_STEP_DEADBAND_MA)
-                || (ref_ma - track->target_ma > DRUN29_STEP_DEADBAND_MA))
+    } else if ((track->entry_armed != 0u)
                && ((ref_ma >= DRUN29_STEP_MIN_MA)
                    || (ref_ma <= -DRUN29_STEP_MIN_MA))) {
         track->state = DRUN29_STEP_ST_WAIT;
+        track->entry_armed = 0u;
         track->target_ma = ref_ma;
         track->start_us = now_us;
         track->cross_us = 0u;
