@@ -15,6 +15,7 @@
 #include "tmr4_pwm.h"
 #include "encoder.h"
 #include "motor_config.h"
+#include "timer6_timebase.h"
 #include "hc32_ll_tmra.h"
 
 #define DRUN29_ISR_DT_US  (1000000u / FOC_ISR_HZ)
@@ -57,6 +58,14 @@ volatile float    g_drun29_eq_pp_ma      = 0.0f;
 volatile float    g_drun29_du            = 50.0f;
 volatile float    g_drun29_dv            = 50.0f;
 volatile float    g_drun29_dw            = 50.0f;
+volatile uint32_t g_drun29_time_us       = 0u;
+volatile float    g_drun29_step_frac_pct = 90.0f;
+volatile uint8_t  g_drun29_id_step_state = DRUN29_STEP_ST_IDLE;
+volatile uint8_t  g_drun29_iq_step_state = DRUN29_STEP_ST_IDLE;
+volatile float    g_drun29_id_step_target_ma = 0.0f;
+volatile float    g_drun29_iq_step_target_ma = 0.0f;
+volatile uint32_t g_drun29_id_step_t90_us = DRUN29_STEP_TIME_TIMEOUT;
+volatile uint32_t g_drun29_iq_step_t90_us = DRUN29_STEP_TIME_TIMEOUT;
 
 pid_config_t g_drun29_pid_id_cfg = {
     .enabled = true,
@@ -125,6 +134,22 @@ static float s_ed_max;
 static float s_eq_min;
 static float s_eq_max;
 
+typedef struct {
+    uint8_t  state;
+    float    target_ma;
+    float    prev_ref_ma;
+    uint32_t start_us;
+    uint32_t cross_us;
+    uint8_t  cross_tick;
+} drun29_step_track_t;
+
+static drun29_step_track_t s_id_step;
+static drun29_step_track_t s_iq_step;
+
+static uint16_t s_timer_last_count;
+static uint64_t s_time_elapsed_us;
+static uint8_t  s_timer_initialized;
+
 static void Drun29_ResetLoopState(void)
 {
     s_rotor_count = 0;
@@ -155,6 +180,16 @@ static void Drun29_ResetLoopState(void)
     s_ed_max = 0.0f;
     s_eq_min = 0.0f;
     s_eq_max = 0.0f;
+    s_id_step.state = DRUN29_STEP_ST_IDLE;
+    s_id_step.target_ma = 0.0f;
+    s_id_step.prev_ref_ma = 0.0f;
+    s_id_step.start_us = 0u;
+    s_id_step.cross_us = 0u;
+    s_id_step.cross_tick = 0u;
+    s_iq_step = s_id_step;
+    s_timer_last_count = 0u;
+    s_time_elapsed_us = 0u;
+    s_timer_initialized = 0u;
 }
 
 static void Drun29_ClearObservables(void)
@@ -182,6 +217,14 @@ static void Drun29_ClearObservables(void)
     g_drun29_du = 50.0f;
     g_drun29_dv = 50.0f;
     g_drun29_dw = 50.0f;
+    g_drun29_time_us = 0u;
+    g_drun29_step_frac_pct = 90.0f;
+    g_drun29_id_step_state = DRUN29_STEP_ST_IDLE;
+    g_drun29_iq_step_state = DRUN29_STEP_ST_IDLE;
+    g_drun29_id_step_target_ma = 0.0f;
+    g_drun29_iq_step_target_ma = 0.0f;
+    g_drun29_id_step_t90_us = DRUN29_STEP_TIME_TIMEOUT;
+    g_drun29_iq_step_t90_us = DRUN29_STEP_TIME_TIMEOUT;
 }
 
 static void Drun29_PpFeed(float id, float iq)
@@ -215,6 +258,101 @@ static stc_i_data_t Drun29_CorrectedData(const stc_i_data_t *pData)
     return data;
 }
 
+static uint32_t Drun29_TimeUpdate(void)
+{
+    uint32_t now_count;
+    int32_t timer_delta;
+    uint32_t timer_freq;
+
+    now_count = Timer6_Timebase_GetCounter();
+    if (s_timer_initialized == 0u) {
+        s_timer_last_count = (uint16_t)now_count;
+        s_time_elapsed_us = 0u;
+        s_timer_initialized = 1u;
+        g_drun29_time_us = 0u;
+        return 0u;
+    }
+
+    timer_delta = (int32_t)(int16_t)((uint16_t)now_count - s_timer_last_count);
+    s_timer_last_count = (uint16_t)now_count;
+    timer_freq = Timer6_Timebase_GetFrequency();
+    if (timer_freq != 0u) {
+        s_time_elapsed_us += ((uint64_t)timer_delta * 1000000u
+                              + (uint64_t)(timer_freq / 2u)) / (uint64_t)timer_freq;
+    }
+    g_drun29_time_us = (uint32_t)s_time_elapsed_us;
+    return (uint32_t)s_time_elapsed_us;
+}
+
+static void Drun29_StepFeed(drun29_step_track_t *track,
+                            volatile uint8_t *state_out,
+                            volatile float *target_out,
+                            volatile uint32_t *time_out,
+                            float ref_ma,
+                            float actual_ma,
+                            uint32_t now_us)
+{
+    float fraction;
+    float threshold_ma;
+    uint8_t crossed;
+
+    fraction = g_drun29_step_frac_pct * 0.01f;
+    if ((fraction <= 0.0f) || (fraction > 2.0f)) {
+        fraction = 0.9f;
+    }
+
+    if (track->state == DRUN29_STEP_ST_WAIT) {
+        /* A second command change re-arms the measurement. */
+        if ((track->target_ma - ref_ma > DRUN29_STEP_DEADBAND_MA)
+                || (ref_ma - track->target_ma > DRUN29_STEP_DEADBAND_MA)) {
+            track->target_ma = ref_ma;
+            track->start_us = now_us;
+            track->cross_us = 0u;
+            track->cross_tick = 0u;
+            *time_out = 0u;
+            *target_out = ref_ma;
+        } else if ((now_us - track->start_us) >= DRUN29_STEP_TIMEOUT_US) {
+            track->state = DRUN29_STEP_ST_TIMEOUT;
+            *time_out = DRUN29_STEP_TIME_TIMEOUT;
+        } else {
+            threshold_ma = track->target_ma * fraction;
+            if (track->target_ma >= 0.0f) {
+                crossed = (actual_ma >= threshold_ma) ? 1u : 0u;
+            } else {
+                crossed = (actual_ma <= threshold_ma) ? 1u : 0u;
+            }
+
+            if (crossed != 0u) {
+                if (track->cross_tick == 0u) {
+                    track->cross_us = now_us;
+                }
+                track->cross_tick++;
+                if (track->cross_tick >= DRUN29_STEP_CONFIRM_TICK) {
+                    track->state = DRUN29_STEP_ST_DONE;
+                    *time_out = track->cross_us;
+                }
+            } else {
+                track->cross_tick = 0u;
+                track->cross_us = 0u;
+            }
+        }
+    } else if (((track->target_ma - ref_ma > DRUN29_STEP_DEADBAND_MA)
+                || (ref_ma - track->target_ma > DRUN29_STEP_DEADBAND_MA))
+               && ((ref_ma >= DRUN29_STEP_MIN_MA)
+                   || (ref_ma <= -DRUN29_STEP_MIN_MA))) {
+        track->state = DRUN29_STEP_ST_WAIT;
+        track->target_ma = ref_ma;
+        track->start_us = now_us;
+        track->cross_us = 0u;
+        track->cross_tick = 0u;
+        *time_out = 0u;
+        *target_out = ref_ma;
+    }
+
+    track->prev_ref_ma = ref_ma;
+    *state_out = track->state;
+}
+
 void Foc_Drun29_InitPids(void)
 {
     PID_Init(&s_pid_id, &g_drun29_pid_id_cfg);
@@ -241,6 +379,10 @@ void Foc_Drun29_Start(void)
     s_zero_u_ma = calibration.zero_u_ma;
     s_zero_v_ma = calibration.zero_v_ma;
     s_zero_w_ma = calibration.zero_w_ma;
+    s_timer_last_count = (uint16_t)Timer6_Timebase_GetCounter();
+    s_time_elapsed_us = 0u;
+    s_timer_initialized = 1u;
+    g_drun29_time_us = 0u;
 
     hardware_count = TMRA_GetCountValue(CM_TMRA_1);
     encoder_dir = (int32_t)g_foc_enc_dir;
@@ -298,6 +440,7 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
     uint16_t hardware_count;
     uint32_t ramp_ticks;
     int32_t hardware_delta, corrected_delta, field_deg, rotor_deg, angle_diff;
+    uint32_t now_us;
 
     if (Foc_Core_OverCurrent(pData)) {
         g_drun29_state = DRUN29_STEP_FAULT_OC;
@@ -311,6 +454,7 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
         return;
     }
 
+    now_us = Drun29_TimeUpdate();
     ramp_ticks = g_drun29_dlt_tr_ms * (FOC_ISR_HZ / 1000u);
     if (ramp_ticks == 0u) {
         progress = 1.0f;
@@ -386,6 +530,14 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
     iq_ref = (s_i_ref_ramp * 0.001f) * Foc_Math_Sin(delta_rad);
     g_drun29_id_ref_ma = id_ref * 1000.0f;
     g_drun29_iq_ref_ma = iq_ref * 1000.0f;
+    Drun29_StepFeed(&s_id_step, &g_drun29_id_step_state,
+                    &g_drun29_id_step_target_ma,
+                    &g_drun29_id_step_t90_us,
+                    g_drun29_id_ref_ma, g_drun29_id_ma, now_us);
+    Drun29_StepFeed(&s_iq_step, &g_drun29_iq_step_state,
+                    &g_drun29_iq_step_target_ma,
+                    &g_drun29_iq_step_t90_us,
+                    g_drun29_iq_ref_ma, g_drun29_iq_ma, now_us);
 
     vd = PID_UpdateUs(&s_pid_id, id_ref, id, DRUN29_ISR_DT_US);
     vq = PID_UpdateUs(&s_pid_iq, iq_ref, iq, DRUN29_ISR_DT_US);

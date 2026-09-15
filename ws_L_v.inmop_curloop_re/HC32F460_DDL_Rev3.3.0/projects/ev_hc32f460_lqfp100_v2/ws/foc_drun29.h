@@ -46,6 +46,17 @@ extern "C" {
 #define DRUN29_EVT_RAMP_DONE     1u
 #define DRUN29_EVT_OC            2u
 
+#define DRUN29_STEP_DEADBAND_MA  50.0f
+#define DRUN29_STEP_MIN_MA       100.0f
+#define DRUN29_STEP_TIMEOUT_US   200000u
+#define DRUN29_STEP_CONFIRM_TICK 3u
+#define DRUN29_STEP_TIME_TIMEOUT 0xFFFFFFFFu
+
+#define DRUN29_STEP_ST_IDLE      0u
+#define DRUN29_STEP_ST_WAIT      1u
+#define DRUN29_STEP_ST_DONE      2u
+#define DRUN29_STEP_ST_TIMEOUT   3u
+
 extern volatile uint8_t  g_drun29_running;
 extern volatile uint8_t  g_drun29_state;
 extern volatile uint8_t  g_drun29_evt;
@@ -76,6 +87,19 @@ extern volatile float    g_drun29_eq_pp_ma;
 extern volatile float    g_drun29_du;
 extern volatile float    g_drun29_dv;
 extern volatile float    g_drun29_dw;
+
+/* Step-response instrumentation.  Times are measured from the first ISR where
+ * the selected axis reference differs from its previous value by more than
+ * DRUN29_STEP_DEADBAND_MA.  A crossing must remain present for
+ * DRUN29_STEP_CONFIRM_TICK samples before it is accepted. */
+extern volatile uint32_t g_drun29_time_us;
+extern volatile float    g_drun29_step_frac_pct;
+extern volatile uint8_t  g_drun29_id_step_state;
+extern volatile uint8_t  g_drun29_iq_step_state;
+extern volatile float    g_drun29_id_step_target_ma;
+extern volatile float    g_drun29_iq_step_target_ma;
+extern volatile uint32_t g_drun29_id_step_t90_us;
+extern volatile uint32_t g_drun29_iq_step_t90_us;
 
 extern pid_config_t g_drun29_pid_id_cfg;
 extern pid_config_t g_drun29_pid_iq_cfg;
