@@ -87,6 +87,8 @@ volatile float    g_dci_iq_mean_ma  = 0.0f;  /* iq 均值 (mA, 同上) */
 volatile float    g_dci_i_ref_ma    = DCI_I_REF_MA;  /* 电流矢量幅值参考 (Start 不复位) */
 volatile float    g_dci_id_ref_ma   = 0.0f;  /* d 轴电流参考 (mA, 实时) */
 volatile float    g_dci_iq_ref_ma   = 0.0f;  /* q 轴电流参考 (mA, 实时) */
+volatile float    g_dci_i_ramp_ma_s = (float)DCI_I_RAMP_MA_S;  /* I_ref 软启动斜率 (mA/s)，<=0 直通 */
+static float      s_i_ref_ramp      = 0.0f;   /* 斜坡后的幅值实际值 (mA)，Start 复位 0 */
 volatile uint8_t  g_dci_vsat        = 0u;    /* 电压饱和标志 (1 = 任一轴顶到 UMAX) */
 volatile float    g_dci_ed_mean_ma  = 0.0f;  /* d 轴误差均值 (mA, 每 DCI_ERR_WIN_MS 刷新) */
 volatile float    g_dci_eq_mean_ma  = 0.0f;  /* q 轴误差均值 (mA, 同上) */
@@ -276,6 +278,7 @@ static void Foc_Dci_StartWithVariant(uint8_t variant)
     s_phase_tick      = 0u;
     s_run_tick        = 0u;
     s_ramp_done       = 0u;
+    s_i_ref_ramp      = 0.0f;
     s_enc_init        = 0u;
     s_enc_pos         = 0;
     s_off_rel         = 0;
@@ -389,6 +392,7 @@ void Foc_Drun29_Start(void)
 
     s_run_tick        = 0u;
     s_ramp_done       = 0u;
+    s_i_ref_ramp      = 0.0f;
     s_speed_tick      = 0u;
     s_speed_acc       = 0;
     g_dci_dlt_now_deg = g_dci_dlt_init_deg;
@@ -441,7 +445,7 @@ void Foc_Drun29_Start(void)
  ******************************************************************************/
 void Foc_Dci_Step(const stc_i_data_t *pData)
 {
-    float rot_rad, id, iq, w, dlt, dlt_rad;
+    float rot_rad, id, iq, w, dlt, dlt_rad, ramp_step;
     float id_ref, iq_ref, vd, vq, valpha, vbeta, du, dv, dw, cos_r, sin_r;
     uint16_t hw, hw0;
     uint32_t tr_ticks;
@@ -611,11 +615,30 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
             s_iq_sum_ma = 0;
         }
 
-        /* 6. 电流参考生成：id_ref = I_ref·cosδ, iq_ref = I_ref·sinδ
-         *    （δ = 参考电流矢量方向；δ=90° 即 id_ref=0 的经典 FOC） */
+        /* 6. 电流参考生成：先 I_ref 斜坡（每拍小目标逼近最终目标），再
+         *    id_ref = I·cosδ, iq_ref = I·sinδ（δ=90° 即 id_ref=0 经典 FOC）。
+         *    斜率 g_dci_i_ramp_ma_s (mA/s) Watch 可调，<=0 直通（阶跃激励，
+         *    调 P 用）。g_dci_i_ref_ma 恒为最终目标，s_i_ref_ramp 为生效幅值，
+         *    Start 复位 0 —— 启动即从 0 爬坡，改目标即时跟随 */
+        if (g_dci_i_ramp_ma_s > 0.0f) {
+            ramp_step = g_dci_i_ramp_ma_s / (float)FOC_ISR_HZ;
+            if (s_i_ref_ramp < g_dci_i_ref_ma) {
+                s_i_ref_ramp += ramp_step;
+                if (s_i_ref_ramp > g_dci_i_ref_ma) {
+                    s_i_ref_ramp = g_dci_i_ref_ma;
+                }
+            } else if (s_i_ref_ramp > g_dci_i_ref_ma) {
+                s_i_ref_ramp -= ramp_step;
+                if (s_i_ref_ramp < g_dci_i_ref_ma) {
+                    s_i_ref_ramp = g_dci_i_ref_ma;
+                }
+            }
+        } else {
+            s_i_ref_ramp = g_dci_i_ref_ma;
+        }
         dlt_rad = dlt * DCI_DEG2RAD;
-        id_ref = (g_dci_i_ref_ma * 0.001f) * Foc_Math_Cos(dlt_rad);
-        iq_ref = (g_dci_i_ref_ma * 0.001f) * Foc_Math_Sin(dlt_rad);
+        id_ref = (s_i_ref_ramp * 0.001f) * Foc_Math_Cos(dlt_rad);
+        iq_ref = (s_i_ref_ramp * 0.001f) * Foc_Math_Sin(dlt_rad);
         g_dci_id_ref_ma = id_ref * 1000.0f;
         g_dci_iq_ref_ma = iq_ref * 1000.0f;
 

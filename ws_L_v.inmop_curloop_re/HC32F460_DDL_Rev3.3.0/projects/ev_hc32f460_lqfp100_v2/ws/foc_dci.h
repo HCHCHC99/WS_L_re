@@ -63,7 +63,8 @@
  *                     : PI 参数（Watch 实时可调；i_valid=0 为 P-only）
  *   g_dci_volt_v      : 校准吸附电压，Start 复位 0.6（RUN 不再用）
  *   g_dci_dlt_now_deg : 当前爬坡中的 delta 指令（实时）
- *   g_dci_id_ref_ma / g_dci_iq_ref_ma : 电流参考实时值 (=I_ref·cosδ/sinδ)
+ *   g_dci_id_ref_ma / g_dci_iq_ref_ma : 电流参考实时值 (=斜坡后幅值·cosδ/sinδ)
+ *   g_dci_i_ramp_ma_s : I_ref 软启动斜率 (mA/s)，<=0 直通（阶跃），>0 每拍小目标爬坡
  *   g_dci_vsat        : 电压饱和标志（1 = 任一轴顶到 UMAX）
  *   g_dci_speed_hz    : 实测电频率（200ms 窗口，带符号）
  *   g_dci_diff_deg    : 参考功角（=dlt_now；实际跟踪误差看 e_d/e_q 统计）
@@ -127,6 +128,9 @@ extern "C" {
 #define DCI_ITERM_MAX_V   3.2f   /* 积分项限幅 (V)，必须 > 最大 BEMF 3.05V @ 891Hz 天花板 */
 #define DCI_I_REF_MA      500.0f /* 电流矢量幅值参考 (mA) —— 调 I 阶段默认 ≈摩擦电流；
                                     eq_mean≈0 后 Watch 逐步上调 250→500→1000→3000 */
+#define DCI_I_RAMP_MA_S   0.0f   /* I_ref 软启动斜率 (mA/s)。<=0 = 直通（阶跃激励，调 P 用）；
+                                    Watch 置正数（如 1000）启用软启动：参考幅值每拍向目标爬
+                                    一小步（小目标），0->1000mA 约 1s 走完，避免转矩突跳 */
 
 /*=============================================================================
  * 编码器增量限幅（与 mode 27 同：物理极限 7800rpm -> 单拍真实增量上限
@@ -190,7 +194,8 @@ extern volatile float    g_dci_id_mean_ma;    /* id 均值 (mA, DCI_MEAN_WIN_MS 
 extern volatile float    g_dci_iq_mean_ma;    /* iq 均值 (mA, 同上) */
 extern volatile float    g_dci_i_ref_ma;      /* 电流矢量幅值参考 (mA, Start 不复位, Watch 可调) */
 extern volatile float    g_dci_id_ref_ma;     /* d 轴电流参考 (mA, 实时 = I_ref·cosδ) */
-extern volatile float    g_dci_iq_ref_ma;     /* q 轴电流参考 (mA, 实时 = I_ref·sinδ) */
+extern volatile float    g_dci_iq_ref_ma;     /* q 轴电流参考 (mA, 实时 = 斜坡后幅值·sinδ) */
+extern volatile float    g_dci_i_ramp_ma_s;   /* I_ref 软启动斜率 (mA/s, Watch 可调；<=0 = 直通阶跃) */
 extern volatile uint8_t  g_dci_vsat;          /* 电压饱和标志 (1 = 任一轴顶到 UMAX，调参数据作废) */
 extern volatile float    g_dci_ed_mean_ma;    /* d 轴误差均值 (mA, DCI_ERR_WIN_MS 窗口刷新) */
 extern volatile float    g_dci_eq_mean_ma;    /* q 轴误差均值 (mA, 同上；P-only 稳态落差) */

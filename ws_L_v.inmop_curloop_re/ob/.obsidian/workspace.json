@@ -13,15 +13,15 @@
             "state": {
               "type": "canvas",
               "state": {
-                "file": "FOC模式20流程图.canvas",
+                "file": "FOC电流环PI计算流程图.canvas",
                 "viewState": {
-                  "x": 225.8237243694862,
-                  "y": 509.7998928750641,
-                  "zoom": -0.2987116584243003
+                  "x": -57.794367745124575,
+                  "y": 1236.7745281162424,
+                  "zoom": 1.1102230246251565e-16
                 }
               },
               "icon": "lucide-layout-dashboard",
-              "title": "FOC模式20流程图"
+              "title": "FOC电流环PI计算流程图"
             }
           }
         ]
@@ -193,9 +193,9 @@
   },
   "active": "5b078cf78a2d5c10",
   "lastOpenFiles": [
+    "FOC模式20流程图.canvas",
     "FOC模式25流程图.canvas",
     "FOC模式32流程图.canvas",
-    "FOC模式20流程图.canvas",
     "FOC模式31流程图.canvas",
     "FOC模式30流程图.canvas"
   ]
