@@ -58,6 +58,11 @@ extern "C" {
 #define I_SAMPLE_ADC2_PWM_VALLEY        (2U)
 #define I_SAMPLE_ADC2_PWM_PEAK_VALLEY   (3U)
 
+/* 2026-09-16: Do NOT select ADC2_PWM_PEAK on the current board.
+ * Entering mode 29 immediately reports over-current.  Extending ADC2 sample
+ * time to 64 ADCLK cycles did not fix it.  VALLEY and PEAK_VALLEY have been
+ * tested working; root-cause PEAK sampling/coupling before re-enabling it. */
+
 #ifndef I_SAMPLE_MODE
 #define I_SAMPLE_MODE                   (I_SAMPLE_ADC2_PWM_VALLEY)
 #endif

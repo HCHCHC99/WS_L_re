@@ -219,7 +219,11 @@ static void I_AdcConfig(void)
 
 #if (I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_PEAK)
     /* PEAK mode starts near the PWM reload/update edge.  Use a longer
-     * sample-and-hold window to reject the coupled transient. */
+     * sample-and-hold window to reject the coupled transient.
+     * Known issue (2026-09-16): this is still NOT usable.  Mode 29 reports
+     * over-current immediately, even with this 64 ADCLK-cycle window.
+     * Keep VALLEY or PEAK_VALLEY until the PEAK sampling/coupling path is
+     * root-caused. */
     ADC_SetSampleTime(I_ADC_UNIT, I_CH_U, I_ADC2_PWM_PEAK_SAMPLE_TIME);
     ADC_SetSampleTime(I_ADC_UNIT, I_CH_V, I_ADC2_PWM_PEAK_SAMPLE_TIME);
     ADC_SetSampleTime(I_ADC_UNIT, I_CH_W, I_ADC2_PWM_PEAK_SAMPLE_TIME);
