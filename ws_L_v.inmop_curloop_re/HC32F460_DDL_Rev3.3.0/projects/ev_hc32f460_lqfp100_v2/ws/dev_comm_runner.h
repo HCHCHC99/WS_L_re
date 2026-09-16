@@ -29,6 +29,7 @@ typedef enum {
     COMM_RUNNER_DCI        = 28, /* 功角参考电流闭环（复刻27 + foc_calib 零偏窗；逐步加电流环） */
     COMM_RUNNER_DCAL       = 24, /* mode 28 系校准专用（零偏窗+BETA+ALPHA+锁offset -> 自动回 0） */
     COMM_RUNNER_DRUN       = 29, /* mode 28 系纯电流环（复用已锁 offset/零偏，直接进 RUN） */
+    COMM_RUNNER_SPEED_FOC  = 40, /* mode 40 编码器 FOC 速度/电流双闭环 */
     COMM_RUNNER_FOC_ALIGN  = 23, /* FOC 对齐校准 */
     COMM_RUNNER_ZIZENG     = 30, /* 磁场角度自增拖动模式 */
     COMM_RUNNER_IQ_PI      = 31, /* PI 电流环模式（需先跑 mode 30 锁偏移） */
@@ -62,6 +63,9 @@ uint8_t CommRunner_IsStalled(void);
 uint8_t CommRunner_CurLoopActive(void);
 void CommRunner_SetTargetRPM(float rpm);
 float CommRunner_GetTargetRPM(void);
+
+/* mode 40 cascade speed/current FOC */
+void Foc_Speed40_SetTargetRPM(float target_rpm);
 
 /* 删除所有 Calibration 相关声明 */
 /* 删除所有 PID/JScope 相关 extern 变量 */

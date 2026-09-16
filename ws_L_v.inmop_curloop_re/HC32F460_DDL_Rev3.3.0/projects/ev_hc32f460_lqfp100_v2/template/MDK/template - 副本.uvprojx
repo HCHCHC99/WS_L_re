@@ -1048,6 +1048,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_drun29.c</FilePath>
             </File>
+            <File>
+              <FileName>foc_speed40.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_speed40.c</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>
@@ -2093,6 +2098,11 @@
               <FileName>foc_drun29.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_drun29.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_speed40.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_speed40.c</FilePath>
             </File>
           </Files>
         </Group>

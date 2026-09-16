@@ -44,6 +44,7 @@ void Foc_Init(void)
     Foc_IqPi_InitPids();
     Foc_Dci_InitPids();
     Foc_Drun29_InitPids();
+    Foc_Speed40_InitPids();
     I_RegisterFocCallback(Foc_Isr);
     s_bInited = 1u;
 }
@@ -83,6 +84,8 @@ void Foc_Isr(const stc_i_data_t *pData)
             Foc_Dci_Step(pData);
         } else if (g_drun29_running) {
             Foc_Drun29_Step(pData);
+        } else if (g_speed40_running) {
+            Foc_Speed40_Step(pData);
         } else {
             Foc_Align_Step(pData);
         }

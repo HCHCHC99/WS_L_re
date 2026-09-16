@@ -85,6 +85,9 @@ static void CommRunner_StopFocModes(void)
     if (g_drun29_running) {
         Foc_Drun29_Stop();
     }
+    if (g_speed40_running) {
+        Foc_Speed40_Stop();
+    }
     if (g_foc_mode == FOC_MODE_ALIGN) {
         Foc_Stop();
     }
@@ -193,6 +196,13 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         RUNNER_DBG("DRUN (mode 29, run-only)");
         break;
 
+    case COMM_RUNNER_SPEED_FOC:
+        CommRunner_StopFocModes();
+        Commutation_Stop();
+        Foc_Speed40_Start();
+        RUNNER_DBG("SPEED_FOC (mode 40)");
+        break;
+
     default:
         break;
     }
@@ -248,5 +258,19 @@ float CommRunner_GetRPM(void) { return 0.0f; }
 uint8_t CommRunner_IsRunning(void) { return 0; }
 uint8_t CommRunner_IsStalled(void) { return 0; }
 uint8_t CommRunner_CurLoopActive(void) { return 0; }
-void CommRunner_SetTargetRPM(float rpm) { (void)rpm; }
-float CommRunner_GetTargetRPM(void) { return 0.0f; }
+void CommRunner_SetTargetRPM(float rpm)
+{
+    Foc_Speed40_SetTargetRPM(rpm);
+}
+
+float CommRunner_GetTargetRPM(void)
+{
+    return g_speed40_speed_target_rpm;
+}
+
+void Foc_Speed40_SetTargetRPM(float target_rpm)
+{
+    /* Defined here to keep mode 40's public target entry point beside the
+     * other runner command interfaces. */
+    g_speed40_speed_target_rpm = target_rpm;
+}
