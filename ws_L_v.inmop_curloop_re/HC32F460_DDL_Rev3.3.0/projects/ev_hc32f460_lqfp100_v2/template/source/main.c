@@ -216,15 +216,21 @@ int main(void)
             cur[1] = (int32_t)(g_i_iv_ma);            /* V 相电流 (mA -> A) */
             cur[2] = (int32_t)(g_i_iw_ma);            /* W 相电流 (mA -> A) */
             cur[3] = (int32_t)(g_foc_ialpha * 1000.0f); /* 静止系 ialpha (mA -> A) */
-            cur[4] = (g_drun29_running || g_dci_running)
+            cur[4] = g_speed40_running
+                                   ? (int32_t)(g_speed40_id_ma)        /* mode40: id 反馈 (mA -> A) */
+                                   : (g_drun29_running || g_dci_running)
                                    ? (int32_t)(g_foc_id_ma)            /* mode28/29: id 反馈 (mA -> A) */
                                    : (int32_t)(g_foc_ibeta * 1000.0f); /* 静止系 ibeta (mA -> A) */
-            cur[5] = (int32_t)(g_foc_iq_ma);          /* 控制系 iq / mode28: iq 反馈 (mA -> A) */
-            cur[6] = g_drun29_running ? (int32_t)(g_drun29_id_ref_ma)  /* mode29: id 参考 (mA -> A) */
+            cur[5] = g_speed40_running
+                                   ? (int32_t)(g_speed40_iq_ma)        /* mode40: iq 反馈 (mA -> A) */
+                                   : (int32_t)(g_foc_iq_ma);           /* 控制系 iq / mode28: iq 反馈 (mA -> A) */
+            cur[6] = g_speed40_running ? (int32_t)(g_speed40_id_ref_ma) /* mode40: id 参考 (mA -> A) */
+                    : g_drun29_running ? (int32_t)(g_drun29_id_ref_ma)  /* mode29: id 参考 (mA -> A) */
                     : g_dci_running    ? (int32_t)(g_dci_id_ref_ma)    /* mode28: id 参考 (mA -> A) */
                                        : (int32_t)(g_foc_id_ma);       /* 控制系 id (mA -> A) */
 
-            cur[7] = g_drun29_running ? (int32_t)(g_drun29_iq_ref_ma)  /* mode29: iq 参考 (mA -> A) */
+            cur[7] = g_speed40_running ? (int32_t)(g_speed40_iq_ref_ma) /* mode40: iq 参考 (mA -> A) */
+                    : g_drun29_running ? (int32_t)(g_drun29_iq_ref_ma)  /* mode29: iq 参考 (mA -> A) */
                     : g_dci_running    ? (int32_t)(g_dci_iq_ref_ma)    /* mode28: iq 参考 (mA -> A) */
                                        : (int32_t)(g_zizeng_volt_v * 1000.0f); /* mode30: 电压幅值 (mV -> V) */
             cur[8] = (g_drun29_running || g_dci_running)
