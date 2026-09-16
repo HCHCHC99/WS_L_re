@@ -187,7 +187,7 @@ int main(void)
 #endif /* MOTOR_FOC_ENABLE */
 #endif /* !APP_MINIMAL_CURRENT_TEST — 最小系统模式下主循环只跑 VOFA */
 
-        /* ---- VOFA+ USART3 数据发送（电流观测通道，14 通道定长） ----
+        /* ---- VOFA+ USART3 数据发送（电流/速度观测通道，16 通道定长） ----
          * 接口约定：SendScaled 内部 ×0.001，即"传毫单位、显示基本单位"。
          * 电流通道传整数 mA -> 显示 A（1mA 分辨率，µA 精度已舍弃）；
          * 电压通道传 mV -> 显示 V；角度通道传 mrad -> 显示 rad。
@@ -205,10 +205,12 @@ int main(void)
          *          由功率守恒估算，含铜损前的电功率；mode 0 下为 0）；
          *          mode28 时 = id 3s均值 (A)
          * CH12   : mode31 iq 参考（斜坡后）
-         * CH13   : mode26 负载角 delta（deg，其他模式下恒 0） */
+         * CH13   : mode26 负载角 delta（deg，其他模式下恒 0）
+         * CH14   : mode40 目标转速（rpm；mode40 外可用作速度目标监视）
+         * CH15   : mode40 实际转速（rpm，电流环使用的滤波反馈值） */
 #if 1
         if (!Usart3_Vofa_IsTxBusy()) {
-            int32_t cur[14];
+            int32_t cur[16];
 
             cur[0] = (int32_t)(g_i_iu_ma);            /* U 相电流 (mA -> A) */
             cur[1] = (int32_t)(g_i_iv_ma);            /* V 相电流 (mA -> A) */
@@ -252,7 +254,9 @@ int main(void)
             }
             cur[12] = (int32_t)(g_iqpi_iq_ref_ramp_ma); /* mode31 iq 参考(斜坡后), mA -> A */
             cur[13] = g_olf_diff_deg * 1000;          /* mode26 负载角 delta (mdeg -> deg) */
-            Usart3_Vofa_SendScaled(cur, 14, USART3_VOFA_SCALE_MILLI);
+            cur[14] = (int32_t)(g_speed40_speed_target_rpm * 1000.0f); /* mode40 目标转速 (mrpm -> rpm) */
+            cur[15] = (int32_t)(g_speed40_speed_filt_rpm * 1000.0f);   /* mode40 实际转速 (mrpm -> rpm) */
+            Usart3_Vofa_SendScaled(cur, 16, USART3_VOFA_SCALE_MILLI);
         }
 #endif
     }
