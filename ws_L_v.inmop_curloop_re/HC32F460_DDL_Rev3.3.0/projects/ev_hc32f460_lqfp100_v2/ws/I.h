@@ -59,7 +59,7 @@ extern "C" {
 #define I_SAMPLE_ADC2_PWM_PEAK_VALLEY   (3U)
 
 #ifndef I_SAMPLE_MODE
-#define I_SAMPLE_MODE                   (I_SAMPLE_ADC2_PWM_PEAK)
+#define I_SAMPLE_MODE                   (I_SAMPLE_ADC2_PWM_VALLEY)
 #endif
 
 #if ((I_SAMPLE_MODE != I_SAMPLE_ADC2_CONT_DMA) && \
@@ -68,6 +68,9 @@ extern "C" {
      (I_SAMPLE_MODE != I_SAMPLE_ADC2_PWM_PEAK_VALLEY))
 #error "Invalid I_SAMPLE_MODE"
 #endif
+
+/* Longer ADC2 sample/hold window for PEAK-only tests. Units are ADCLK cycles. */
+#define I_ADC2_PWM_PEAK_SAMPLE_TIME     (64U)
 
 typedef enum {
     I_SAMPLE_MODE_CONT_DMA = I_SAMPLE_ADC2_CONT_DMA,

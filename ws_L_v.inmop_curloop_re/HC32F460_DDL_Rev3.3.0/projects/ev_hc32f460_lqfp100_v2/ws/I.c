@@ -217,6 +217,14 @@ static void I_AdcConfig(void)
                astcChannels[i].u8Channel);
     }
 
+#if (I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_PEAK)
+    /* PEAK mode starts near the PWM reload/update edge.  Use a longer
+     * sample-and-hold window to reject the coupled transient. */
+    ADC_SetSampleTime(I_ADC_UNIT, I_CH_U, I_ADC2_PWM_PEAK_SAMPLE_TIME);
+    ADC_SetSampleTime(I_ADC_UNIT, I_CH_V, I_ADC2_PWM_PEAK_SAMPLE_TIME);
+    ADC_SetSampleTime(I_ADC_UNIT, I_CH_W, I_ADC2_PWM_PEAK_SAMPLE_TIME);
+#endif
+
     I_DEBUG("Active ADC configured for 3-channel current scan (self-init)");
 }
 
