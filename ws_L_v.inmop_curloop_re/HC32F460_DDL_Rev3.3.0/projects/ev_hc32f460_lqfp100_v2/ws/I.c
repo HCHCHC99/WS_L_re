@@ -251,6 +251,10 @@ static void I_TriggerConfig(void)
 #if ((I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_VALLEY) || \
      (I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_PEAK_VALLEY))
     I_Tmr4ValleyEvtConfig();
+    AOS_Connect(AOS_ADC2_0, EVT_SRC_TMR4_3_SCMP2);
+#endif
+
+#if (I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_PEAK_VALLEY)
     AOS_Connect(AOS_ADC2_1, EVT_SRC_TMR4_3_SCMP2);
 #endif
 

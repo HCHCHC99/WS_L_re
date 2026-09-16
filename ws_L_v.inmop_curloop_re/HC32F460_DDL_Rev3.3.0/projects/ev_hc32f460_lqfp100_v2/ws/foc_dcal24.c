@@ -167,7 +167,6 @@ uint8_t Foc_Dcal24_GetResult(foc_dcal24_result_t *result)
 
 void Foc_Dcal24_Step(const stc_i_data_t *pData)
 {
-    uint16_t hardware_count;
     int32_t encoder_dir;
 
     if (Foc_Core_OverCurrent(pData)) {
