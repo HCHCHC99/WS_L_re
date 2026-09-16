@@ -106,6 +106,8 @@ static volatile int32_t s_i32CalibCnt  = 0;
 static void I_SetPinAnalogMode(uint8_t u8Port, uint8_t u8Pin);
 static void I_AdcConfig(void);
 static void I_TriggerConfig(void);
+static void I_Tmr4PeakEvtConfig(void);
+static void I_Tmr4ValleyEvtConfig(void);
 static void I_IrqConfig(void);
 
 static char I_GetPortLetter(uint8_t u8Port);
@@ -184,7 +186,7 @@ static void I_AdcConfig(void)
      *    原来这个初始化依赖于 Bemf_Init()，现在独立完成
      */
     (void)ADC_StructInit(&stcAdcInit);
-    stcAdcInit.u16ScanMode = ADC_MD_SEQA_SEQB_SINGLESHOT;   /* SEQ_A + SEQ_B 单次扫描模式 */
+    stcAdcInit.u16ScanMode = I_ADC_SCAN_MODE;   /* 单次扫描可被硬件重复触发；连续模式保持旧行为 */
     stcAdcInit.u16Resolution = ADC_RESOLUTION_12BIT;
     stcAdcInit.u16DataAlign = ADC_DATAALIGN_RIGHT;
     (void)ADC_Init(I_ADC_UNIT, &stcAdcInit);
@@ -215,7 +217,7 @@ static void I_AdcConfig(void)
                astcChannels[i].u8Channel);
     }
 
-    I_DEBUG("ADC1 SEQ_B configured for 3-channel current scan (self-init)");
+    I_DEBUG("Active ADC configured for 3-channel current scan (self-init)");
 }
 
 /*******************************************************************************
@@ -228,14 +230,40 @@ static void I_AdcConfig(void)
  */
 static void I_TriggerConfig(void)
 {
-    /* SEQ_B uses EVT0, same as BEMF's SEQ_A — both triggered by SCMP0 at PWM peak */
+#if I_INMOP_STYLE
+    /* Legacy ADC1 current trigger.  ADC2 is read asynchronously through DMA. */
     ADC_TriggerConfig(I_ADC_UNIT, I_ADC_SEQ, I_ADC_HARDTRIG);
     ADC_TriggerCmd(I_ADC_UNIT, I_ADC_SEQ, ENABLE);
-
-#if I_INMOP_STYLE
+    I_Tmr4ValleyEvtConfig();
+    AOS_InitForCurrent();
     I_DEBUG("SEQ_B trigger: EVT0+EVT1 (SCMP0@PEAK + SCMP2@VALLEY, 10k PWM -> 20k sampling)");
 #else
-    I_DEBUG("SEQ_B trigger: EVT0 (shared with BEMF SCMP0)");
+    /* PWM-triggered ADC2.  Route the selected TMR4_3 compare event(s) to the
+     * two dedicated ADC2 AOS targets, then enable IN_TRG0/IN_TRG1. */
+    uint16_t hardtrig = I_ADC_HARDTRIG;
+
+#if ((I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_PEAK) || \
+     (I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_PEAK_VALLEY))
+    I_Tmr4PeakEvtConfig();
+    AOS_Connect(AOS_ADC2_0, EVT_SRC_TMR4_3_SCMP0);
+#endif
+
+#if ((I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_VALLEY) || \
+     (I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_PEAK_VALLEY))
+    I_Tmr4ValleyEvtConfig();
+    AOS_Connect(AOS_ADC2_1, EVT_SRC_TMR4_3_SCMP2);
+#endif
+
+    ADC_TriggerConfig(I_ADC_UNIT, I_ADC_SEQ, hardtrig);
+    ADC_TriggerCmd(I_ADC_UNIT, I_ADC_SEQ, ENABLE);
+
+#if (I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_PEAK)
+    I_DEBUG("ADC2 PWM trigger: PEAK only, effective rate = PWM frequency");
+#elif (I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_VALLEY)
+    I_DEBUG("ADC2 PWM trigger: VALLEY only, effective rate = PWM frequency");
+#else
+    I_DEBUG("ADC2 PWM trigger: PEAK+VALLEY, effective rate = 2 x PWM frequency");
+#endif
 #endif
 }
 
@@ -352,12 +380,32 @@ static void I_DmaContinuousConfig(void)
 }
 #endif /* I_INMOP_STYLE && I_ASYNC_ADC2_READ */
 
-#if I_INMOP_STYLE
 /**
- * @brief  Configure TMR4_3 EVT to also fire at counter VALLEY (SCMP2).
- * @note   INMOP-style double update: SCMP0 @ PEAK (BEMF, EVT0) +
- *         SCMP2 @ VALLEY (EVT1) => 10kHz PWM generates 20kHz EOCB ISR.
- *         Uses EVT channel VH; the EVT submodule only writes SCCR/SCSR/SCMR
+ * @brief  Configure TMR4_3 EVT to fire at counter PEAK (SCMP0).
+ * @note   The EVT submodule is independent of the PWM OC channels.  Keep the
+ *         same event output mapping used by the BEMF module: EVT0 -> SCMP0.
+ */
+static void I_Tmr4PeakEvtConfig(void)
+{
+    stc_tmr4_evt_init_t stcTmr4Evt;
+    uint16_t u16Period = TMR4_GetPeriodValue(CM_TMR4_3);
+
+    if (u16Period == 0U) {
+        u16Period = 1U;
+    }
+
+    (void)TMR4_EVT_StructInit(&stcTmr4Evt);
+    stcTmr4Evt.u16Mode         = TMR4_EVT_MD_CMP;
+    stcTmr4Evt.u16CompareValue = u16Period;
+    stcTmr4Evt.u16MatchCond    = TMR4_EVT_MATCH_CNT_PEAK;
+    stcTmr4Evt.u16OutputEvent  = TMR4_EVT_OUTPUT_EVT0;  /* -> SCMP0 */
+
+    (void)TMR4_EVT_Init(CM_TMR4_3, TMR4_EVT_CH_UH, &stcTmr4Evt);
+}
+
+/**
+ * @brief  Configure TMR4_3 EVT to fire at counter VALLEY (SCMP2).
+ * @note   Uses EVT channel VH; the EVT submodule only writes SCCR/SCSR/SCMR
  *         and is independent of the PWM OC channels.
  */
 static void I_Tmr4ValleyEvtConfig(void)
@@ -374,8 +422,6 @@ static void I_Tmr4ValleyEvtConfig(void)
 
     I_DEBUG("TMR4_3 EVT: SCMP2 @ VALLEY configured (10k PWM -> 20k tick)");
 }
-
-#endif /* I_INMOP_STYLE */
 
 /*******************************************************************************
  * Interrupt configuration & ISR
@@ -422,11 +468,11 @@ static void I_ApplyKclDerive(int16_t *pU, int16_t *pV, int16_t *pW)
 
 static void I_IrqCallback(void)
 {
-    /* Clear SEQ_B end-of-conversion flag */
-    ADC_ClearStatus(I_ADC_UNIT, ADC_FLAG_EOCB);
+    /* Clear the active sequence end-of-conversion flag */
+    ADC_ClearStatus(I_ADC_UNIT, I_ADC_INT_FLAG);
 
     uint16_t u16IU, u16IV, u16IW;
-#if I_ASYNC_ADC2_READ
+#if (I_SAMPLE_MODE == I_SAMPLE_ADC2_CONT_DMA)
     /* Legacy async: 20kHz ISR reads latest DMA values (ADC2 free-running) */
     u16IU = Dma_GetLatestValue(s_au8DmaId[0]);
     u16IV = Dma_GetLatestValue(s_au8DmaId[1]);
@@ -540,7 +586,7 @@ static void I_IrqConfig(void)
     stcIrq.pfnCallback = &I_IrqCallback;
 
     if (LL_OK != INTC_IrqSignIn(&stcIrq)) {
-        I_DEBUG("ERROR: INTC_IrqSignIn failed for ADC1 EOCB!");
+        I_DEBUG("ERROR: INTC_IrqSignIn failed for active ADC EOC!");
         return;
     }
 
@@ -548,10 +594,10 @@ static void I_IrqConfig(void)
     NVIC_SetPriority(stcIrq.enIRQn, I_ADC_INT_PRIO);
     NVIC_EnableIRQ(stcIrq.enIRQn);
 
-    /* Enable ADC1 EOCB interrupt */
-    ADC_IntCmd(I_ADC_UNIT, ADC_INT_EOCB, ENABLE);
+    /* Enable the active ADC sequence-complete interrupt */
+    ADC_IntCmd(I_ADC_UNIT, I_ADC_INT_TYPE, ENABLE);
 
-    I_DEBUG("ADC1 EOCB ISR registered: INT_SRC=%u, IRQn=%d, prio=%d",
+    I_DEBUG("ADC EOC ISR registered: INT_SRC=%u, IRQn=%d, prio=%d",
            (unsigned)I_ADC_INT_SRC, (int)I_ADC_IRQn, (int)I_ADC_INT_PRIO);
 }
 
@@ -575,17 +621,11 @@ void I_Init(void)
     /* Reset data structure */
     memset(&s_stcIData, 0, sizeof(s_stcIData));
 
-    /* 1. Configure ADC1 SEQ_B: pins + CH5/6/7 (独立初始化 ADC1) */
+    /* 1. Configure the active ADC and current channels */
     I_AdcConfig();
 
-    /* 2. SEQ_B trigger = EVT0 + EVT1 (INMOP-style double update) */
+    /* 2. Configure the selected PWM/continuous trigger source */
     I_TriggerConfig();
-
-#if I_INMOP_STYLE
-    /* 2.4 INMOP-style double update: valley trigger SCMP2 -> EVT1 (20kHz ISR) */
-    I_Tmr4ValleyEvtConfig();
-    AOS_InitForCurrent();   /* routes TMR4_3_SCMP2 -> AOS_ADC1_1 (TRGSEL1) */
-#endif
 
 #if I_INMOP_STYLE && I_ASYNC_ADC2_READ
     /* 2.5 legacy async ADC2 free-running + DMA2 (disabled by default) */
@@ -593,12 +633,12 @@ void I_Init(void)
     I_DmaContinuousConfig();
 #endif
 
-    /* 3. Register EOCB interrupt */
+    /* 3. Register the active sequence-complete interrupt */
     I_IrqConfig();
 
     s_bIInitialized = true;
     g_i_running = 1;
-    I_DEBUG("Init done: ADC1 SEQ_B self-initialized, ISR=INT116_EOCB");
+    I_DEBUG("Init done: current sampling initialized");
 }
 
 /*******************************************************************************
@@ -674,12 +714,12 @@ void I_DeInit(void)
     s_pfnFocCallback   = NULL;
     g_i_running = 0;
 
-    /* Disable ADC1 EOCB interrupt */
-    ADC_IntCmd(I_ADC_UNIT, ADC_INT_EOCB, DISABLE);
+    /* Disable active ADC sequence-complete interrupt */
+    ADC_IntCmd(I_ADC_UNIT, I_ADC_INT_TYPE, DISABLE);
     NVIC_DisableIRQ(I_ADC_IRQn);
     NVIC_ClearPendingIRQ(I_ADC_IRQn);
 
-    /* Disable ADC1 SEQ_B trigger */
+    /* Disable active ADC hardware trigger */
     ADC_TriggerCmd(I_ADC_UNIT, I_ADC_SEQ, DISABLE);
 
 #if I_INMOP_STYLE && I_ASYNC_ADC2_READ

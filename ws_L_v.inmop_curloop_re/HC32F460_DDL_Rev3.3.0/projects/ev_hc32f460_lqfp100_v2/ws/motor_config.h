@@ -67,7 +67,6 @@
 #define MOTOR_FOC_ENABLE        1
 #define FOC_POLE_PAIRS          10
 #define FOC_VBUS_V              12.0f
-#define FOC_ISR_HZ              20000
 #define FOC_DEADTIME_NS         500u
 
 /* 对齐校准（comm_mode 23） */

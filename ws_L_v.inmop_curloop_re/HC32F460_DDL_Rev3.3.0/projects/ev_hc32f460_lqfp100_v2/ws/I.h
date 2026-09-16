@@ -24,6 +24,7 @@
 
 #include "main.h"
 #include "Hardware.h"
+#include "motor_config.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,22 +43,57 @@ extern "C" {
 #endif
 
 /* ============================================================================
- * INMOP-style current sampling switch (branch inmop_cur_loop)
- *   1 = mimic STM32 INMOP project:
- *         ADC2 free-running continuous conversion (software start) + DMA2
- *         circular transfer; the 20kHz ADC1 EOCB ISR (PWM peak + valley,
- *         10kHz PWM -> 20kHz double update) reads the latest DMA value.
- *         UVW are still sampled directly on PA5/6/7 (= ADC2_CH1/2/3);
- *         V phase is NOT derived from U+W.
- *   0 = original: ADC1 SEQ_B hardware trigger (SCMP0 @ PWM peak), EOCB ISR
- *         reads DR5/6/7 directly.
+ * Current sampling source
+ *   ADC2_CONT_DMA       : legacy INMOP-style, free-running ADC2 + DMA.
+ *                         The sample instant is async to PWM.
+ *   ADC2_PWM_PEAK       : Timer4_3 SCMP0 at triangle peak triggers ADC2.
+ *                         Effective current-loop rate = PWM frequency.
+ *   ADC2_PWM_VALLEY     : Timer4_3 SCMP2 at triangle valley triggers ADC2.
+ *                         Effective current-loop rate = PWM frequency.
+ *   ADC2_PWM_PEAK_VALLEY: both peak and valley trigger ADC2.
+ *                         Effective current-loop rate = 2 x PWM frequency.
  * ==========================================================================*/
+#define I_SAMPLE_ADC2_CONT_DMA          (0U)
+#define I_SAMPLE_ADC2_PWM_PEAK          (1U)
+#define I_SAMPLE_ADC2_PWM_VALLEY        (2U)
+#define I_SAMPLE_ADC2_PWM_PEAK_VALLEY   (3U)
+
+#ifndef I_SAMPLE_MODE
+#define I_SAMPLE_MODE                   (I_SAMPLE_ADC2_PWM_PEAK)
+#endif
+
+#if ((I_SAMPLE_MODE != I_SAMPLE_ADC2_CONT_DMA) && \
+     (I_SAMPLE_MODE != I_SAMPLE_ADC2_PWM_PEAK) && \
+     (I_SAMPLE_MODE != I_SAMPLE_ADC2_PWM_VALLEY) && \
+     (I_SAMPLE_MODE != I_SAMPLE_ADC2_PWM_PEAK_VALLEY))
+#error "Invalid I_SAMPLE_MODE"
+#endif
+
+typedef enum {
+    I_SAMPLE_MODE_CONT_DMA = I_SAMPLE_ADC2_CONT_DMA,
+    I_SAMPLE_MODE_PWM_PEAK = I_SAMPLE_ADC2_PWM_PEAK,
+    I_SAMPLE_MODE_PWM_VALLEY = I_SAMPLE_ADC2_PWM_VALLEY,
+    I_SAMPLE_MODE_PWM_PEAK_VALLEY = I_SAMPLE_ADC2_PWM_PEAK_VALLEY,
+} i_sample_mode_t;
+
+/* Compatibility flags used by the legacy INMOP read path. */
+#if (I_SAMPLE_MODE == I_SAMPLE_ADC2_CONT_DMA)
 #define I_INMOP_STYLE                   (1U)
-/* Current read source:
- *   1 = legacy INMOP-style: ADC2 free-running + DMA (async to PWM) - NOISY
- *   0 = ADC1 SEQ_B hardware-triggered samples (PWM peak/valley = ripple average) - recommended
- */
-#define I_ASYNC_ADC2_READ                (1U)
+#define I_ASYNC_ADC2_READ               (1U)
+#else
+#define I_INMOP_STYLE                   (0U)
+#define I_ASYNC_ADC2_READ               (0U)
+#endif
+
+/* Keep the FOC control cadence tied to the selected current-sample cadence. */
+#if ((I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_PEAK) || \
+     (I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_VALLEY))
+#define I_ACTIVE_SAMPLE_RATE_HZ         (MOTOR_PWM_FREQ_HZ)
+#else
+#define I_ACTIVE_SAMPLE_RATE_HZ         (MOTOR_PWM_FREQ_HZ * 2U)
+#endif
+/* The FOC timestep is tied to current sampling, not directly to PWM reload. */
+#define FOC_ISR_HZ                      (I_ACTIVE_SAMPLE_RATE_HZ)
 /* KCL two-sensor mode selector (derive one phase from the other two):
  *   0 = measure all three phases directly with current sensors (default)
  *   1 = U derived:  IU = -(IV + IW)
@@ -69,10 +105,16 @@ extern "C" {
  * I_GetData, I_GetCurrentMA) honor this setting. */
 #define I_KCL_DERIVE_MODE                (0U)
 
-/* ===== Current channel definitions ===== */
+/* ===== Active current channel definitions ===== */
+#if (I_SAMPLE_MODE == I_SAMPLE_ADC2_CONT_DMA)
 #define I_CH_U                          (ADC_CH5)   /* PA5/ADC1_CH5: IU */
 #define I_CH_V                          (ADC_CH6)   /* PA6/ADC1_CH6: IV */
 #define I_CH_W                          (ADC_CH7)   /* PA7/ADC1_CH7: IW */
+#else
+#define I_CH_U                          (ADC_CH1)   /* PA5/ADC2_CH1/ADC12_IN5: IU */
+#define I_CH_V                          (ADC_CH2)   /* PA6/ADC2_CH2/ADC12_IN6: IV */
+#define I_CH_W                          (ADC_CH3)   /* PA7/ADC2_CH3/ADC12_IN7: IW */
+#endif
 #define I_CHANNEL_COUNT                 (3U)
 
 /* ===== Pin definitions ===== */
@@ -83,24 +125,37 @@ extern "C" {
 #define I_W_PORT                        (GPIO_PORT_A)
 #define I_W_PIN                         (GPIO_PIN_07)
 
-/* ===== ADC1 hardware configuration ===== */
+/* ===== Active ADC hardware configuration ===== */
+#if (I_SAMPLE_MODE == I_SAMPLE_ADC2_CONT_DMA)
 #define I_ADC_UNIT                      (CM_ADC1)
 #define I_ADC_PERIPH_CLK                (FCG3_PERIPH_ADC1)
 #define I_ADC_SEQ                       (ADC_SEQ_B)
-
-/* ===== Trigger =====
- * INMOP-style: EVT0 (SCMP0 @ PEAK) + EVT1 (SCMP2 @ VALLEY)
- *              => 10kHz PWM -> 20kHz sampling (double update)
- * Original    : EVT0 only (SCMP0 @ PEAK), 1x sampling per PWM period */
-#if I_INMOP_STYLE
-#define I_ADC_HARDTRIG                  (ADC_HARDTRIG_EVT0_EVT1)
+#define I_ADC_SCAN_MODE                 (ADC_MD_SEQA_SEQB_SINGLESHOT)
+#define I_ADC_INT_SRC                   (INT_SRC_ADC1_EOCB)
+#define I_ADC_INT_TYPE                  (ADC_INT_EOCB)
+#define I_ADC_INT_FLAG                  (ADC_FLAG_EOCB)
+#define I_ADC_IRQn                      (INT116_IRQn)
 #else
-#define I_ADC_HARDTRIG                  (ADC_HARDTRIG_EVT0)
+#define I_ADC_UNIT                      (CM_ADC2)
+#define I_ADC_PERIPH_CLK                (FCG3_PERIPH_ADC2)
+#define I_ADC_SEQ                       (ADC_SEQ_A)
+#define I_ADC_SCAN_MODE                 (ADC_MD_SEQA_SINGLESHOT)
+#define I_ADC_INT_SRC                   (INT_SRC_ADC2_EOCA)
+#define I_ADC_INT_TYPE                  (ADC_INT_EOCA)
+#define I_ADC_INT_FLAG                  (ADC_FLAG_EOCA)
+#define I_ADC_IRQn                      (INT116_IRQn)
 #endif
 
-/* ===== Interrupt configuration ===== */
-#define I_ADC_INT_SRC                   (INT_SRC_ADC1_EOCB)
-#define I_ADC_IRQn                      (INT116_IRQn)
+/* ===== Hardware trigger selection for the active ADC sequence ===== */
+#if (I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_PEAK) || \
+    (I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_VALLEY)
+#define I_ADC_HARDTRIG                  (ADC_HARDTRIG_EVT0)
+#elif (I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_PEAK_VALLEY)
+#define I_ADC_HARDTRIG                  (ADC_HARDTRIG_EVT0_EVT1)
+#else
+#define I_ADC_HARDTRIG                  (ADC_HARDTRIG_EVT0_EVT1)
+#endif
+
 #define I_ADC_INT_PRIO                  (DDL_IRQ_PRIO_03)
 
 /* ===== Current conversion constants ===== */
