@@ -267,10 +267,3 @@ float CommRunner_GetTargetRPM(void)
 {
     return g_speed40_speed_target_rpm;
 }
-
-void Foc_Speed40_SetTargetRPM(float target_rpm)
-{
-    /* Defined here to keep mode 40's public target entry point beside the
-     * other runner command interfaces. */
-    g_speed40_speed_target_rpm = target_rpm;
-}

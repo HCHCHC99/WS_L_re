@@ -64,9 +64,6 @@ uint8_t CommRunner_CurLoopActive(void);
 void CommRunner_SetTargetRPM(float rpm);
 float CommRunner_GetTargetRPM(void);
 
-/* mode 40 cascade speed/current FOC */
-void Foc_Speed40_SetTargetRPM(float target_rpm);
-
 /* 删除所有 Calibration 相关声明 */
 /* 删除所有 PID/JScope 相关 extern 变量 */
 
