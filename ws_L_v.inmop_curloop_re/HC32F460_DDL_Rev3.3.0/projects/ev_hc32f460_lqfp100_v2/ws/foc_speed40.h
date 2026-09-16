@@ -35,8 +35,8 @@ extern "C" {
 #define SPEED40_ITERM_MAX_V       3.2f
 
 /* Outer speed PI output is a signed q-axis current reference in mA. */
-#define SPEED40_SPD_KP_MA_PER_RPM       0.0005f
-#define SPEED40_SPD_KI_MA_PER_RPM_S     0.020f
+#define SPEED40_SPD_KP_MA_PER_RPM       1.0f
+#define SPEED40_SPD_KI_MA_PER_RPM_S     5.0f
 #define SPEED40_SPD_IQ_LIMIT_MA         ((float)FOC_MOTOR_RATED_CURRENT_A \
                                         * 1000.0f * 0.20f)
 
