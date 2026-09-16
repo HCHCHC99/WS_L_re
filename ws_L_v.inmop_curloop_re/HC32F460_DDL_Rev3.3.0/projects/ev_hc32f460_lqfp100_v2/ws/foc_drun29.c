@@ -260,6 +260,16 @@ static stc_i_data_t Drun29_CorrectedData(const stc_i_data_t *pData)
     return data;
 }
 
+static void Drun29_ClearCurrentFeedback(void)
+{
+    g_drun29_id_ma = 0.0f;
+    g_drun29_iq_ma = 0.0f;
+    g_drun29_id_ref_ma = 0.0f;
+    g_drun29_iq_ref_ma = 0.0f;
+    g_foc_id_ma = 0.0f;
+    g_foc_iq_ma = 0.0f;
+}
+
 static uint32_t Drun29_TimeUpdate(void)
 {
     uint32_t now_count;
@@ -413,18 +423,17 @@ void Foc_Drun29_Start(void)
 
 void Foc_Drun29_Stop(void)
 {
-    if (!g_drun29_running) {
-        return;
+    if (g_drun29_running) {
+        g_drun29_running = 0u;
+        g_foc_align_state = 0u;
+        if (g_foc_active) {
+            g_foc_active = 0u;
+            Foc_Core_PwmStop();
+            Foc_Core_SetStateMachine(FOC_STATE_IDLE);
+        }
+        DRUN29_LOG("stopped");
     }
-
-    g_drun29_running = 0u;
-    g_foc_align_state = 0u;
-    if (g_foc_active) {
-        g_foc_active = 0u;
-        Foc_Core_PwmStop();
-        Foc_Core_SetStateMachine(FOC_STATE_IDLE);
-    }
-    DRUN29_LOG("stopped");
+    Drun29_ClearCurrentFeedback();
 }
 
 void Foc_Drun29_Step(const stc_i_data_t *pData)
@@ -442,6 +451,7 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
         g_drun29_evt = DRUN29_EVT_OC;
         g_drun29_running = 0u;
         Foc_Core_FaultStop(1u);
+        Drun29_ClearCurrentFeedback();
         return;
     }
 
