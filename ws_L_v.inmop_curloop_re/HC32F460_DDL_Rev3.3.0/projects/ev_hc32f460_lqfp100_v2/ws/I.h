@@ -76,6 +76,7 @@ extern "C" {
 
 /* Longer ADC2 sample/hold window for PEAK-only tests. Units are ADCLK cycles. */
 #define I_ADC2_PWM_PEAK_SAMPLE_TIME     (64U)
+#define I_ADC2_PWM_VALLEY_SAMPLE_TIME   (64U)
 
 typedef enum {
     I_SAMPLE_MODE_CONT_DMA = I_SAMPLE_ADC2_CONT_DMA,

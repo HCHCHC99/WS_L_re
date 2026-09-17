@@ -116,6 +116,7 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
     case COMM_RUNNER_STOP:
         CommRunner_StopFocModes();
         Commutation_Stop();
+        TMR4_PWM_StartOutput();   /* keep VALLEY/PEAK ADC trigger alive in mode 0 */
         RUNNER_DBG("STOP");
         break;
 

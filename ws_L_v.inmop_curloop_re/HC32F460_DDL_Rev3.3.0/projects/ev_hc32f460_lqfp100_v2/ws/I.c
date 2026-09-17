@@ -227,6 +227,10 @@ static void I_AdcConfig(void)
     ADC_SetSampleTime(I_ADC_UNIT, I_CH_U, I_ADC2_PWM_PEAK_SAMPLE_TIME);
     ADC_SetSampleTime(I_ADC_UNIT, I_CH_V, I_ADC2_PWM_PEAK_SAMPLE_TIME);
     ADC_SetSampleTime(I_ADC_UNIT, I_CH_W, I_ADC2_PWM_PEAK_SAMPLE_TIME);
+#elif (I_SAMPLE_MODE == I_SAMPLE_ADC2_PWM_VALLEY)
+    ADC_SetSampleTime(I_ADC_UNIT, I_CH_U, I_ADC2_PWM_VALLEY_SAMPLE_TIME);
+    ADC_SetSampleTime(I_ADC_UNIT, I_CH_V, I_ADC2_PWM_VALLEY_SAMPLE_TIME);
+    ADC_SetSampleTime(I_ADC_UNIT, I_CH_W, I_ADC2_PWM_VALLEY_SAMPLE_TIME);
 #endif
 
     I_DEBUG("Active ADC configured for 3-channel current scan (self-init)");
