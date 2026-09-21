@@ -42,6 +42,8 @@ volatile int32_t  g_drun29_diff_deg      = 0;
 volatile int32_t  g_drun29_rotor_count   = 0;
 volatile float    g_drun29_id_ma         = 0.0f;
 volatile float    g_drun29_iq_ma         = 0.0f;
+volatile float    g_drun29_iq_filt_ma    = 0.0f;
+volatile float    g_drun29_iq_filt_alpha = DRUN29_IQ_FILT_ALPHA;
 volatile float    g_drun29_id_pp_ma      = 0.0f;
 volatile float    g_drun29_iq_pp_ma      = 0.0f;
 volatile float    g_drun29_id_mean_ma    = 0.0f;
@@ -107,6 +109,7 @@ static uint8_t s_encoder_initialized;
 static float s_zero_u_ma;
 static float s_zero_v_ma;
 static float s_zero_w_ma;
+static uint8_t s_iq_filt_init;
 
 static uint32_t s_run_tick;
 static uint8_t s_ramp_done;
@@ -159,6 +162,7 @@ static void Drun29_ResetLoopState(void)
     s_zero_u_ma = 0.0f;
     s_zero_v_ma = 0.0f;
     s_zero_w_ma = 0.0f;
+    s_iq_filt_init = 0u;
     s_run_tick = 0u;
     s_ramp_done = 0u;
     s_i_ref_ramp = 0.0f;
@@ -205,6 +209,7 @@ static void Drun29_ClearObservables(void)
     g_drun29_rotor_count = 0;
     g_drun29_id_ma = 0.0f;
     g_drun29_iq_ma = 0.0f;
+    g_drun29_iq_filt_ma = 0.0f;
     g_drun29_id_pp_ma = 0.0f;
     g_drun29_iq_pp_ma = 0.0f;
     g_drun29_id_mean_ma = 0.0f;
@@ -264,6 +269,7 @@ static void Drun29_ClearCurrentFeedback(void)
 {
     g_drun29_id_ma = 0.0f;
     g_drun29_iq_ma = 0.0f;
+    g_drun29_iq_filt_ma = 0.0f;
     g_drun29_id_ref_ma = 0.0f;
     g_drun29_iq_ref_ma = 0.0f;
     g_foc_id_ma = 0.0f;
@@ -503,6 +509,19 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
     Foc_Core_GetDq(&data, rotor_rad, &id, &iq);
     g_drun29_id_ma = id * 1000.0f;
     g_drun29_iq_ma = iq * 1000.0f;
+    {
+        float alpha = g_drun29_iq_filt_alpha;
+        if (alpha <= 0.0f || alpha > 1.0f) {
+            alpha = 1.0f;
+        }
+        if (s_iq_filt_init == 0u) {
+            g_drun29_iq_filt_ma = g_drun29_iq_ma;
+            s_iq_filt_init = 1u;
+        } else {
+            g_drun29_iq_filt_ma += alpha
+                                   * (g_drun29_iq_ma - g_drun29_iq_filt_ma);
+        }
+    }
     g_foc_id_ma = g_drun29_id_ma;
     g_foc_iq_ma = g_drun29_iq_ma;
     Drun29_PpFeed(id, iq);

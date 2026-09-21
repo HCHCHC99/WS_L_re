@@ -85,8 +85,14 @@ static void CommRunner_StopFocModes(void)
     if (g_drun29_running) {
         Foc_Drun29_Stop();
     }
+    if (g_drun41_running) {
+        Foc_Drun41_Stop();
+    }
     if (g_speed40_running) {
         Foc_Speed40_Stop();
+    }
+    if (g_smo45_running) {
+        Foc_Smo45_Stop();
     }
     if (g_foc_mode == FOC_MODE_ALIGN) {
         Foc_Stop();
@@ -197,11 +203,25 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         RUNNER_DBG("DRUN (mode 29, run-only)");
         break;
 
+    case COMM_RUNNER_DRUN41:
+        CommRunner_StopFocModes();
+        Commutation_Stop();
+        Foc_Drun41_Start();
+        RUNNER_DBG("DRUN41 (mode 41, current FF)");
+        break;
+
     case COMM_RUNNER_SPEED_FOC:
         CommRunner_StopFocModes();
         Commutation_Stop();
         Foc_Speed40_Start();
         RUNNER_DBG("SPEED_FOC (mode 40)");
+        break;
+
+    case COMM_RUNNER_SMO45:
+        CommRunner_StopFocModes();
+        Commutation_Stop();
+        Foc_Smo45_Start();
+        RUNNER_DBG("SMO45 (mode 45)");
         break;
 
     default:

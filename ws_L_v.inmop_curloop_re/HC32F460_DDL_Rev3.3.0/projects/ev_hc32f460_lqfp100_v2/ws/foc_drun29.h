@@ -30,6 +30,7 @@ extern "C" {
 #define DRUN29_PI_KI             300.0f
 #define DRUN29_PI_UMAX_V         3.5f
 #define DRUN29_ITERM_MAX_V       3.2f
+#define DRUN29_IQ_FILT_ALPHA     0.10f
 #define DRUN29_I_REF_MA          500.0f
 #define DRUN29_I_RAMP_MA_S       0.0f
 #define DRUN29_ENC_DELTA_MAX     32
@@ -71,6 +72,8 @@ extern volatile int32_t  g_drun29_diff_deg;
 extern volatile int32_t  g_drun29_rotor_count;
 extern volatile float    g_drun29_id_ma;
 extern volatile float    g_drun29_iq_ma;
+extern volatile float    g_drun29_iq_filt_ma;
+extern volatile float    g_drun29_iq_filt_alpha;
 extern volatile float    g_drun29_id_pp_ma;
 extern volatile float    g_drun29_iq_pp_ma;
 extern volatile float    g_drun29_id_mean_ma;

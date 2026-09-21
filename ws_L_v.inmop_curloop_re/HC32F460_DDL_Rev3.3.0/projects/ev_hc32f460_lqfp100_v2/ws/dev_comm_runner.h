@@ -30,6 +30,8 @@ typedef enum {
     COMM_RUNNER_DCAL       = 24, /* mode 28 系校准专用（零偏窗+BETA+ALPHA+锁offset -> 自动回 0） */
     COMM_RUNNER_DRUN       = 29, /* mode 28 系纯电流环（复用已锁 offset/零偏，直接进 RUN） */
     COMM_RUNNER_SPEED_FOC  = 40, /* mode 40 编码器 FOC 速度/电流双闭环 */
+    COMM_RUNNER_SMO45      = 45, /* mode 45 SMO+PLL 无感（第 1 步 = 复刻 mode 40 + 自动转速 profile） */
+    COMM_RUNNER_DRUN41     = 41, /* mode 41 纯电流环 + 可选 dq 前馈实验 */
     COMM_RUNNER_FOC_ALIGN  = 23, /* FOC 对齐校准 */
     COMM_RUNNER_ZIZENG     = 30, /* 磁场角度自增拖动模式 */
     COMM_RUNNER_IQ_PI      = 31, /* PI 电流环模式（需先跑 mode 30 锁偏移） */

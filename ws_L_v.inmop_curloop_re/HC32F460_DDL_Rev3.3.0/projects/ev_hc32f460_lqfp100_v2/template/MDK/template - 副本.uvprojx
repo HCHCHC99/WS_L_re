@@ -1049,9 +1049,24 @@
               <FilePath>..\..\ws\foc_drun29.c</FilePath>
             </File>
             <File>
+              <FileName>foc_drun41.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_drun41.c</FilePath>
+            </File>
+            <File>
               <FileName>foc_speed40.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_speed40.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_smo45.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_smo45.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_smo.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_smo.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -2100,9 +2115,24 @@
               <FilePath>..\..\ws\foc_drun29.c</FilePath>
             </File>
             <File>
+              <FileName>foc_drun41.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_drun41.c</FilePath>
+            </File>
+            <File>
               <FileName>foc_speed40.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_speed40.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_smo45.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_smo45.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_smo.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_smo.c</FilePath>
             </File>
           </Files>
         </Group>

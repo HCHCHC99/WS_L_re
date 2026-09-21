@@ -758,6 +758,42 @@ void I_DeInit(void)
     I_DEBUG("Deinitialized");
 }
 
+/**
+ * @brief  Noise test: disable current sampling but keep callbacks/config.
+ */
+void I_StopSampling(void)
+{
+    if (!s_bIInitialized || (g_i_running == 0U)) {
+        return;
+    }
+
+    g_i_running = 0U;
+    ADC_IntCmd(I_ADC_UNIT, I_ADC_INT_TYPE, DISABLE);
+    NVIC_DisableIRQ(I_ADC_IRQn);
+    NVIC_ClearPendingIRQ(I_ADC_IRQn);
+    ADC_TriggerCmd(I_ADC_UNIT, I_ADC_SEQ, DISABLE);
+
+    I_DEBUG("Sampling paused");
+}
+
+/**
+ * @brief  Noise test: re-enable current sampling after I_StopSampling().
+ */
+void I_StartSampling(void)
+{
+    if (!s_bIInitialized || (g_i_running != 0U)) {
+        return;
+    }
+
+    ADC_TriggerCmd(I_ADC_UNIT, I_ADC_SEQ, ENABLE);
+    NVIC_ClearPendingIRQ(I_ADC_IRQn);
+    NVIC_EnableIRQ(I_ADC_IRQn);
+    ADC_IntCmd(I_ADC_UNIT, I_ADC_INT_TYPE, ENABLE);
+    g_i_running = 1U;
+
+    I_DEBUG("Sampling resumed");
+}
+
 /*******************************************************************************
  * API — Data access
  ******************************************************************************/

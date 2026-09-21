@@ -13,15 +13,15 @@
             "state": {
               "type": "canvas",
               "state": {
-                "file": "FOC电流环PI计算流程图.canvas",
+                "file": "FOC模式41前馈原理流程图.canvas",
                 "viewState": {
-                  "x": -57.794367745124575,
-                  "y": 1236.7745281162424,
-                  "zoom": 1.1102230246251565e-16
+                  "x": 26.882528542182683,
+                  "y": 742.0424085172524,
+                  "zoom": -0.41078947341332944
                 }
               },
               "icon": "lucide-layout-dashboard",
-              "title": "FOC电流环PI计算流程图"
+              "title": "FOC模式41前馈原理流程图"
             }
           }
         ]
@@ -193,6 +193,7 @@
   },
   "active": "5b078cf78a2d5c10",
   "lastOpenFiles": [
+    "FOC电流环PI计算流程图.canvas",
     "FOC模式20流程图.canvas",
     "FOC模式25流程图.canvas",
     "FOC模式32流程图.canvas",

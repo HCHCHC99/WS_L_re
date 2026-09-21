@@ -44,7 +44,9 @@ void Foc_Init(void)
     Foc_IqPi_InitPids();
     Foc_Dci_InitPids();
     Foc_Drun29_InitPids();
+    Foc_Drun41_InitPids();
     Foc_Speed40_InitPids();
+    Foc_Smo45_InitPids();
     I_RegisterFocCallback(Foc_Isr);
     s_bInited = 1u;
 }
@@ -68,7 +70,7 @@ void Foc_Isr(const stc_i_data_t *pData)
     if (g_foc_mode == FOC_MODE_ALIGN) {
         /* mode 20 校准优先（g_cal_running 托管），mode 25 次之
          * （g_calang_running 托管），mode 26 再次（g_olf_running 托管），
-         * mode 27 再次之（g_dcl_running 托管），随后 mode 24/28/29
+         * mode 27 再次之（g_dcl_running 托管），随后 mode 24/28/29/41
          * 各自使用独立 running 标志，否则 mode 23 对齐。 */
         if (g_cal_running) {
             Foc_Cal_Step(pData);
@@ -84,8 +86,12 @@ void Foc_Isr(const stc_i_data_t *pData)
             Foc_Dci_Step(pData);
         } else if (g_drun29_running) {
             Foc_Drun29_Step(pData);
+        } else if (g_drun41_running) {
+            Foc_Drun41_Step(pData);
         } else if (g_speed40_running) {
             Foc_Speed40_Step(pData);
+        } else if (g_smo45_running) {
+            Foc_Smo45_Step(pData);
         } else {
             Foc_Align_Step(pData);
         }

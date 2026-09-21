@@ -33,6 +33,7 @@ extern "C" {
 #define SPEED40_PI_KI             300.0f
 #define SPEED40_PI_UMAX_V         3.5f
 #define SPEED40_ITERM_MAX_V       3.2f
+#define SPEED40_IQ_FILT_ALPHA     0.10f
 
 /* Outer speed PI output is a signed q-axis current reference in mA. */
 #define SPEED40_SPD_KP_MA_PER_RPM       1.8f
@@ -71,6 +72,8 @@ extern volatile float    g_speed40_id_ref_ma;
 extern volatile float    g_speed40_iq_ref_ma;
 extern volatile float    g_speed40_id_ma;
 extern volatile float    g_speed40_iq_ma;
+extern volatile float    g_speed40_iq_filt_ma;
+extern volatile float    g_speed40_iq_filt_alpha;
 extern volatile float    g_speed40_vd;
 extern volatile float    g_speed40_vq;
 extern volatile uint8_t  g_speed40_vsat;

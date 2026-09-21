@@ -25,6 +25,9 @@
 #include "foc_dci.h"
 #include "foc_dcal24.h"
 #include "foc_drun29.h"
+#include "foc_drun41.h"
+#include "foc_smo45.h"
+#include "foc_smo.h"
 #include "foc_calib.h"
 #include "dev_comm_runner.h"   /* CommRunner_SetMode（mode 20 完成自动回 mode 0） */
 #include "encoder.h"
@@ -110,6 +113,14 @@ void Foc_Obs_Task(void)
      * mode 0 下维持 g_foc_if_rotor_rad / g_foc_mech_rad 实时更新；
      * 活跃模式下 ISR 会覆盖 g_foc_if_rotor_rad，此写入无害。 */
     Foc_Core_UpdateAngleObs();
+
+    /* ---- mode45 SMO 旁观诊断（sqrtf/atan2f 只在主循环，不进 ISR） ----
+     * omega_e = 机械 rpm -> 电角速度 rad/s（×2π/60×极对数） */
+    if (g_smo45_running) {
+        float smo_omega_e = g_smo45_speed_filt_rpm * 0.10472f
+                          * (float)FOC_POLE_PAIRS;
+        Foc_Smo_Diag((float)g_smo45_rotor_deg, smo_omega_e);
+    }
 
     /* ---- FOC 故障打印 ---- */
     {
@@ -475,6 +486,47 @@ void Foc_Obs_Task(void)
                        (int)g_drun29_ed_pp_ma, (int)g_drun29_eq_pp_ma,
                        (int)(DRUN29_ERR_WIN_MS / 1000u),
                        g_drun29_vsat ? " [SAT]" : "");
+        }
+    }
+
+    /* ---- mode 41 current feed-forward loop events ---- */
+    if (g_drun41_evt != 0u) {
+        uint8_t evt = g_drun41_evt;
+        g_drun41_evt = 0u;
+        switch (evt) {
+        case DRUN41_EVT_RAMP_DONE:
+            DRUN41_LOG("ramp done dlt=%d deg spd=%d mHz rot=%d cnt",
+                       (int)g_drun41_dlt_now_deg,
+                       (int)(g_drun41_speed_hz * 1000.0f),
+                       (int)g_drun41_rotor_count);
+            break;
+        case DRUN41_EVT_OC:
+            DRUN41_LOG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+            CommRunner_SetMode(COMM_RUNNER_STOP);
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (g_drun41_running && (g_drun41_state == DRUN41_STEP_RUN)) {
+        static uint32_t s_last_drun41_dbg = 0u;
+        uint32_t now = tickTimer_GetCount();
+        if ((now - s_last_drun41_dbg) >= 200u) {
+            s_last_drun41_dbg = now;
+            DRUN41_LOG("dlt=%d deg spd=%d mHz idRef=%d iqRef=%d mA id=%d iq=%d mA vdPi=%d vqPi=%d vdFF=%d vqFF=%d mV sat=%d ff=%u",
+                       (int)g_drun41_dlt_now_deg,
+                       (int)(g_drun41_speed_hz * 1000.0f),
+                       (int)g_drun41_id_ref_ma,
+                       (int)g_drun41_iq_ref_ma,
+                       (int)g_drun41_id_ma,
+                       (int)g_drun41_iq_ma,
+                       (int)(g_drun41_vd_pi_v * 1000.0f),
+                       (int)(g_drun41_vq_pi_v * 1000.0f),
+                       (int)(g_drun41_vd_ff_v * 1000.0f),
+                       (int)(g_drun41_vq_ff_v * 1000.0f),
+                       (int)g_drun41_vsat,
+                       (unsigned)g_drun41_ff_enable);
         }
     }
 

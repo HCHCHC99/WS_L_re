@@ -255,6 +255,11 @@ extern volatile uint16_t g_i_calib_zero_w;
 void I_Init(void);
 void I_DeInit(void);
 
+/* Noise-diagnosis helpers: pause/resume only the sampling IRQ and hardware
+ * trigger. Unlike I_DeInit(), the registered callbacks are preserved. */
+void I_StopSampling(void);
+void I_StartSampling(void);
+
 /* Zero-offset calibration: blocks 500ms, samples all 3 phases, stores offsets */
 void I_Calibrate(void);
 

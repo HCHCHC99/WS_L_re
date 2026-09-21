@@ -36,6 +36,8 @@ volatile float    g_speed40_id_ref_ma         = 0.0f;
 volatile float    g_speed40_iq_ref_ma         = 0.0f;
 volatile float    g_speed40_id_ma             = 0.0f;
 volatile float    g_speed40_iq_ma             = 0.0f;
+volatile float    g_speed40_iq_filt_ma        = 0.0f;
+volatile float    g_speed40_iq_filt_alpha     = SPEED40_IQ_FILT_ALPHA;
 volatile float    g_speed40_vd                = 0.0f;
 volatile float    g_speed40_vq                = 0.0f;
 volatile uint8_t  g_speed40_vsat              = 0u;
@@ -99,6 +101,7 @@ static uint8_t  s_encoder_initialized;
 static float    s_zero_u_ma;
 static float    s_zero_v_ma;
 static float    s_zero_w_ma;
+static uint8_t  s_iq_filt_init;
 
 static int32_t  s_speed_acc_cnt;
 static uint32_t s_speed_win_tick;
@@ -115,6 +118,7 @@ static void Speed40_ResetLoopState(void)
     s_zero_u_ma = 0.0f;
     s_zero_v_ma = 0.0f;
     s_zero_w_ma = 0.0f;
+    s_iq_filt_init = 0u;
     s_speed_acc_cnt = 0;
     s_speed_win_tick = 0u;
     s_speed_filt_init = 0u;
@@ -137,6 +141,7 @@ static void Speed40_ClearObservables(void)
     g_speed40_iq_ref_ma = 0.0f;
     g_speed40_id_ma = 0.0f;
     g_speed40_iq_ma = 0.0f;
+    g_speed40_iq_filt_ma = 0.0f;
     g_speed40_vd = 0.0f;
     g_speed40_vq = 0.0f;
     g_speed40_vsat = 0u;
@@ -149,6 +154,7 @@ static void Speed40_ClearCurrentFeedback(void)
 {
     g_speed40_id_ma = 0.0f;
     g_speed40_iq_ma = 0.0f;
+    g_speed40_iq_filt_ma = 0.0f;
     g_speed40_id_ref_ma = 0.0f;
     g_speed40_iq_ref_ma = 0.0f;
     g_speed40_vd = 0.0f;
@@ -368,6 +374,19 @@ void Foc_Speed40_Step(const stc_i_data_t *pData)
     Foc_Core_GetDq(&data, rotor_rad, &id, &iq);
     g_speed40_id_ma = id * 1000.0f;
     g_speed40_iq_ma = iq * 1000.0f;
+    {
+        float alpha = g_speed40_iq_filt_alpha;
+        if (alpha <= 0.0f || alpha > 1.0f) {
+            alpha = 1.0f;
+        }
+        if (s_iq_filt_init == 0u) {
+            g_speed40_iq_filt_ma = g_speed40_iq_ma;
+            s_iq_filt_init = 1u;
+        } else {
+            g_speed40_iq_filt_ma += alpha
+                                    * (g_speed40_iq_ma - g_speed40_iq_filt_ma);
+        }
+    }
     g_foc_id_ma = g_speed40_id_ma;
     g_foc_iq_ma = g_speed40_iq_ma;
 
