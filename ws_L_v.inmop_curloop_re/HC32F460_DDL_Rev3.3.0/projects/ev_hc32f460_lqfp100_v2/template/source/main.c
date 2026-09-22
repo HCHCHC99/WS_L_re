@@ -264,9 +264,10 @@ int main(void)
          * ch13 理论幅值 ωψf (V)   ch14 实际转速 (rpm)
          * ⚠ ch3~8 为电频率正弦（2600rpm=433Hz），VOFA ~140Hz 帧率必然混叠
          *   （呈 max/min 交替假象），仅作信号存在性检查；SMO 验收看 ch9~13 直流量。
-         * 【mode45 PLL 验收面板】（运行 mode45 且 wave_mode=2 时启用，8 通道）
-         * ch0 编码器转速 ch1 PLL 转速估计 ch2 PLL 角度误差滤波(≈0) ch3 角度误差原始
-         * ch4 SMO 相位差滤波(≈−17°对比) ch5 鉴相残差滤波 ch6 |e_hat| ch7 转速估计误差
+         * 【mode45 PLL/无感验收面板】（运行 mode45 且 wave_mode=2 时启用，16 通道）
+         * ch0 enc原始转速 ch1 enc滤波 ch2 ω̂原始 ch3 ω̂低通(无感反馈) ch4 转速差原始
+         * ch5 转速差滤波 ch6 角差原始 ch7 角差滤波 ch8 iq ch9 补偿角δ̂
+         * ch10 sl锁存 ch11 |e_hat| ch12 sE(SMO同拍角差) ch13 目标转速
          * 【通用布局（其余模式，17 通道）】
          * CH0~2  : 三相原始电流（含上电校准残余零偏，mode 0 下用于观察温漂/噪声）
          * CH3    : 静止系 ialpha（瞬时值，无 EMA）
@@ -287,32 +288,37 @@ int main(void)
         if (!Usart3_Vofa_IsTxBusy()) {
             if (g_smo45_running) {
                 if (g_smo45_wave_mode == 2) {
-                    /*===== mode45 PLL 验收面板（8ch，Watch 置 g_smo45_wave_mode=2）=====
-                     * 核心判据：锁定后 ch2 均值 ≈ SMO 已知滞后（1500rpm ≈ −17.5°，
-                     * PLL 锁 e_hat 相位，滞后保留在均值里，后续补偿角解决），
-                     * 且摆动 << SMO 的 ±9.5° 马鞍纹波（6f 被窄带跟踪滤掉）；
-                     * ch1 转速估计应贴合 ch0 编码器测速。
-                     * ch0 编码器实际转速 (rpm)      ch1 PLL 转速估计 (rpm)
-                     * ch2 PLL 角度误差滤波 (deg)    ← 锁定后 ≈−17.5° 平稳
-                     * ch3 PLL 角度误差原始 (deg，ISR 同拍比较)
-                     * ch4 SMO 相位差滤波 (deg)      ← 对比：约 −17°，看摆动差
-                     * ch5 PLL 鉴相残差滤波 (deg)    ← 锁定质量，越小越稳
-                     * ch6 |e_hat| 幅值 (V)          ch7 转速估计误差 (rpm) = ch1−ch0 */
-                    int32_t cur[8];
+                    /*===== mode45 PLL/无感验收面板（16ch，g_smo45_wave_mode=2）=====
+                     * 转速链：ch0 enc原始 ch1 enc滤波 ch2 ω̂原始 ch3 ω̂低通(无感反馈)
+                     *         ch4 转速差原始(ch2−ch0) ch5 转速差滤波(ch3−ch1)
+                     * 角度链：ch6 角差原始(同拍θ_park−enc) ch7 角差滤波
+                     *         ch9 补偿角δ̂ ch12 sE(同拍SMO atan2角差)
+                     * 工况：ch8 iq ch10 sl无感锁存 ch11 |e_hat| ch13 目标转速
+                     * 注：原始转子角为 0~360 锯齿+wrap，VOFA 采样下不可读，
+                     *     不设通道（RTT [PLL] 行 th=/ec= 可看原始值）。 */
+                    int32_t cur[16];
+                    float pll_emag = sqrtf(g_smo_e_alpha_hat_v * g_smo_e_alpha_hat_v
+                                         + g_smo_e_beta_hat_v * g_smo_e_beta_hat_v);
 
-                    cur[0] = (int32_t)(g_smo45_speed_filt_rpm * 1000.0f);        /* mrpm -> rpm */
-                    cur[1] = (int32_t)(g_pll_omega_hat_rpm * 1000.0f);           /* mrpm -> rpm */
-                    cur[2] = (int32_t)(g_pll_diag_theta_err_filt_deg * 1000.0f); /* mdeg -> deg */
-                    cur[3] = (int32_t)(g_pll_diag_theta_err_deg * 1000.0f);      /* mdeg -> deg */
-                    cur[4] = (int32_t)(g_smo_diag_theta_err_filt_deg * 1000.0f); /* mdeg -> deg */
-                    cur[5] = (int32_t)(g_pll_diag_err_filt_deg * 1000.0f);       /* mdeg -> deg */
-                    {
-                        float pll_e_mag = sqrtf(g_smo_e_alpha_hat_v * g_smo_e_alpha_hat_v
-                                              + g_smo_e_beta_hat_v * g_smo_e_beta_hat_v);
-                        cur[6] = (int32_t)(pll_e_mag * 1000.0f);                 /* mV -> V */
-                    }
-                    cur[7] = (int32_t)((g_pll_omega_hat_rpm - g_smo45_speed_filt_rpm) * 1000.0f);
-                    Usart3_Vofa_SendScaled(cur, 8, USART3_VOFA_SCALE_MILLI);
+                    cur[0]  = (int32_t)(g_smo45_speed_meas_rpm * 1000.0f);   /* mrpm -> rpm */
+                    cur[1]  = (int32_t)(g_smo45_speed_filt_rpm * 1000.0f);   /* mrpm -> rpm */
+                    cur[2]  = (int32_t)(g_pll_omega_hat_rpm * 1000.0f);      /* mrpm -> rpm */
+                    cur[3]  = (int32_t)(g_pll_omega_out_rpm * 1000.0f);      /* mrpm -> rpm */
+                    cur[4]  = (int32_t)((g_pll_omega_hat_rpm
+                                       - g_smo45_speed_meas_rpm) * 1000.0f); /* mrpm -> rpm */
+                    cur[5]  = (int32_t)((g_pll_omega_out_rpm
+                                       - g_smo45_speed_filt_rpm) * 1000.0f); /* mrpm -> rpm */
+                    cur[6]  = (int32_t)(g_pll_diag_theta_err_deg * 1000.0f); /* mdeg -> deg */
+                    cur[7]  = (int32_t)(g_pll_diag_theta_err_filt_deg * 1000.0f);
+                    cur[8]  = (int32_t)(g_smo45_iq_filt_ma);                 /* mA -> A */
+                    cur[9]  = (int32_t)(g_pll_comp_deg_out * 1000.0f);       /* mdeg -> deg */
+                    cur[10] = (int32_t)(g_smo45_sl_active * 1000.0f);        /* 0/1 */
+                    cur[11] = (int32_t)(pll_emag * 1000.0f);                 /* mV -> V */
+                    cur[12] = (int32_t)(g_pll_diag_smo_err_deg * 1000.0f);   /* mdeg -> deg */
+                    cur[13] = (int32_t)(g_smo45_speed_target_rpm * 1000.0f); /* mrpm -> rpm */
+                    cur[14] = 0;
+                    cur[15] = 0;
+                    Usart3_Vofa_SendScaled(cur, 16, USART3_VOFA_SCALE_MILLI);
                 } else if (g_smo45_wave_mode) {
                     /*===== mode45 波形窄帧（7ch=32B）：Watch 置 g_smo45_wave_mode=1 =====
                      * 921600 波特 → 帧率 ~2.9kHz → 2600rpm(433Hz) 约 6.6 点/周期
