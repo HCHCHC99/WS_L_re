@@ -119,10 +119,6 @@
       <TargetDriverDllRegistry>
         <SetRegEntry>
           <Number>0</Number>
-          <Key>DLGUARM</Key>
-        </SetRegEntry>
-        <SetRegEntry>
-          <Number>0</Number>
           <Key>UL2CM3</Key>
           <Name>UL2CM3(-S0 -C0 -P0 ) -FN2 -FC1000 -FD1FFF8000 -FF0HC32F46x -FF1HC32F46x_otp -FL0200000 -FL13FC -FS00 -FS13000C00 -FP0($$Device:HC32F460JETA$FlashARM\HC32F46x.FLM) -FP1($$Device:HC32F460JETA$FlashARM\HC32F46x_otp.FLM)</Name>
         </SetRegEntry>
@@ -380,6 +376,26 @@
           <count>16</count>
           <WinNumber>2</WinNumber>
           <ItemText>g_smo45_auto_ramp</ItemText>
+        </Ww>
+        <Ww>
+          <count>17</count>
+          <WinNumber>2</WinNumber>
+          <ItemText>g_smo_emf_ok</ItemText>
+        </Ww>
+        <Ww>
+          <count>18</count>
+          <WinNumber>2</WinNumber>
+          <ItemText>g_smo_jdg_fail</ItemText>
+        </Ww>
+        <Ww>
+          <count>19</count>
+          <WinNumber>2</WinNumber>
+          <ItemText>g_smo_jdg_ratio_filt</ItemText>
+        </Ww>
+        <Ww>
+          <count>20</count>
+          <WinNumber>2</WinNumber>
+          <ItemText>g_smo_diag_theta_err_filt_deg</ItemText>
         </Ww>
       </WatchWindow2>
       <Tracepoint>
@@ -1161,7 +1177,7 @@
 
   <Group>
     <GroupName>Adp</GroupName>
-    <tvExp>0</tvExp>
+    <tvExp>1</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -1813,7 +1829,7 @@
 
   <Group>
     <GroupName>ws</GroupName>
-    <tvExp>1</tvExp>
+    <tvExp>0</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -2186,6 +2202,18 @@
       <bDave2>0</bDave2>
       <PathWithFileName>..\..\ws\foc_smo.c</PathWithFileName>
       <FilenameWithoutPath>foc_smo.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>10</GroupNumber>
+      <FileNumber>129</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>..\..\ws\foc_pll.c</PathWithFileName>
+      <FilenameWithoutPath>foc_pll.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>

@@ -28,11 +28,13 @@
 #include "foc_drun41.h"
 #include "foc_smo45.h"
 #include "foc_smo.h"
+#include "foc_pll.h"
 #include "foc_calib.h"
 #include "dev_comm_runner.h"   /* CommRunner_SetMode（mode 20 完成自动回 mode 0） */
 #include "encoder.h"
 #include "motor_config.h"
 #include "rtt_log.h"
+#include <stdio.h>
 #include "TickTimer.h"
 
 /*******************************************************************************
@@ -103,6 +105,20 @@ void Foc_Obs_IqpiRecordStep(iqpi_step_t s)
 }
 
 /*******************************************************************************
+ * Pll_Fmt1000 - float 转 "SIII.DDD" 定点字符串（×1000，负数带符号）
+ * 工程 printf 不支持 %f，PLL 数据打印统一走此转换。buf 需 ≥14 字节。
+ ******************************************************************************/
+static const char *Pll_Fmt1000(char *buf, float v)
+{
+    int32_t x = (int32_t)(v * 1000.0f + ((v >= 0.0f) ? 0.5f : -0.5f));
+    int32_t a = (x < 0) ? -x : x;
+
+    (void)snprintf(buf, 14, "%s%d.%03d",
+                   (x < 0) ? "-" : "", (int)(a / 1000), (int)(a % 1000));
+    return buf;
+}
+
+/*******************************************************************************
  * Foc_Obs_Task - 观察任务（主循环每圈一次；ISR 内禁止调用）
  *   以下六段均自 main.c 原样迁移，打印格式与处理逻辑未改动。
  ******************************************************************************/
@@ -120,6 +136,57 @@ void Foc_Obs_Task(void)
         float smo_omega_e = g_smo45_speed_filt_rpm * 0.10472f
                           * (float)FOC_POLE_PAIRS;
         Foc_Smo_Diag((float)g_smo45_rotor_deg, smo_omega_e);
+
+        /* ---- mode45 PLL 旁观诊断（只滤波；角度比较已在 ISR 同拍完成） ---- */
+        Foc_Pll_Diag();
+
+        /* ---- mode45 PLL 数据快照 RTT 打印（5ms 节流，供复制粘贴判读） ----
+         * 工程 printf 不支持 %f：全部经 Pll_Fmt1000 转"整型.整型"定点串。
+         * t=tick(ms)；th/ec 原始角 [0,360) 有 wrap 跳变属正常；
+         * e 与 sE 同拍同基准（PLL 角差 vs SMO atan2 角差）→ 直接对比裁决；
+         * enc=编码器转速 / wE=PLL 转速估计 → 振荡是否真实存在。 */
+        {
+            static uint32_t s_pll_print_t0 = 0;
+            uint32_t now = (uint32_t)tickTimer_GetCount();
+            char b1[14], b2[14], b3[14], b4[14], b5[14], b6[14], b7[14], b8[14], b9[14];
+
+            if ((uint32_t)(now - s_pll_print_t0) >= 5u) {
+                s_pll_print_t0 = now;
+                OBS_DBG("[PLL] t=%u e=%s sE=%s th=%s ec=%s wE=%s enc=%s iq=%s g=%s",
+                        (unsigned)now,
+                        Pll_Fmt1000(b1, g_pll_diag_theta_err_deg),
+                        Pll_Fmt1000(b2, g_pll_diag_smo_err_deg),
+                        Pll_Fmt1000(b3, g_pll_theta_rotor_deg),
+                        Pll_Fmt1000(b4, (float)g_smo45_rotor_deg),
+                        Pll_Fmt1000(b5, g_pll_omega_hat_rpm),
+                        Pll_Fmt1000(b6, g_smo45_speed_filt_rpm),
+                        Pll_Fmt1000(b7, (float)g_smo45_iq_filt_ma),
+                        Pll_Fmt1000(b8, g_pll_err_rad * 57.2958f));
+            }
+        }
+
+        /* ---- SMO 反电动势判定结果跳变事件（ok/fail 由 foc_smo.c 维护，
+         *      mode45 每次 Start 经 Foc_Smo_Reset 重新判定） ---- */
+        {
+            static uint8_t s_smo_emf_ok_prev = 0u;
+
+            if (g_smo_emf_ok != s_smo_emf_ok_prev) {
+                s_smo_emf_ok_prev = g_smo_emf_ok;
+                if (g_smo_emf_ok) {
+                    OBS_DBG("SMO EMF judge: OK (ratio=%d%% phase=%ddeg hold=%dms)",
+                            (int)(g_smo_jdg_ratio_filt * 100.0f),
+                            (int)g_smo_jdg_phase_filt_deg,
+                            (int)g_smo_jdg_hold_ms);
+                } else if (g_smo_jdg_fail != 0u) {
+                    OBS_DBG("SMO EMF judge: FAIL mask=0x%02X%s%s%s",
+                            (int)g_smo_jdg_fail,
+                            ((g_smo_jdg_fail & 0x01u) ? " [rpm<min]" : ""),
+                            ((g_smo_jdg_fail & 0x02u) ? " [ratio]" : ""),
+                            ((g_smo_jdg_fail & 0x04u) ? " [phase]" : ""));
+                }
+                /* fail==0 的掉零 = Stop/Reset 路径，不打印 */
+            }
+        }
     }
 
     /* ---- FOC 故障打印 ---- */

@@ -12,12 +12,15 @@
  * 零改动，SMO 输入 = 上一拍指令电压 + 同源 Clarke 电流，输出
  * e_alpha_hat/e_beta_hat 与诊断量（|e| vs ωψf、atan2 角 vs 编码器角）。
  *
- * 第 2 步（待做）：PLL 从 e_hat 提取 theta_hat/omega_hat。
+ * 第 2 步（当前）：PLL 旁观（foc_pll.c，独立模块）—— 消费 SMO 滤波后
+ * e_hat，输出 theta_hat/omega_hat 与编码器对比；预期吃掉 SMO 的恒定
+ * 滞后与 6f 马鞍纹波（theta_err_pll ≈ 0）。编码器闭环控制路径仍零改动。
  *******************************************************************************
  */
 
 #include "foc_smo45.h"
 #include "foc_smo.h"
+#include "foc_pll.h"
 #include "foc_dcal24.h"
 #include "foc_math.h"
 #include "tmr4_pwm.h"
@@ -309,6 +312,7 @@ void Foc_Smo45_Start(void)
     Smo45_ResetLoopState();
     Smo45_ClearObservables();
     Foc_Smo_Reset();   /* SMO 旁观者状态清零（观测电流/e_hat/诊断） */
+    Foc_Pll_Reset();   /* PLL 旁观者状态清零（θ̂/ω̂/诊断） */
     s_calibration = calibration;
     s_zero_u_ma = calibration.zero_u_ma;
     s_zero_v_ma = calibration.zero_v_ma;
@@ -472,6 +476,10 @@ void Foc_Smo45_Step(const stc_i_data_t *pData)
      * 喂平均值——单喂 v_prev 会引入 ~1 拍的传输延迟（1500rpm 时 ~9° 系统滞后） */
     Foc_Smo_Step((s_v_alpha_prev + valpha) * 0.5f,
                  (s_v_beta_prev + vbeta) * 0.5f, ialpha_s, ibeta_s);
+    /* PLL 旁观者：消费 SMO 滤波后 e_hat（独立模块，见 foc_pll.h）；
+     * 紧跟同拍角度比较（θ̂ 每拍转 ~9°电角，跨拍比较会撕裂出 ±9° 假差） */
+    Foc_Pll_Step(g_smo_e_alpha_hat_v, g_smo_e_beta_hat_v);
+    Foc_Pll_Compare(rotor_rad * SMO45_RAD2DEG);
     s_v_alpha_prev = valpha;   /* 缓冲本拍指令，下一拍参与平均 */
     s_v_beta_prev = vbeta;
     g_foc_theta_rad = rotor_rad;

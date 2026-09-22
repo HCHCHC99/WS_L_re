@@ -92,6 +92,37 @@ extern volatile float g_smo_theory_alpha_v;    /* 理论 e_alpha (V) */
 extern volatile float g_smo_theory_beta_v;     /* 理论 e_beta (V) */
 
 /*---------------------------------------------------------------------------
+ * 反电动势自动判定（Foc_Smo_Diag 末尾执行，每次 mode45 Start 经
+ * Foc_Smo_Reset 重新判定）——"四个直流判据恒定"的代码化：
+ *   前提：机械转速 >= rpm_min（固定 k 的信噪比窗口下限，低于=未判定）
+ *   C1：幅值比慢速均值 ∈ [ratio_min, ratio_max]（1500rpm 实测中心≈0.98）
+ *   C2：相位慢速均值 ∈ [phase_min, phase_max]（恒定滞后 PLL 会吃掉，只抓
+ *       相位翻转/滞后过大，不卡"必须≈−17°"）
+ *   慢速均值：两级 EMA（theta_err_filt α=0.1 → 判定级 α=jdg_filt_alpha），
+ *   马鞍纹波/混叠拍频对判定免疫；恒定：三项连续满足 hold_ms 才置 OK，
+ *   任一拍破窗立即清零重来。验收匀速稳态，不验收动态。
+ *---------------------------------------------------------------------------*/
+extern volatile float g_smo_jdg_rpm_min;       /* 判定生效转速下限 (rpm)，默认 1300 */
+extern volatile float g_smo_jdg_ratio_min;     /* C1 幅值比下限，默认 0.85 */
+extern volatile float g_smo_jdg_ratio_max;     /* C1 幅值比上限，默认 1.08
+                                                * （1500rpm 实测中心≈0.98：|e_hat| 含
+                                                * 谐波/纹波能量，比纯基波理论 0.90 高） */
+extern volatile float g_smo_jdg_phase_min_deg; /* C2 相位下限 (deg)，默认 −45 */
+extern volatile float g_smo_jdg_phase_max_deg; /* C2 相位上限 (deg)，默认 +5 */
+extern volatile float g_smo_jdg_hold_ms;       /* 持续满足时长 (ms)，默认 1000 */
+extern volatile float g_smo_jdg_filt_alpha;    /* 判定级慢速 EMA 系数（幅值比/相位
+                                                * 共用），默认 0.02 */
+
+extern volatile uint8_t g_smo_emf_ok;          /* 判定结果：1=反电动势 OK */
+extern volatile uint8_t g_smo_jdg_fail;        /* 失败原因位掩码（不 OK 时看这里）：
+                                                *   bit0 = 转速未达生效下限（未判定）
+                                                *   bit1 = C1 幅值比越界
+                                                *   bit2 = C2 相位越界 */
+extern volatile float g_smo_jdg_ratio_filt;    /* 慢速幅值比（判定与打印用） */
+extern volatile float g_smo_jdg_phase_filt_deg;/* 慢速相位均值 (deg)，判定用；
+                                                * 稳态应 ≈−17°（1500rpm） */
+
+/*---------------------------------------------------------------------------
  * API
  *---------------------------------------------------------------------------*/
 void Foc_Smo_Reset(void);

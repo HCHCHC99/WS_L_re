@@ -18,6 +18,7 @@
 #include "foc_smo.h"
 #include "motor_config.h"
 #include "foc_core.h"      /* FOC_ISR_HZ（I.h 派生宏，随采样模式 10k/20k 自适应） */
+#include "TickTimer.h"     /* tickTimer_GetCount：判定 hold 计时（ms 级时基） */
 #include <math.h>
 
 #define SMO_TS_S        (1.0f / (float)FOC_ISR_HZ)
@@ -55,12 +56,36 @@ volatile float g_smo_diag_e_err_v       = 0.0f;
 volatile float g_smo_theory_alpha_v     = 0.0f;
 volatile float g_smo_theory_beta_v      = 0.0f;
 
+/* 反电动势自动判定（窗口默认值依据 1500rpm 实测：ratio 中心≈0.98、phase 均值≈−17.5°。
+ * ratio 实测比纯基波理论 0.90 高的原因：|e_hat|=sqrt(ea²+eb²) 把死区 6f 谐波与
+ * 切换纹波能量也计入幅值，而分母 ωψf 是纯基波 → 分子虚高 ≈7%）。
+ * 判定哲学：恒定滞后（−9°~−30°）PLL 都会吃掉，不妨碍可用；C2 只抓相位翻转
+ * （大正角）与滞后过大（模型/滤波严重不对），不卡"必须≈−17°"。 */
+volatile float g_smo_jdg_rpm_min        = 1300.0f;  /* k=4.6V 信噪比窗口下限 */
+volatile float g_smo_jdg_ratio_min      = 0.85f;
+volatile float g_smo_jdg_ratio_max      = 1.08f;
+volatile float g_smo_jdg_phase_min_deg  = -45.0f;
+volatile float g_smo_jdg_phase_max_deg  = 5.0f;
+volatile float g_smo_jdg_hold_ms        = 1000.0f;
+volatile float g_smo_jdg_filt_alpha     = 0.02f;  /* 判定用慢速 EMA（幅值比/相位共用）：
+                                                   * 一级滤波(theta_err_filt,0.1)后仍有
+                                                   * ±9.5°马鞍纹波+混叠拍频驻留，点值进
+                                                   * 窗口会来回破窗；二级慢速取均值免疫 */
+
+volatile uint8_t g_smo_emf_ok       = 0u;
+volatile uint8_t g_smo_jdg_fail     = 0u;
+volatile float g_smo_jdg_ratio_filt = 0.0f;
+volatile float g_smo_jdg_phase_filt_deg = 0.0f;
+
 /* 内部状态 */
 static float s_ih_alpha;    /* 观测器电流 α (A) */
 static float s_ih_beta;     /* 观测器电流 β (A) */
 static float s_e_f_alpha;   /* e_hat α 滤波状态 (V) */
 static float s_e_f_beta;    /* e_hat β 滤波状态 (V) */
 static float s_theta_err_f; /* theta_err 滤波状态 (deg)；稳态远离 ±180°，普通 EMA 即可 */
+static float s_ratio_f;     /* 幅值比慢速 EMA 状态（判定用） */
+static float s_phase_f;     /* 相位慢速 EMA 状态（判定用，级联在 theta_err_filt 之后） */
+static uint64_t s_jdg_hold_t0; /* 判据开始连续满足的时刻 (ms tick)，0=未在满足中 */
 
 void Foc_Smo_Reset(void)
 {
@@ -86,6 +111,13 @@ void Foc_Smo_Reset(void)
     g_smo_diag_e_err_v = 0.0f;
     g_smo_theory_alpha_v = 0.0f;
     g_smo_theory_beta_v = 0.0f;
+    s_ratio_f = 0.0f;
+    s_phase_f = 0.0f;
+    s_jdg_hold_t0 = 0u;
+    g_smo_emf_ok = 0u;
+    g_smo_jdg_fail = 0u;
+    g_smo_jdg_ratio_filt = 0.0f;
+    g_smo_jdg_phase_filt_deg = 0.0f;
 }
 
 void Foc_Smo_Step(float v_alpha, float v_beta, float i_alpha, float i_beta)
@@ -210,5 +242,48 @@ void Foc_Smo_Diag(float theta_enc_e_deg, float omega_e_rad_s)
     {
         float eq = g_smo_diag_e_on_q_v - expect;
         g_smo_diag_e_err_v = sqrtf(eq * eq + g_smo_diag_e_on_d_v * g_smo_diag_e_on_d_v);
+    }
+
+    /* ---- 反电动势自动判定（见 foc_smo.h 判定说明）----
+     * 前提+C1+C2 全部连续满足 hold_ms → g_smo_emf_ok=1；
+     * 任一拍破窗 → hold 计时清零、ok=0（恒定性要求，非粘滞锁存）。 */
+    {
+        float fa = g_smo_jdg_filt_alpha;
+        uint8_t fail = 0u;
+
+        if (fa <= 0.0f || fa > 1.0f) fa = 1.0f;
+        /* 二级慢速 EMA 取"均值"：一级滤波(theta_err_filt,α=0.1)后仍有 ±9.5°
+         * 马鞍纹波+混叠拍频驻留，点值进窗口会来回破窗；判定只关心均值 */
+        s_ratio_f += fa * (g_smo_diag_e_ratio - s_ratio_f);
+        g_smo_jdg_ratio_filt = s_ratio_f;
+        s_phase_f += fa * (g_smo_diag_theta_err_filt_deg - s_phase_f);
+        g_smo_jdg_phase_filt_deg = s_phase_f;
+
+        /* 前提：机械转速（ω_e rad/s → rpm：×60/2π/极对数 ≈ ×9.5493/pp） */
+        if (fabsf(omega_e_rad_s) * 9.5493f / (float)FOC_POLE_PAIRS < g_smo_jdg_rpm_min) {
+            fail |= 0x01u;
+        }
+        /* C1：慢速幅值比（1500rpm 实测中心 ≈0.98） */
+        if (s_ratio_f < g_smo_jdg_ratio_min || s_ratio_f > g_smo_jdg_ratio_max) {
+            fail |= 0x02u;
+        }
+        /* C2：慢速相位均值（合理滞后带内即过；抓翻转/过大滞后，不卡必须≈−17°） */
+        if (s_phase_f < g_smo_jdg_phase_min_deg || s_phase_f > g_smo_jdg_phase_max_deg) {
+            fail |= 0x04u;
+        }
+
+        if (fail == 0u) {
+            uint64_t now = tickTimer_GetCount();
+            if (s_jdg_hold_t0 == 0u) {
+                s_jdg_hold_t0 = now;
+            }
+            if ((float)(now - s_jdg_hold_t0) >= g_smo_jdg_hold_ms) {
+                g_smo_emf_ok = 1u;
+            }
+        } else {
+            s_jdg_hold_t0 = 0u;
+            g_smo_emf_ok = 0u;
+        }
+        g_smo_jdg_fail = fail;
     }
 }

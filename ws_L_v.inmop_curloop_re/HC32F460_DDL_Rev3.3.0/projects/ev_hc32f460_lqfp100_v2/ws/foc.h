@@ -47,6 +47,7 @@
 #include "foc_speed40.h"
 #include "foc_smo45.h"
 #include "foc_smo.h"
+#include "foc_pll.h"
 #include "foc_zizeng.h"
 #include "foc_iq_pi.h"
 #include "foc_lock_iq_pi.h"
