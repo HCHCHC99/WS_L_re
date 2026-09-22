@@ -50,6 +50,28 @@ extern volatile float g_pll_zeta;        /* 阻尼比，默认 0.9（0.707~1 稳
 extern volatile float g_pll_mag_min_v;   /* 弱信号冻结门限 (V)，默认 0.1 */
 
 /*---------------------------------------------------------------------------
+ * 滞后补偿 + 无感输出（Step 4）
+ *   补偿角 δ̂ = atan(ω̂/ω_c) + atan(ω̂·L/(k/φ)) + bias
+ *   （SMO 的 LPF 滞后 + 观测极点滞后，ω_c 取 e_hat EMA 精确 −3dB 截止，
+ *    参数直接读 foc_smo 的 Watch 变量，观测器调参自动跟随）
+ *   实测 1500rpm：δ̂ ≈ 16.3°（sE 同拍链验证），补偿后 theta_err_pll ≈ 0
+ *   已知残留：PLL 对不对称 6f 纹波的 sin 整流锁点偏置 ≈ +9°（随工况缓变，
+ *   用 bias 微调），Step 4 验证时观察
+ *---------------------------------------------------------------------------*/
+extern volatile uint8_t g_pll_comp_en;       /* 补偿角开关，默认 0 */
+extern volatile float g_pll_comp_bias_deg;   /* 补偿偏置 (deg)，默认 0，Watch 微调 */
+extern volatile float g_pll_wout_lpf_alpha;  /* ω̂ 输出低通 α（10kHz），默认 0.0125
+                                              * → fc≈20Hz：无感喂速度环前压掉 25Hz
+                                              * 打摆频段的 PLL 超前特性 */
+
+extern volatile float g_pll_theta_comp_deg;  /* 补偿后转子角 (deg,[0,360)) */
+extern volatile float g_pll_theta_park_deg;  /* Park 用角 = θ_comp + ω̂·Ts（外推一拍，
+                                              * 消除"上一拍值"的 9°@1500rpm 滞后） */
+extern volatile float g_pll_omega_out_rpm;   /* 低通后转速估计 (rpm，带符号)，
+                                              * 无感时喂速度环 */
+extern volatile float g_pll_comp_deg_out;    /* 当前补偿角 δ̂ (deg，含 bias) */
+
+/*---------------------------------------------------------------------------
  * ISR 实时输出（每拍刷新）
  *---------------------------------------------------------------------------*/
 extern volatile float g_pll_theta_rotor_deg; /* 转子电角估计 (deg,[0,360)) */
@@ -64,11 +86,9 @@ extern volatile float g_pll_err_rad;         /* 归一化鉴相残差 ≈ 相位
  *   转 9°电角，主循环分两次读 θ̂ 与 θ_enc 会被 ISR 打断出 ±9°/拍 假差
  *   （实测 4 拍循环马鞍序列即此撕裂）；主循环只做 EMA 滤波。
  *---------------------------------------------------------------------------*/
-extern volatile float g_pll_diag_theta_err_deg;     /* ISR 同拍：θ̂_rotor − 编码器电角
-                                                     * (deg,[-180,180))。锁定后均值 ≈ SMO
-                                                     * 已知滞后（1500rpm ≈ −17.5°，PLL 锁
-                                                     * e_hat 相位，滞后保留在均值里），
-                                                     * 恒定滞后待补偿角解决 */
+extern volatile float g_pll_diag_theta_err_deg;     /* ISR 同拍：补偿后 Park 角 − 编码器电角
+                                                     * (deg,[-180,180))。补偿开启且锁定后
+                                                     * 均值应 ≈0（含锁点偏置+bias 残留） */
 extern volatile float g_pll_diag_theta_err_filt_deg;/* 上项 EMA 滤波（主循环，看均值） */
 extern volatile float g_pll_diag_err_filt_deg;      /* 鉴相残差 EMA 滤波 (deg)，
                                                      * 反映锁定质量（越小越稳） */

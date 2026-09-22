@@ -102,7 +102,9 @@ extern volatile float g_smo_theory_beta_v;     /* 理论 e_beta (V) */
  *   马鞍纹波/混叠拍频对判定免疫；恒定：三项连续满足 hold_ms 才置 OK，
  *   任一拍破窗立即清零重来。验收匀速稳态，不验收动态。
  *---------------------------------------------------------------------------*/
-extern volatile float g_smo_jdg_rpm_min;       /* 判定生效转速下限 (rpm)，默认 1300 */
+extern volatile float g_smo_jdg_rpm_min;       /* 判定生效转速下限 (rpm)，默认 900
+                                                *（Step 4 无感首切 1000rpm 需判定生效；
+                                                *  1000rpm 下 k/e_peak≈5.2 信噪比更差） */
 extern volatile float g_smo_jdg_ratio_min;     /* C1 幅值比下限，默认 0.85 */
 extern volatile float g_smo_jdg_ratio_max;     /* C1 幅值比上限，默认 1.08
                                                 * （1500rpm 实测中心≈0.98：|e_hat| 含

@@ -142,17 +142,17 @@ void Foc_Obs_Task(void)
 
         /* ---- mode45 PLL 数据快照 RTT 打印（5ms 节流，供复制粘贴判读） ----
          * 工程 printf 不支持 %f：全部经 Pll_Fmt1000 转"整型.整型"定点串。
-         * t=tick(ms)；th/ec 原始角 [0,360) 有 wrap 跳变属正常；
-         * e 与 sE 同拍同基准（PLL 角差 vs SMO atan2 角差）→ 直接对比裁决；
-         * enc=编码器转速 / wE=PLL 转速估计 → 振荡是否真实存在。 */
+         * e=补偿后 Park 角−编码器角（同拍）；sE=同拍 SMO atan2 角差；
+         * d=当前补偿角 δ̂；sl=无感锁存状态（1=Park/速度反馈已用 PLL）。
+         * 补偿开启后 e 均值应 ≈0（残差=锁点偏置+bias）。 */
         {
             static uint32_t s_pll_print_t0 = 0;
             uint32_t now = (uint32_t)tickTimer_GetCount();
-            char b1[14], b2[14], b3[14], b4[14], b5[14], b6[14], b7[14], b8[14], b9[14];
+            char b1[14], b2[14], b3[14], b4[14], b5[14], b6[14], b7[14], b8[14], b9[14], b10[14];
 
             if ((uint32_t)(now - s_pll_print_t0) >= 5u) {
                 s_pll_print_t0 = now;
-                OBS_DBG("[PLL] t=%u e=%s sE=%s th=%s ec=%s wE=%s enc=%s iq=%s g=%s",
+                OBS_DBG("[PLL] t=%u e=%s sE=%s th=%s ec=%s wE=%s enc=%s iq=%s d=%s sl=%u",
                         (unsigned)now,
                         Pll_Fmt1000(b1, g_pll_diag_theta_err_deg),
                         Pll_Fmt1000(b2, g_pll_diag_smo_err_deg),
@@ -161,7 +161,8 @@ void Foc_Obs_Task(void)
                         Pll_Fmt1000(b5, g_pll_omega_hat_rpm),
                         Pll_Fmt1000(b6, g_smo45_speed_filt_rpm),
                         Pll_Fmt1000(b7, (float)g_smo45_iq_filt_ma),
-                        Pll_Fmt1000(b8, g_pll_err_rad * 57.2958f));
+                        Pll_Fmt1000(b8, g_pll_comp_deg_out),
+                        (unsigned)g_smo45_sl_active);
             }
         }
 

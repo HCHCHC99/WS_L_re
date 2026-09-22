@@ -37,6 +37,7 @@ volatile uint8_t  g_smo45_state             = SMO45_STEP_IDLE;
 volatile uint8_t  g_smo45_evt               = 0u;
 volatile uint8_t  g_smo45_auto_ramp         = SMO45_AUTO_RAMP_DEFAULT;
 volatile uint8_t  g_smo45_wave_mode         = 0u;
+volatile uint8_t  g_smo45_sensorless        = 0u;   /* Step 4：无感切换开关（0=有感） */
 volatile float    g_smo45_speed_target_rpm  = 0.0f;
 volatile float    g_smo45_speed_ramp_rpm    = 0.0f;
 volatile float    g_smo45_speed_meas_rpm    = 0.0f;
@@ -123,17 +124,20 @@ static float    s_speed_ramp_rpm;
 static float    s_speed_filt_rpm;
 static float    s_speed_out_ma;
 
-/* 启动自动转速 profile：秒 0/1/2/3/4 -> 0/200/500/1000/1500 rpm
- * （最高 1500：2600rpm 档相位差抖动过大，验证窗口下调；
- *   固定 k=4.6V 在 1500rpm 下 k/e_peak≈3.5，仍满足 k>e_peak） */
+/* 启动自动转速 profile：秒 0/1/2/3 -> 0/200/500/1000 rpm，之后保持 1000
+ * （Step 4 无感首切定在 1000rpm：PLL 信噪比窗口内、打摆扰动更小） */
 static uint32_t s_run_ticks;
 static const uint16_t s_auto_rpm[SMO45_AUTO_RAMP_SECS + 1u] = {
-    0u, 200u, 500u, 1000u, 1500u
+    0u, 200u, 500u, 1000u
 };
 
 /* SMO 旁观者电压输入缓冲：采样时刻实际施加的是上一拍指令电压 */
 static float s_v_alpha_prev;
 static float s_v_beta_prev;
+
+/* Step 4 无感锁存状态（全局供 Watch/打印观察）：开关置 1 且 emf_ok=1 时进入，
+ * 进入后不因 emf_ok 瞬时掉 0 跌回有感（防角度源来回跳变）；关开关/停机退出 */
+volatile uint8_t g_smo45_sl_active = 0u;
 
 static void Smo45_ResetLoopState(void)
 {
@@ -273,8 +277,23 @@ static void Smo45_UpdateOuterLoop(void)
     }
 
     speed_error = s_speed_ramp_rpm - s_speed_filt_rpm;
-    speed_out = PID_UpdateUs(&s_speed_pid, s_speed_ramp_rpm,
-                             s_speed_filt_rpm, SMO45_SPD_WIN_US);
+    /* Step 4：无感锁存时速度反馈换 PLL 低通转速估计（其余逻辑不变） */
+    {
+        float speed_fb = s_speed_filt_rpm;
+
+        if (g_smo45_sensorless != 0u && g_smo_emf_ok != 0u) {
+            g_smo45_sl_active = 1u;
+        }
+        if (g_smo45_sensorless == 0u) {
+            g_smo45_sl_active = 0u;
+        }
+        if (g_smo45_sl_active != 0u) {
+            speed_fb = g_pll_omega_out_rpm;
+        }
+        speed_error = s_speed_ramp_rpm - speed_fb;
+        speed_out = PID_UpdateUs(&s_speed_pid, s_speed_ramp_rpm,
+                                 speed_fb, SMO45_SPD_WIN_US);
+    }
 
     g_smo45_speed_ramp_rpm = s_speed_ramp_rpm;
     g_smo45_speed_err_rpm = speed_error;
@@ -313,6 +332,7 @@ void Foc_Smo45_Start(void)
     Smo45_ClearObservables();
     Foc_Smo_Reset();   /* SMO 旁观者状态清零（观测电流/e_hat/诊断） */
     Foc_Pll_Reset();   /* PLL 旁观者状态清零（θ̂/ω̂/诊断） */
+    g_smo45_sl_active = 0u;  /* 无感锁存退出（每次 Start 从有感闭环起步） */
     s_calibration = calibration;
     s_zero_u_ma = calibration.zero_u_ma;
     s_zero_v_ma = calibration.zero_v_ma;
@@ -365,6 +385,7 @@ void Foc_Smo45_Stop(void)
         }
         SMO45_LOG("stopped");
     }
+    g_smo45_sl_active = 0u;   /* 停机退出无感锁存（下次 Start 从有感起步） */
     Smo45_ClearCurrentFeedback();
 }
 
@@ -372,7 +393,7 @@ void Foc_Smo45_Step(const stc_i_data_t *pData)
 {
     stc_i_data_t data;
     float id, iq, vd, vq, valpha, vbeta, du, dv, dw;
-    float cos_r, sin_r, rotor_rad;
+    float cos_r, sin_r, rotor_rad, rotor_use;
     float ialpha_s, ibeta_s;   /* SMO 输入电流（Clarke 后，跨块传递到 SVPWM 后调用点） */
     uint16_t hardware_count;
     int32_t hardware_delta, corrected_delta, rotor_deg;
@@ -419,8 +440,23 @@ void Foc_Smo45_Step(const stc_i_data_t *pData)
                * FOC_MATH_2PI;
     if (rotor_rad < 0.0f) rotor_rad += FOC_MATH_2PI;
 
+    /* Step 4：无感锁存时 Park 角换 PLL 补偿外推角 g_pll_theta_park_deg
+     *（含滞后补偿+一拍外推）。编码器角 rotor_rad 保留作裁判（Compare 入参）。
+     * 锁存进条件：开关置 1 且 SMO 判定 ok；退出：开关回 0（防 emf_ok 瞬时
+     * 掉 0 造成角度源来回跳变）。 */
+    rotor_use = rotor_rad;
+    if (g_smo45_sensorless != 0u && g_smo_emf_ok != 0u) {
+        g_smo45_sl_active = 1u;
+    }
+    if (g_smo45_sensorless == 0u) {
+        g_smo45_sl_active = 0u;
+    }
+    if (g_smo45_sl_active != 0u) {
+        rotor_use = g_pll_theta_park_deg * (FOC_MATH_2PI / 360.0f);
+    }
+
     data = Smo45_CorrectedData(pData);
-    Foc_Core_GetDq(&data, rotor_rad, &id, &iq);
+    Foc_Core_GetDq(&data, rotor_use, &id, &iq);
     g_smo45_id_ma = id * 1000.0f;
     g_smo45_iq_ma = iq * 1000.0f;
     {
@@ -462,8 +498,8 @@ void Foc_Smo45_Step(const stc_i_data_t *pData)
                     (vq <= -SMO45_PI_UMAX_V + 0.01f) ||
                     (vq >=  SMO45_PI_UMAX_V - 0.01f)) ? 1u : 0u;
 
-    cos_r = Foc_Math_Cos(rotor_rad);
-    sin_r = Foc_Math_Sin(rotor_rad);
+    cos_r = Foc_Math_Cos(rotor_use);
+    sin_r = Foc_Math_Sin(rotor_use);
     valpha = vd * cos_r - vq * sin_r;
     vbeta  = vd * sin_r + vq * cos_r;
     Foc_Svpwm(valpha, vbeta, FOC_VBUS_V, &du, &dv, &dw);

@@ -56,12 +56,14 @@ volatile float g_smo_diag_e_err_v       = 0.0f;
 volatile float g_smo_theory_alpha_v     = 0.0f;
 volatile float g_smo_theory_beta_v      = 0.0f;
 
-/* 反电动势自动判定（窗口默认值依据 1500rpm 实测：ratio 中心≈0.98、phase 均值≈−17.5°。
+/* 反电动势自动判定（窗口默认值依据 1500rpm 实测：ratio 中心≈0.98、phase 均值≈−16.3°。
  * ratio 实测比纯基波理论 0.90 高的原因：|e_hat|=sqrt(ea²+eb²) 把死区 6f 谐波与
  * 切换纹波能量也计入幅值，而分母 ωψf 是纯基波 → 分子虚高 ≈7%）。
  * 判定哲学：恒定滞后（−9°~−30°）PLL 都会吃掉，不妨碍可用；C2 只抓相位翻转
- * （大正角）与滞后过大（模型/滤波严重不对），不卡"必须≈−17°"。 */
-volatile float g_smo_jdg_rpm_min        = 1300.0f;  /* k=4.6V 信噪比窗口下限 */
+ * （大正角）与滞后过大（模型/滤波严重不对），不卡"必须≈−17°"。
+ * rpm_min=900：Step 4 无感首切定在 1000rpm，判定需在该工况生效
+ *（1000rpm 下 k/e_peak≈5.2 信噪比更差，若 C1/C2 误报按实测收放窗口） */
+volatile float g_smo_jdg_rpm_min        = 900.0f;
 volatile float g_smo_jdg_ratio_min      = 0.85f;
 volatile float g_smo_jdg_ratio_max      = 1.08f;
 volatile float g_smo_jdg_phase_min_deg  = -45.0f;

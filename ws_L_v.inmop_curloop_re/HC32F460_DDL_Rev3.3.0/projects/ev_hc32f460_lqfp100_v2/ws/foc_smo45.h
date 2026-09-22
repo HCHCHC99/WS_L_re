@@ -63,9 +63,10 @@ extern "C" {
 #define SMO45_ENC_DELTA_MAX           32
 
 /* 启动自动转速 profile（g_smo45_auto_ramp=1 时生效，到顶后停止写入）：
- * 秒 0/1/2/3/4 -> 0/200/500/1000/1500 rpm，之后保持 1500（Watch 可接管） */
+ * 秒 0/1/2/3 -> 0/200/500/1000 rpm，之后保持 1000（Watch 可接管）
+ * （Step 4 无感首切定在 1000rpm） */
 #define SMO45_AUTO_RAMP_DEFAULT       1u
-#define SMO45_AUTO_RAMP_SECS          4u
+#define SMO45_AUTO_RAMP_SECS          3u
 
 #define SMO45_STEP_IDLE               0u
 #define SMO45_STEP_RUN                1u
@@ -96,6 +97,12 @@ extern volatile float    g_smo45_iq_filt_alpha;
 extern volatile float    g_smo45_vd;
 extern volatile float    g_smo45_vq;
 extern volatile uint8_t  g_smo45_vsat;
+extern volatile uint8_t  g_smo45_sensorless;  /* 无感切换开关（Step 4）：0=编码器角有感
+                                               * 闭环（现状），1=θ_park(PLL 补偿角)+
+                                               * ω̂_lpf 无感闭环。置 1 需 SMO 判定
+                                               * g_smo_emf_ok=1（ISR 内锁存，回 0 退出） */
+extern volatile uint8_t  g_smo45_sl_active;   /* 无感锁存状态（只读观察）：1=当前 Park/速度
+                                               * 反馈已用 PLL 无感量，0=编码器 */
 extern volatile float    g_smo45_du;
 extern volatile float    g_smo45_dv;
 extern volatile float    g_smo45_dw;

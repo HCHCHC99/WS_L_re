@@ -8,6 +8,7 @@
 #include "foc_pll.h"
 #include "motor_config.h"
 #include "foc_core.h"      /* FOC_ISR_HZ（与 SMO Step 同拍） */
+#include "foc_smo.h"       /* 补偿角读 SMO 观测器参数（调参自动跟随） */
 #include <math.h>
 
 #define PLL_TS_S        (1.0f / (float)FOC_ISR_HZ)
@@ -19,12 +20,24 @@ volatile float g_pll_omega_n   = 1256.6f;  /* 2π×200 rad/s：电流环带宽 ~
 volatile float g_pll_zeta      = 0.9f;     /* 0.707~1 稳妥区 */
 volatile float g_pll_mag_min_v = 0.10f;    /* 弱信号冻结门限（<1300rpm 验证窗外信号小） */
 
+/* 补偿角 + 无感输出参数 */
+volatile uint8_t g_pll_comp_en       = 0u;     /* 补偿角开关（Watch 置 1 开启） */
+volatile float g_pll_comp_bias_deg   = 0.0f;   /* 补偿偏置：锁点偏置残留微调 */
+volatile float g_pll_wout_lpf_alpha  = 0.0125f; /* ω̂ 输出低通：fc≈20Hz@10kHz，
+                                                 * 喂速度环前压掉 25Hz 频段 PLL 超前 */
+
 /* ISR 输出 */
 volatile float g_pll_theta_rotor_deg = 0.0f;
 volatile float g_pll_omega_hat_rpm   = 0.0f;
 volatile float g_pll_omega_hat_rad_s = 0.0f;
 volatile float g_pll_theta_e_deg     = 0.0f;
 volatile float g_pll_err_rad         = 0.0f;
+
+/* 补偿/无感输出 */
+volatile float g_pll_theta_comp_deg  = 0.0f;
+volatile float g_pll_theta_park_deg  = 0.0f;
+volatile float g_pll_omega_out_rpm   = 0.0f;
+volatile float g_pll_comp_deg_out    = 0.0f;
 
 /* 诊断输出 */
 volatile float g_pll_diag_theta_err_deg      = 0.0f;
@@ -74,6 +87,10 @@ void Foc_Pll_Reset(void)
     g_pll_diag_theta_err_filt_deg = 0.0f;
     g_pll_diag_err_filt_deg = 0.0f;
     g_pll_diag_smo_err_deg = 0.0f;
+    g_pll_theta_comp_deg = 0.0f;
+    g_pll_theta_park_deg = 0.0f;
+    g_pll_omega_out_rpm = 0.0f;
+    g_pll_comp_deg_out = 0.0f;
     s_ea_last = 0.0f;
     s_eb_last = 0.0f;
     s_cmp_div = 0u;
@@ -123,12 +140,58 @@ void Foc_Pll_Step(float e_alpha, float e_beta)
     if (g_pll_theta_rotor_deg < 0.0f) {
         g_pll_theta_rotor_deg += 360.0f;
     }
+
+    /* ---- 滞后补偿 + 无感输出（Step 4，见 foc_pll.h 说明） ----
+     * δ̂ = atan(|ω̂|/ω_c) + atan(|ω̂|·L/(k/φ)) + bias
+     * ω_c = e_hat EMA 精确 −3dB 截止：cos w = (1+b²−2a²)/(2b)，b=1−α，
+     *       fc = fs·w/2π（小 α 近式 620Hz 偏低，精确 ≈805Hz@α=0.39/10kHz）。
+     * θ_comp = θ̂_rotor + δ̂（δ̂ 为滞后量，补偿=加回）；
+     * θ_park = θ_comp + ω̂·Ts（外推一拍：Park 在下一拍首使用本值，
+     *          消除一拍滞后的 9°@1500rpm）；
+     * ω̂ 经低通输出 g_pll_omega_out_rpm（无感喂速度环，压 25Hz 频段超前）。 */
+    {
+        float w = fabsf(s_omega);
+        float a = g_smo_lpf_alpha;
+        float b, cosw, wc, kg, d1, d2, th_c;
+
+        if (a <= 0.0f || a >= 1.0f) a = 0.39f;
+        b = 1.0f - a;
+        cosw = (1.0f + b * b - 2.0f * a * a) / (2.0f * b);
+        if (cosw > 1.0f)        cosw = 1.0f;
+        else if (cosw < -1.0f)  cosw = -1.0f;
+        wc = (float)FOC_ISR_HZ * acosf(cosw);   /* ω_c = 2π·fc (rad/s) */
+
+        kg = g_smo_obs_gain;
+        if (kg < 0.1f) kg = 0.1f;
+        d1 = atan2f(w, wc);
+        d2 = atanf(w * g_smo_model_l_h / kg);
+        g_pll_comp_deg_out = (d1 + d2) * PLL_RAD2DEG + g_pll_comp_bias_deg;
+
+        th_c = g_pll_theta_rotor_deg + ((g_pll_comp_en != 0u) ? g_pll_comp_deg_out : 0.0f);
+        th_c = Pll_Wrap180(th_c);
+        if (th_c < 0.0f) th_c += 360.0f;
+        g_pll_theta_comp_deg = th_c;
+
+        th_c += s_omega * PLL_TS_S * PLL_RAD2DEG;   /* 外推一拍 */
+        th_c = Pll_Wrap180(th_c);
+        if (th_c < 0.0f) th_c += 360.0f;
+        g_pll_theta_park_deg = th_c;
+
+        /* ω̂ 输出低通（α≤0 视为直通） */
+        if (g_pll_wout_lpf_alpha <= 0.0f || g_pll_wout_lpf_alpha > 1.0f) {
+            g_pll_omega_out_rpm = g_pll_omega_hat_rpm;
+        } else {
+            g_pll_omega_out_rpm += g_pll_wout_lpf_alpha
+                                 * (g_pll_omega_hat_rpm - g_pll_omega_out_rpm);
+        }
+    }
 }
 
 void Foc_Pll_Compare(float theta_enc_e_deg)
 {
-    /* ISR 同拍比较：θ̂_rotor 与编码器角同属本拍快照，无撕裂 */
-    g_pll_diag_theta_err_deg = Pll_Wrap180(g_pll_theta_rotor_deg - theta_enc_e_deg);
+    /* ISR 同拍比较：补偿后 Park 角（无感时真正进 Park 的角）与编码器角，
+     * 同属本拍快照，无撕裂。补偿开启且锁定后均值应 ≈0（残差=bias+锁点偏置） */
+    g_pll_diag_theta_err_deg = Pll_Wrap180(g_pll_theta_park_deg - theta_enc_e_deg);
 
     /* 同拍 SMO atan2 角差（每 10 拍算一次，atan2f ~1-2µs 摊薄后可忽略）：
      * 与 PLL 的 e 完全同快照基准 —— 两链均值之差 = PLL 锁点偏置 + 动态差，
