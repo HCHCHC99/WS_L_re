@@ -38,6 +38,7 @@ volatile uint8_t  g_smo45_evt               = 0u;
 volatile uint8_t  g_smo45_auto_ramp         = SMO45_AUTO_RAMP_DEFAULT;
 volatile uint8_t  g_smo45_wave_mode         = 0u;
 volatile uint8_t  g_smo45_sensorless        = 0u;   /* Step 4：无感切换开关（0=有感） */
+volatile float    g_smo45_ang_lead_ticks    = 1.5f; /* 高速角度超前补偿拍数（0=关） */
 volatile float    g_smo45_speed_target_rpm  = 0.0f;
 volatile float    g_smo45_speed_ramp_rpm    = 0.0f;
 volatile float    g_smo45_speed_meas_rpm    = 0.0f;
@@ -439,6 +440,18 @@ void Foc_Smo45_Step(const stc_i_data_t *pData)
     rotor_rad -= (float)((int32_t)(rotor_rad * (1.0f / FOC_MATH_2PI)))
                * FOC_MATH_2PI;
     if (rotor_rad < 0.0f) rotor_rad += FOC_MATH_2PI;
+
+    /* 高速角度超前补偿：Park 角要对齐"电压矢量作用中心"= 采样后 ~1.5 拍
+     * （中心对齐 PWM + 谷点采样）。4500rpm 电频率 750Hz 下一拍=27°，不补
+     * 则功角偏差 27~40° → 转矩折损+失步（实测 6000 掉 3000 的帮凶）。
+     * g_smo45_ang_lead_ticks Watch 可调（0=关，1.5=默认），低速无影响。 */
+    if (g_smo45_ang_lead_ticks > 0.0f && g_smo45_sl_active == 0u) {
+        float w_e = g_smo45_speed_filt_rpm * 0.10472f * (float)FOC_POLE_PAIRS;
+        rotor_rad += w_e * SMO45_ISR_DT_US * 1.0e-6f * g_smo45_ang_lead_ticks;
+        rotor_rad -= (float)((int32_t)(rotor_rad * (1.0f / FOC_MATH_2PI)))
+                   * FOC_MATH_2PI;
+        if (rotor_rad < 0.0f) rotor_rad += FOC_MATH_2PI;
+    }
 
     /* Step 4：无感锁存时 Park 角换 PLL 补偿外推角 g_pll_theta_park_deg
      *（含滞后补偿+一拍外推）。编码器角 rotor_rad 保留作裁判（Compare 入参）。

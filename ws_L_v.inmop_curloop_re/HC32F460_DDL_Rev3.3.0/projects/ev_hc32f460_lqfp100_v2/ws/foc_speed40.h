@@ -31,8 +31,10 @@ extern "C" {
 /* Inner current PI: start from the verified mode 29 values. */
 #define SPEED40_PI_KP             0.5f
 #define SPEED40_PI_KI             300.0f
-#define SPEED40_PI_UMAX_V         3.5f
-#define SPEED40_ITERM_MAX_V       3.2f
+/* ⚠ UMAX 3.5→6.2 / ITERM 3.2→6.0（与 mode 45 SMO45 同步，2026-09-23）：
+ *   12V 母线 SVPWM 线性区相电压峰值 6.93V，原 3.5V 是高速电压墙（卡 ~4800rpm） */
+#define SPEED40_PI_UMAX_V         6.2f
+#define SPEED40_ITERM_MAX_V       6.0f
 #define SPEED40_IQ_FILT_ALPHA     0.10f
 
 /* Outer speed PI output is a signed q-axis current reference in mA. */
@@ -49,7 +51,9 @@ extern "C" {
 #define SPEED40_SPD_WIN_MS              5u
 #define SPEED40_SPD_WIN_US              (SPEED40_SPD_WIN_MS * 1000u)
 #define SPEED40_SPD_FILT_ALPHA          0.25f
-#define SPEED40_ENC_DELTA_MAX           32
+/* 编码器每拍增量限幅：与 mode 45 同步 32→72（7800rpm 需 53 counts，×1.35 裕度）。
+ * ⚠ 原 32 只支持 4687rpm：超限测速削顶 + 角度积分丢拍（高速 Park 角落后） */
+#define SPEED40_ENC_DELTA_MAX           72
 
 #define SPEED40_STEP_IDLE               0u
 #define SPEED40_STEP_RUN                1u

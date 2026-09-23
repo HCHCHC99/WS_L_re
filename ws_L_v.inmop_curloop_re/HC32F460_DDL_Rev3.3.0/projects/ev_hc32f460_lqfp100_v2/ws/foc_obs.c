@@ -148,7 +148,7 @@ void Foc_Obs_Task(void)
         {
             static uint32_t s_pll_print_t0 = 0;
             uint32_t now = (uint32_t)tickTimer_GetCount();
-            char b1[14], b2[14], b3[14], b4[14], b5[14], b6[14], b7[14], b8[14], b9[14], b10[14];
+            char b1[14], b2[14], b3[14], b4[14], b5[14], b6[14], b7[14], b8[14];
 
             if ((uint32_t)(now - s_pll_print_t0) >= 5u) {
                 s_pll_print_t0 = now;

@@ -172,7 +172,9 @@ void Foc_Pll_Step(float e_alpha, float e_beta)
         if (th_c < 0.0f) th_c += 360.0f;
         g_pll_theta_comp_deg = th_c;
 
-        th_c += s_omega * PLL_TS_S * PLL_RAD2DEG;   /* 外推一拍 */
+        th_c += s_omega * PLL_TS_S * PLL_RAD2DEG * 1.5f;   /* 外推 1.5 拍：
+                                    * Park 在下一拍首使用本值，对齐 PWM 作用中心
+                                    *（与有感侧 g_smo45_ang_lead_ticks=1.5 同口径） */
         th_c = Pll_Wrap180(th_c);
         if (th_c < 0.0f) th_c += 360.0f;
         g_pll_theta_park_deg = th_c;

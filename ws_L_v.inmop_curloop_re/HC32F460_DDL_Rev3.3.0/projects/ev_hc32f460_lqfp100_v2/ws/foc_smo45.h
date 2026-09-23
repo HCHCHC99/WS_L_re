@@ -39,11 +39,14 @@ extern "C" {
 #define SMO45_LOG(fmt, ...)  ((void)0)
 #endif
 
-/* Inner current PI: start from the verified mode 29 values. */
+/* Inner current PI: start from the verified mode 29 values.
+ * ⚠ UMAX 3.5→6.2（Step4 高速）：4800rpm 反电动势已 ≈3.4V，3.5V 限幅是
+ *   高速第一电压墙。上限约束：12V 母线 SVPWM 线性区相电压峰值 = 12/√3
+ *   = 6.93V，留 ~10% 余量防过调制。ITERM 同步放大防积分 early 饱和。 */
 #define SMO45_PI_KP             0.5f
 #define SMO45_PI_KI             300.0f
-#define SMO45_PI_UMAX_V         3.5f
-#define SMO45_ITERM_MAX_V       3.2f
+#define SMO45_PI_UMAX_V         6.2f
+#define SMO45_ITERM_MAX_V       6.0f
 #define SMO45_IQ_FILT_ALPHA     0.10f
 
 /* Outer speed PI output is a signed q-axis current reference in mA. */
@@ -60,7 +63,10 @@ extern "C" {
 #define SMO45_SPD_WIN_MS              5u
 #define SMO45_SPD_WIN_US              (SMO45_SPD_WIN_MS * 1000u)
 #define SMO45_SPD_FILT_ALPHA          0.25f
-#define SMO45_ENC_DELTA_MAX           32
+/* 编码器每拍增量限幅：7800rpm → 7800/60×4096×100µs = 53 counts，×1.35 裕度。
+ * ⚠ 原 32 只支持到 4687rpm：超限后测速削顶 + s_rotor_count 角度积分丢拍
+ * （Park 角持续落后，高速转矩错位）——高速上不去的第一堵墙 */
+#define SMO45_ENC_DELTA_MAX           72
 
 /* 启动自动转速 profile（g_smo45_auto_ramp=1 时生效，到顶后停止写入）：
  * 秒 0/1/2/3 -> 0/200/500/1000 rpm，之后保持 1000（Watch 可接管）
@@ -101,6 +107,8 @@ extern volatile uint8_t  g_smo45_sensorless;  /* 无感切换开关（Step 4）�
                                                * 闭环（现状），1=θ_park(PLL 补偿角)+
                                                * ω̂_lpf 无感闭环。置 1 需 SMO 判定
                                                * g_smo_emf_ok=1（ISR 内锁存，回 0 退出） */
+extern volatile float    g_smo45_ang_lead_ticks; /* 有感角度超前补偿拍数（默认 1.5，0=关）：
+                                               * 采样→PWM 作用中心的延迟补偿，高速必需 */
 extern volatile uint8_t  g_smo45_sl_active;   /* 无感锁存状态（只读观察）：1=当前 Park/速度
                                                * 反馈已用 PLL 无感量，0=编码器 */
 extern volatile float    g_smo45_du;
