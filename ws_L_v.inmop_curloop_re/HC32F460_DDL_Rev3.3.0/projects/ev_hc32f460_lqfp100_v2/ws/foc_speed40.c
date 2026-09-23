@@ -28,6 +28,7 @@ volatile float    g_speed40_speed_target_rpm  = 0.0f;
 volatile float    g_speed40_speed_ramp_rpm    = 0.0f;
 volatile float    g_speed40_speed_meas_rpm    = 0.0f;
 volatile float    g_speed40_speed_filt_rpm    = 0.0f;
+volatile float    g_speed40_speed_disp_rpm    = 0.0f;   /* 显示专用强滤波转速 */
 volatile float    g_speed40_speed_err_rpm     = 0.0f;
 volatile float    g_speed40_speed_out_ma      = 0.0f;
 volatile int32_t  g_speed40_rotor_count       = 0;
@@ -106,8 +107,10 @@ static uint8_t  s_iq_filt_init;
 static int32_t  s_speed_acc_cnt;
 static uint32_t s_speed_win_tick;
 static uint8_t  s_speed_filt_init;
+static uint8_t  s_speed_disp_init;
 static float    s_speed_ramp_rpm;
 static float    s_speed_filt_rpm;
+static float    s_speed_disp_rpm;
 static float    s_speed_out_ma;
 
 static void Speed40_ResetLoopState(void)
@@ -124,6 +127,8 @@ static void Speed40_ResetLoopState(void)
     s_speed_filt_init = 0u;
     s_speed_ramp_rpm = 0.0f;
     s_speed_filt_rpm = 0.0f;
+    s_speed_disp_rpm = 0.0f;
+    s_speed_disp_init = 0u;
     s_speed_out_ma = 0.0f;
 }
 
@@ -133,6 +138,7 @@ static void Speed40_ClearObservables(void)
     g_speed40_speed_ramp_rpm = 0.0f;
     g_speed40_speed_meas_rpm = 0.0f;
     g_speed40_speed_filt_rpm = 0.0f;
+    g_speed40_speed_disp_rpm = 0.0f;
     g_speed40_speed_err_rpm = 0.0f;
     g_speed40_speed_out_ma = 0.0f;
     g_speed40_rotor_count = 0;
@@ -204,9 +210,18 @@ static void Speed40_UpdateSpeed(int32_t corrected_delta)
         s_speed_filt_rpm += SPEED40_SPD_FILT_ALPHA
                           * (raw_rpm - s_speed_filt_rpm);
     }
+    /* 显示专用强滤波（独立于 PI 反馈链，α=0.05 仅平滑曲线） */
+    if (s_speed_disp_init == 0u) {
+        s_speed_disp_rpm = raw_rpm;
+        s_speed_disp_init = 1u;
+    } else {
+        s_speed_disp_rpm += SPEED40_SPD_DISP_ALPHA
+                          * (raw_rpm - s_speed_disp_rpm);
+    }
 
     g_speed40_speed_meas_rpm = raw_rpm;
     g_speed40_speed_filt_rpm = s_speed_filt_rpm;
+    g_speed40_speed_disp_rpm = s_speed_disp_rpm;
     s_speed_acc_cnt = 0;
     s_speed_win_tick = 0u;
 }

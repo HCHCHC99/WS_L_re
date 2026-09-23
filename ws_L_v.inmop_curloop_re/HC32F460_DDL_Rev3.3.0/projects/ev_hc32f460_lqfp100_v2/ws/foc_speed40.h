@@ -51,6 +51,8 @@ extern "C" {
 #define SPEED40_SPD_WIN_MS              5u
 #define SPEED40_SPD_WIN_US              (SPEED40_SPD_WIN_MS * 1000u)
 #define SPEED40_SPD_FILT_ALPHA          0.25f
+/* 显示专用滤波（VOFA 曲线平滑用；α 越小越平滑越滞后，不进 PI 反馈） */
+#define SPEED40_SPD_DISP_ALPHA          0.05f
 /* 编码器每拍增量限幅：与 mode 45 同步 32→72（7800rpm 需 53 counts，×1.35 裕度）。
  * ⚠ 原 32 只支持 4687rpm：超限测速削顶 + 角度积分丢拍（高速 Park 角落后） */
 #define SPEED40_ENC_DELTA_MAX           72
@@ -68,6 +70,9 @@ extern volatile float    g_speed40_speed_target_rpm;
 extern volatile float    g_speed40_speed_ramp_rpm;
 extern volatile float    g_speed40_speed_meas_rpm;
 extern volatile float    g_speed40_speed_filt_rpm;
+extern volatile float    g_speed40_speed_disp_rpm;  /* 显示专用强滤波转速（α=0.05，
+                                              * 仅 VOFA/Watch 看趋势；PI 反馈仍用
+                                              * speed_filt_rpm，勿混用防环路滞后） */
 extern volatile float    g_speed40_speed_err_rpm;
 extern volatile float    g_speed40_speed_out_ma;
 extern volatile int32_t  g_speed40_rotor_count;

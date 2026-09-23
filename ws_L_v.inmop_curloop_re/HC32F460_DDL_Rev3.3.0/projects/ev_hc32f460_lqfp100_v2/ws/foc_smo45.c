@@ -43,6 +43,7 @@ volatile float    g_smo45_speed_target_rpm  = 0.0f;
 volatile float    g_smo45_speed_ramp_rpm    = 0.0f;
 volatile float    g_smo45_speed_meas_rpm    = 0.0f;
 volatile float    g_smo45_speed_filt_rpm    = 0.0f;
+volatile float    g_smo45_speed_disp_rpm    = 0.0f;   /* 显示专用强滤波转速 */
 volatile float    g_smo45_speed_err_rpm     = 0.0f;
 volatile float    g_smo45_speed_out_ma      = 0.0f;
 volatile int32_t  g_smo45_rotor_count       = 0;
@@ -123,6 +124,8 @@ static uint32_t s_speed_win_tick;
 static uint8_t  s_speed_filt_init;
 static float    s_speed_ramp_rpm;
 static float    s_speed_filt_rpm;
+static uint8_t  s_speed_disp_init;
+static float    s_speed_disp_rpm;
 static float    s_speed_out_ma;
 
 /* 启动自动转速 profile：秒 0/1/2/3 -> 0/200/500/1000 rpm，之后保持 1000
@@ -154,6 +157,8 @@ static void Smo45_ResetLoopState(void)
     s_speed_filt_init = 0u;
     s_speed_ramp_rpm = 0.0f;
     s_speed_filt_rpm = 0.0f;
+    s_speed_disp_rpm = 0.0f;
+    s_speed_disp_init = 0u;
     s_speed_out_ma = 0.0f;
     s_run_ticks = 0u;
     s_v_alpha_prev = 0.0f;
@@ -166,6 +171,7 @@ static void Smo45_ClearObservables(void)
     g_smo45_speed_ramp_rpm = 0.0f;
     g_smo45_speed_meas_rpm = 0.0f;
     g_smo45_speed_filt_rpm = 0.0f;
+    g_smo45_speed_disp_rpm = 0.0f;
     g_smo45_speed_err_rpm = 0.0f;
     g_smo45_speed_out_ma = 0.0f;
     g_smo45_rotor_count = 0;
@@ -252,9 +258,18 @@ static void Smo45_UpdateSpeed(int32_t corrected_delta)
         s_speed_filt_rpm += SMO45_SPD_FILT_ALPHA
                           * (raw_rpm - s_speed_filt_rpm);
     }
+    /* 显示专用强滤波（独立于 PI 反馈链，α=0.05 仅平滑曲线） */
+    if (s_speed_disp_init == 0u) {
+        s_speed_disp_rpm = raw_rpm;
+        s_speed_disp_init = 1u;
+    } else {
+        s_speed_disp_rpm += SMO45_SPD_DISP_ALPHA
+                          * (raw_rpm - s_speed_disp_rpm);
+    }
 
     g_smo45_speed_meas_rpm = raw_rpm;
     g_smo45_speed_filt_rpm = s_speed_filt_rpm;
+    g_smo45_speed_disp_rpm = s_speed_disp_rpm;
     s_speed_acc_cnt = 0;
     s_speed_win_tick = 0u;
 }

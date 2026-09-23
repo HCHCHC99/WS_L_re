@@ -316,7 +316,7 @@ int main(void)
                     cur[11] = (int32_t)(pll_emag * 1000.0f);                 /* mV -> V */
                     cur[12] = (int32_t)(g_pll_diag_smo_err_deg * 1000.0f);   /* mdeg -> deg */
                     cur[13] = (int32_t)(g_smo45_speed_target_rpm * 1000.0f); /* mrpm -> rpm */
-                    cur[14] = 0;
+                    cur[14] = (int32_t)(g_smo45_speed_disp_rpm * 1000.0f);   /* 显示滤波转速 */
                     cur[15] = 0;
                     Usart3_Vofa_SendScaled(cur, 16, USART3_VOFA_SCALE_MILLI);
                 } else if (g_smo45_wave_mode) {
@@ -415,7 +415,8 @@ int main(void)
             cur[12] = (int32_t)(g_iqpi_iq_ref_ramp_ma); /* mode31 iq 参考(斜坡后), mA -> A */
             cur[13] = g_olf_diff_deg * 1000;          /* mode26 负载角 delta (mdeg -> deg) */
             cur[14] = (int32_t)(g_speed40_speed_target_rpm * 1000.0f); /* mode40 目标转速 (mrpm -> rpm) */
-            cur[15] = (int32_t)(g_speed40_speed_filt_rpm * 1000.0f);   /* mode40 实际转速 (mrpm -> rpm) */
+            cur[15] = (int32_t)(g_speed40_speed_disp_rpm * 1000.0f);   /* mode40 实际转速(显示强滤波；
+                                                                          PI 反馈滤波值看 Watch g_speed40_speed_filt_rpm) */
             cur[16] = g_drun41_running
                             ? (int32_t)(g_drun41_iq_filt_ma)           /* mode41: filtered iq (mA -> A) */
                             : g_drun29_running

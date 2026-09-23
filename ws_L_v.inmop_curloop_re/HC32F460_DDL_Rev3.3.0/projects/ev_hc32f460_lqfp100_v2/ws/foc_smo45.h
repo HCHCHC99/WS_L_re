@@ -63,6 +63,8 @@ extern "C" {
 #define SMO45_SPD_WIN_MS              5u
 #define SMO45_SPD_WIN_US              (SMO45_SPD_WIN_MS * 1000u)
 #define SMO45_SPD_FILT_ALPHA          0.25f
+/* 显示专用滤波（VOFA 曲线平滑用；α 越小越平滑越滞后，不进 PI 反馈） */
+#define SMO45_SPD_DISP_ALPHA          0.05f
 /* 编码器每拍增量限幅：7800rpm → 7800/60×4096×100µs = 53 counts，×1.35 裕度。
  * ⚠ 原 32 只支持到 4687rpm：超限后测速削顶 + s_rotor_count 角度积分丢拍
  * （Park 角持续落后，高速转矩错位）——高速上不去的第一堵墙 */
@@ -90,6 +92,9 @@ extern volatile float    g_smo45_speed_target_rpm;
 extern volatile float    g_smo45_speed_ramp_rpm;
 extern volatile float    g_smo45_speed_meas_rpm;
 extern volatile float    g_smo45_speed_filt_rpm;
+extern volatile float    g_smo45_speed_disp_rpm;    /* 显示专用强滤波转速（α=0.05，
+                                              * 仅 VOFA/Watch 看趋势；PI 反馈仍用
+                                              * speed_filt_rpm，勿混用防环路滞后） */
 extern volatile float    g_smo45_speed_err_rpm;
 extern volatile float    g_smo45_speed_out_ma;
 extern volatile int32_t  g_smo45_rotor_count;
