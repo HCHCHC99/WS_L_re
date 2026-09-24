@@ -250,121 +250,51 @@ int main(void)
 #endif /* MOTOR_FOC_ENABLE */
 #endif /* !APP_MINIMAL_CURRENT_TEST — 最小系统模式下主循环只跑 VOFA */
 
-        /* ---- VOFA+ USART3 数据发送（电流/速度观测通道，16 通道定长） ----
+        /* ---- VOFA+ USART3 数据发送（模式自持 + 通用布局） ----
          * 接口约定：SendScaled 内部 ×0.001，即"传毫单位、显示基本单位"。
          * 电流通道传整数 mA -> 显示 A（1mA 分辨率，µA 精度已舍弃）；
-         * 电压通道传 mV -> 显示 V；角度通道传 mrad -> 显示 rad。
-         * 【mode45 专用 15 通道布局】（SMO 验收面板，运行 mode45 且 wave_mode=0 时启用）
-         * ch0  当前 iq (A)        ch1  滤波后 iq (A)     ch2  目标 iq (A)
-         * ch3  理论 e_alpha (V)   ch4  理论 e_beta (V)   —— 编码器 θ+ωψf 生成
-         * ch5  SMO 原始 z_alpha (V)  ch6  SMO 原始 z_beta (V) —— 未滤波
-         * ch7  滤波 e_alpha_hat (V)  ch8  滤波 e_beta_hat (V)
-         * ch9  相位误差 atan2 角−编码器角 (deg)
-         * ch10 e_on_q 投影 (V)    ch11 e_on_d 投影 (V)   ch12 总误差 |E_hat−E_theory| (V)
-         * ch13 理论幅值 ωψf (V)   ch14 实际转速 (rpm)
-         * ⚠ ch3~8 为电频率正弦（2600rpm=433Hz），VOFA ~140Hz 帧率必然混叠
-         *   （呈 max/min 交替假象），仅作信号存在性检查；SMO 验收看 ch9~13 直流量。
-         * 【mode45 PLL/无感验收面板】（运行 mode45 且 wave_mode=2 时启用，16 通道）
-         * ch0 enc原始转速 ch1 enc滤波 ch2 ω̂原始 ch3 ω̂低通(无感反馈) ch4 转速差原始
-         * ch5 转速差滤波 ch6 角差原始 ch7 角差滤波 ch8 iq ch9 补偿角δ̂
-         * ch10 sl锁存 ch11 |e_hat| ch12 sE(SMO同拍角差) ch13 目标转速
-         * 【通用布局（其余模式，17 通道）】
+         * 电压通道传 mV -> 显示 V；角度通道传 mrad/mdeg -> 显示 rad/deg。
+         * 模式自持：mode45 / mode40 各自实现 Foc_Xxx_VofaFill 填充自己的
+         * 通道布局，通道含义速览卡 = 各模式 .h 顶部注释（唯一事实源）：
+         *   mode45（g_smo45_wave_mode=0/1/2 三种布局）见 foc_smo45.h
+         *   mode40（固定 18ch，ch17 = PI 反馈真实转速）见 foc_speed40.h
+         * 其余模式走下方通用 17ch 布局。
+         * 【通用布局（mode 0/26/28/29/30/31/41，17 通道）】
          * CH0~2  : 三相原始电流（含上电校准残余零偏，mode 0 下用于观察温漂/噪声）
          * CH3    : 静止系 ialpha（瞬时值，无 EMA）
          * CH4    : 静止系 ibeta；mode28 时 = id 反馈 (A)
          * CH5    : 控制系 iq（mode28 = iq 反馈）
-         * CH6    : 控制系 id；mode28 时 = id 参考 (A)
-         * CH7    : 自增电压幅值 g_zizeng_volt_v；mode28 时 = iq 参考 (A)
-         * CH8    : 控制系总电流幅值 = sqrt(iq^2+id^2)；mode28 时 = PI 输出 vd (V)
-         * CH9    : 控制系角度（ZIZENG 磁场角）；mode28 时 = PI 输出 vq (V)
-         * CH10   : 静止系电流幅值 sqrt(ialpha^2+ibeta^2)；mode28 时 = iq 3s均值 (A)
+         * CH6    : 控制系 id；mode28/29/41 时 = id 参考 (A)
+         * CH7    : 自增电压幅值 g_zizeng_volt_v；mode28/29/41 时 = iq 参考 (A)
+         * CH8    : 控制系总电流幅值 = sqrt(iq^2+id^2)；mode28/29/41 时 = PI 输出 vd (V)
+         * CH9    : 控制系角度（ZIZENG 磁场角）；mode28/29/41 时 = PI 输出 vq (V)
+         * CH10   : 静止系电流幅值 sqrt(ialpha^2+ibeta^2)；mode29/41/28 时 = iq 3s均值 (A)
          * CH11   : 母线直流电流估算 = 1.5*(vd*id+vq*iq)/Vbus（功率守恒估算）；
-         *          mode28 时 = id 3s均值 (A)
+         *          mode29/41/28 时 = id 3s均值 (A)
          * CH12   : mode31 iq 参考（斜坡后）
          * CH13   : mode26 负载角 delta（deg，其他模式下恒 0）
-         * CH14   : mode40 目标转速 (rpm)   CH15 : mode40 实际转速 (rpm，滤波反馈值)
-         * CH16   : mode29/40/41 显示用滤波 iq（EMA；PI 仍使用 CH5 的原始 iq） */
+         * CH14~15: 预留 0（mode40 目标/显示转速已迁至自持布局，见 foc_speed40.h）
+         * CH16   : mode29/41 显示用滤波 iq（EMA；PI 仍使用 CH5 的原始 iq） */
 #if 1
         if (!Usart3_Vofa_IsTxBusy()) {
+            /* 缓冲按上层通道上限开（Usart3_Vofa_SendScaled 拒收
+             * count > USART3_VOFA_MAX_CHANNELS=24）。模式自持布局会随调试
+             * 需求加通道，此数组若按旧值写死，Fill 函数就会越界写栈
+             * （mode 40 已 17ch -> 18ch）。 */
+            int32_t cur[USART3_VOFA_MAX_CHANNELS];
+            int     n;
+
+            /* 模式自持 VOFA：先问各模式要不要自己的布局 */
             if (g_smo45_running) {
-                if (g_smo45_wave_mode == 2) {
-                    /*===== mode45 PLL/无感验收面板（16ch，g_smo45_wave_mode=2）=====
-                     * 转速链：ch0 enc原始 ch1 enc滤波 ch2 ω̂原始 ch3 ω̂低通(无感反馈)
-                     *         ch4 转速差原始(ch2−ch0) ch5 转速差滤波(ch3−ch1)
-                     * 角度链：ch6 角差原始(同拍θ_park−enc) ch7 角差滤波
-                     *         ch9 补偿角δ̂ ch12 sE(同拍SMO atan2角差)
-                     * 工况：ch8 iq ch10 sl无感锁存 ch11 |e_hat| ch13 目标转速
-                     * 注：原始转子角为 0~360 锯齿+wrap，VOFA 采样下不可读，
-                     *     不设通道（RTT [PLL] 行 th=/ec= 可看原始值）。 */
-                    int32_t cur[16];
-                    float pll_emag = sqrtf(g_smo_e_alpha_hat_v * g_smo_e_alpha_hat_v
-                                         + g_smo_e_beta_hat_v * g_smo_e_beta_hat_v);
-
-                    cur[0]  = (int32_t)(g_smo45_speed_meas_rpm * 1000.0f);   /* mrpm -> rpm */
-                    cur[1]  = (int32_t)(g_smo45_speed_filt_rpm * 1000.0f);   /* mrpm -> rpm */
-                    cur[2]  = (int32_t)(g_pll_omega_hat_rpm * 1000.0f);      /* mrpm -> rpm */
-                    cur[3]  = (int32_t)(g_pll_omega_out_rpm * 1000.0f);      /* mrpm -> rpm */
-                    cur[4]  = (int32_t)((g_pll_omega_hat_rpm
-                                       - g_smo45_speed_meas_rpm) * 1000.0f); /* mrpm -> rpm */
-                    cur[5]  = (int32_t)((g_pll_omega_out_rpm
-                                       - g_smo45_speed_filt_rpm) * 1000.0f); /* mrpm -> rpm */
-                    cur[6]  = (int32_t)(g_pll_diag_theta_err_deg * 1000.0f); /* mdeg -> deg */
-                    cur[7]  = (int32_t)(g_pll_diag_theta_err_filt_deg * 1000.0f);
-                    cur[8]  = (int32_t)(g_smo45_iq_filt_ma);                 /* mA -> A */
-                    cur[9]  = (int32_t)(g_pll_comp_deg_out * 1000.0f);       /* mdeg -> deg */
-                    cur[10] = (int32_t)(g_smo45_sl_active * 1000.0f);        /* 0/1 */
-                    cur[11] = (int32_t)(pll_emag * 1000.0f);                 /* mV -> V */
-                    cur[12] = (int32_t)(g_pll_diag_smo_err_deg * 1000.0f);   /* mdeg -> deg */
-                    cur[13] = (int32_t)(g_smo45_speed_target_rpm * 1000.0f); /* mrpm -> rpm */
-                    cur[14] = (int32_t)(g_smo45_speed_disp_rpm * 1000.0f);   /* 显示滤波转速 */
-                    cur[15] = 0;
-                    Usart3_Vofa_SendScaled(cur, 16, USART3_VOFA_SCALE_MILLI);
-                } else if (g_smo45_wave_mode) {
-                    /*===== mode45 波形窄帧（7ch=32B）：Watch 置 g_smo45_wave_mode=1 =====
-                     * 921600 波特 → 帧率 ~2.9kHz → 2600rpm(433Hz) 约 6.6 点/周期
-                     * （想看更细腻的正弦把目标降到 1500rpm ≈ 11.5 点/周期）。
-                     * ch0 z_alpha(原始) / ch1 z_beta(原始) —— 未滤波，含边界层毛刺
-                     * ch2 e_alpha_hat(滤波) / ch3 e_beta_hat(滤波)
-                     * ch4 理论 e_alpha / ch5 理论 e_beta
-                     * ch6 相位差 = SMO 输出矢量 vs 理论矢量（≡面板 ch9 theta_err，
-                     *   因理论矢量方向 = θ_enc+90°，两者相角差恒等于 theta_err） */
-                    int32_t cur[8];
-
-                    cur[0] = (int32_t)(g_smo_z_alpha_v * 1000.0f);      /* mV -> V */
-                    cur[1] = (int32_t)(g_smo_z_beta_v * 1000.0f);       /* mV -> V */
-                    cur[2] = (int32_t)(g_smo_e_alpha_hat_v * 1000.0f);  /* mV -> V */
-                    cur[3] = (int32_t)(g_smo_e_beta_hat_v * 1000.0f);   /* mV -> V */
-                    cur[4] = (int32_t)(g_smo_theory_alpha_v * 1000.0f); /* mV -> V */
-                    cur[5] = (int32_t)(g_smo_theory_beta_v * 1000.0f);  /* mV -> V */
-                    cur[6] = (int32_t)(g_smo_diag_theta_err_deg * 1000.0f); /* mdeg -> deg */
-                    cur[7] = (int32_t)(g_smo_diag_theta_err_filt_deg * 1000.0f); /* mdeg -> deg */
-                    Usart3_Vofa_SendScaled(cur, 8, USART3_VOFA_SCALE_MILLI);
-                } else {
-                /*===== mode45 SMO 专用 15 通道布局（验收面板，见上方注释）=====*/
-                int32_t cur[16];
-
-                cur[0] = (int32_t)(g_smo45_iq_ma);                      /* ch0 当前 iq (mA -> A) */
-                cur[1] = (int32_t)(g_smo45_iq_filt_ma);                 /* ch1 滤波后 iq (mA -> A) */
-                cur[2] = (int32_t)(g_smo45_iq_ref_ma);                  /* ch2 目标 iq (mA -> A) */
-                cur[3] = (int32_t)(g_smo_theory_alpha_v * 1000.0f);     /* ch3 理论 e_alpha (mV -> V) */
-                cur[4] = (int32_t)(g_smo_theory_beta_v * 1000.0f);      /* ch4 理论 e_beta (mV -> V) */
-                cur[5] = (int32_t)(g_smo_z_alpha_v * 1000.0f);          /* ch5 SMO 原始 z_alpha (mV -> V) */
-                cur[6] = (int32_t)(g_smo_z_beta_v * 1000.0f);           /* ch6 SMO 原始 z_beta (mV -> V) */
-                cur[7] = (int32_t)(g_smo_e_alpha_hat_v * 1000.0f);      /* ch7 滤波 e_alpha_hat (mV -> V) */
-                cur[8] = (int32_t)(g_smo_e_beta_hat_v * 1000.0f);       /* ch8 滤波 e_beta_hat (mV -> V) */
-                cur[9] = (int32_t)(g_smo_diag_theta_err_deg * 1000.0f); /* ch9 相位误差 (mdeg -> deg) */
-                cur[10] = (int32_t)(g_smo_diag_e_on_q_v * 1000.0f);     /* ch10 e_on_q 投影 (mV -> V) */
-                cur[11] = (int32_t)(g_smo_diag_e_on_d_v * 1000.0f);     /* ch11 e_on_d 投影 (mV -> V) */
-                cur[12] = (int32_t)(g_smo_diag_e_err_v * 1000.0f);      /* ch12 总误差范数 (mV -> V) */
-                cur[13] = (int32_t)(g_smo_diag_e_expect_v * 1000.0f);   /* ch13 理论幅值 ωψf (mV -> V) */
-                cur[14] = (int32_t)(g_smo45_speed_filt_rpm * 1000.0f);  /* ch14 实际转速 (mrpm -> rpm) */
-                cur[15] = (int32_t)(g_smo_diag_theta_err_filt_deg * 1000.0f); /* ch15 相位差滤波 (mdeg -> deg) */
-                Usart3_Vofa_SendScaled(cur, 16, USART3_VOFA_SCALE_MILLI);
-                }
+                n = Foc_Smo45_VofaFill(cur);    /* foc_smo45.h 速览卡 */
+            } else if (g_speed40_running) {
+                n = Foc_Speed40_VofaFill(cur);  /* foc_speed40.h 速览卡 */
             } else {
-            /*===== 通用布局（mode 0/28/29/30/31/40/41，17 通道）=====*/
-            int32_t cur[17];
+                n = 0;
+            }
 
+            if (n <= 0) {
+            /*===== 通用布局（mode 0/26/28/29/30/31/41，17 通道）=====*/
             cur[0] = (int32_t)(g_i_iu_ma);            /* U 相电流 (mA -> A) */
             cur[1] = (int32_t)(g_i_iv_ma);            /* V 相电流 (mA -> A) */
             cur[2] = (int32_t)(g_i_iw_ma);            /* W 相电流 (mA -> A) */
@@ -373,14 +303,12 @@ int main(void)
                                    ? (int32_t)(g_foc_id_ma)            /* mode28/29/41: id 反馈 (mA -> A) */
                                    : (int32_t)(g_foc_ibeta * 1000.0f); /* 静止系 ibeta (mA -> A) */
             cur[5] = (int32_t)(g_foc_iq_ma);           /* 控制系 iq / mode28: iq 反馈 (mA -> A) */
-            cur[6] = g_speed40_running  ? (int32_t)(g_speed40_id_ref_ma) /* mode40: id 参考 (mA -> A) */
-                    : g_drun29_running ? (int32_t)(g_drun29_id_ref_ma)  /* mode29: id 参考 (mA -> A) */
+            cur[6] = g_drun29_running ? (int32_t)(g_drun29_id_ref_ma)  /* mode29: id 参考 (mA -> A) */
                     : g_drun41_running ? (int32_t)(g_drun41_id_ref_ma)  /* mode41: id 参考 (mA -> A) */
                     : g_dci_running    ? (int32_t)(g_dci_id_ref_ma)    /* mode28: id 参考 (mA -> A) */
                                        : (int32_t)(g_foc_id_ma);       /* 控制系 id (mA -> A) */
 
-            cur[7] = g_speed40_running  ? (int32_t)(g_speed40_iq_ref_ma) /* mode40: iq 参考 (mA -> A) */
-                    : g_drun29_running ? (int32_t)(g_drun29_iq_ref_ma)  /* mode29: iq 参考 (mA -> A) */
+            cur[7] = g_drun29_running ? (int32_t)(g_drun29_iq_ref_ma)  /* mode29: iq 参考 (mA -> A) */
                     : g_drun41_running ? (int32_t)(g_drun41_iq_ref_ma)  /* mode41: iq 参考 (mA -> A) */
                     : g_dci_running    ? (int32_t)(g_dci_iq_ref_ma)    /* mode28: iq 参考 (mA -> A) */
                                        : (int32_t)(g_zizeng_volt_v * 1000.0f); /* mode30: 电压幅值 (mV -> V) */
@@ -414,18 +342,17 @@ int main(void)
             }
             cur[12] = (int32_t)(g_iqpi_iq_ref_ramp_ma); /* mode31 iq 参考(斜坡后), mA -> A */
             cur[13] = g_olf_diff_deg * 1000;          /* mode26 负载角 delta (mdeg -> deg) */
-            cur[14] = (int32_t)(g_speed40_speed_target_rpm * 1000.0f); /* mode40 目标转速 (mrpm -> rpm) */
-            cur[15] = (int32_t)(g_speed40_speed_disp_rpm * 1000.0f);   /* mode40 实际转速(显示强滤波；
-                                                                          PI 反馈滤波值看 Watch g_speed40_speed_filt_rpm) */
+            cur[14] = 0;  /* 预留（mode40 目标转速已迁自持布局，见 foc_speed40.h） */
+            cur[15] = 0;  /* 预留（mode40 实际转速已迁自持布局） */
             cur[16] = g_drun41_running
                             ? (int32_t)(g_drun41_iq_filt_ma)           /* mode41: filtered iq (mA -> A) */
                             : g_drun29_running
                             ? (int32_t)(g_drun29_iq_filt_ma)           /* mode29: filtered iq (mA -> A) */
-                            : g_speed40_running
-                            ? (int32_t)(g_speed40_iq_filt_ma)          /* mode40: filtered iq (mA -> A) */
                             : 0;
-            Usart3_Vofa_SendScaled(cur, 17, USART3_VOFA_SCALE_MILLI);
+            n = 17;
             }
+
+            Usart3_Vofa_SendScaled(cur, n, USART3_VOFA_SCALE_MILLI);
         }
 #endif
     }

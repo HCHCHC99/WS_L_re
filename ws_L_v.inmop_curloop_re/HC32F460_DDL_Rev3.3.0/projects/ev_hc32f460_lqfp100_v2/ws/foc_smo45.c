@@ -27,6 +27,7 @@
 #include "encoder.h"
 #include "motor_config.h"
 #include "hc32_ll_tmra.h"
+#include <math.h>   /* sqrtf */
 
 #define SMO45_ISR_DT_US     (1000000u / FOC_ISR_HZ)
 #define SMO45_SPD_WIN_TICKS (SMO45_SPD_WIN_MS * FOC_ISR_HZ / 1000u)
@@ -557,4 +558,69 @@ void Foc_Smo45_Step(const stc_i_data_t *pData)
     rotor_deg = (int32_t)(rotor_rad * SMO45_RAD2DEG);
     if (rotor_deg >= 360) rotor_deg -= 360;
     g_smo45_rotor_deg = rotor_deg;
+}
+
+/*===========================================================================
+ * 模式自持 VOFA：三种布局由 g_smo45_wave_mode 选择，
+ * 通道含义见 foc_smo45.h 顶部速览卡（唯一事实源）。
+ *===========================================================================*/
+int Foc_Smo45_VofaFill(int32_t *cur)
+{
+    if (g_smo45_wave_mode == 2u) {
+        /*===== wave_mode=2：PLL/无感验收面板（16ch）=====*/
+        float pll_emag = sqrtf(g_smo_e_alpha_hat_v * g_smo_e_alpha_hat_v
+                             + g_smo_e_beta_hat_v * g_smo_e_beta_hat_v);
+
+        cur[0]  = (int32_t)(g_smo45_speed_meas_rpm * 1000.0f);   /* mrpm -> rpm */
+        cur[1]  = (int32_t)(g_smo45_speed_filt_rpm * 1000.0f);   /* mrpm -> rpm */
+        cur[2]  = (int32_t)(g_pll_omega_hat_rpm * 1000.0f);      /* mrpm -> rpm */
+        cur[3]  = (int32_t)(g_pll_omega_out_rpm * 1000.0f);      /* mrpm -> rpm */
+        cur[4]  = (int32_t)((g_pll_omega_hat_rpm
+                           - g_smo45_speed_meas_rpm) * 1000.0f); /* mrpm -> rpm */
+        cur[5]  = (int32_t)((g_pll_omega_out_rpm
+                           - g_smo45_speed_filt_rpm) * 1000.0f); /* mrpm -> rpm */
+        cur[6]  = (int32_t)(g_pll_diag_theta_err_deg * 1000.0f); /* mdeg -> deg */
+        cur[7]  = (int32_t)(g_pll_diag_theta_err_filt_deg * 1000.0f);
+        cur[8]  = (int32_t)(g_smo45_iq_filt_ma);                 /* mA -> A */
+        cur[9]  = (int32_t)(g_pll_comp_deg_out * 1000.0f);       /* mdeg -> deg */
+        cur[10] = (int32_t)(g_smo45_sl_active * 1000.0f);        /* 0/1 */
+        cur[11] = (int32_t)(pll_emag * 1000.0f);                 /* mV -> V */
+        cur[12] = (int32_t)(g_pll_diag_smo_err_deg * 1000.0f);   /* mdeg -> deg */
+        cur[13] = (int32_t)(g_smo45_speed_target_rpm * 1000.0f); /* mrpm -> rpm */
+        cur[14] = (int32_t)(g_smo45_speed_disp_rpm * 1000.0f);   /* 显示滤波转速 */
+        cur[15] = (int32_t)(g_smo45_speed_ramp_rpm * 1000.0f);   /* 斜坡输出转速
+                                              * (mrpm -> rpm)：与 ch13 目标对比看
+                                              * 斜坡限幅段，与 ch1 反馈对比看环路 */
+        return 16;
+    } else if (g_smo45_wave_mode != 0u) {
+        /*===== wave_mode=1：波形窄帧（8ch=32B，~2.9kHz 帧率）=====*/
+        cur[0] = (int32_t)(g_smo_z_alpha_v * 1000.0f);      /* mV -> V */
+        cur[1] = (int32_t)(g_smo_z_beta_v * 1000.0f);       /* mV -> V */
+        cur[2] = (int32_t)(g_smo_e_alpha_hat_v * 1000.0f);  /* mV -> V */
+        cur[3] = (int32_t)(g_smo_e_beta_hat_v * 1000.0f);   /* mV -> V */
+        cur[4] = (int32_t)(g_smo_theory_alpha_v * 1000.0f); /* mV -> V */
+        cur[5] = (int32_t)(g_smo_theory_beta_v * 1000.0f);  /* mV -> V */
+        cur[6] = (int32_t)(g_smo_diag_theta_err_deg * 1000.0f);      /* mdeg -> deg */
+        cur[7] = (int32_t)(g_smo_diag_theta_err_filt_deg * 1000.0f); /* mdeg -> deg */
+        return 8;
+    } else {
+        /*===== wave_mode=0：SMO 验收面板（16ch）=====*/
+        cur[0] = (int32_t)(g_smo45_iq_ma);                      /* ch0 当前 iq (mA -> A) */
+        cur[1] = (int32_t)(g_smo45_iq_filt_ma);                 /* ch1 滤波后 iq (mA -> A) */
+        cur[2] = (int32_t)(g_smo45_iq_ref_ma);                  /* ch2 目标 iq (mA -> A) */
+        cur[3] = (int32_t)(g_smo_theory_alpha_v * 1000.0f);     /* ch3 理论 e_alpha (mV -> V) */
+        cur[4] = (int32_t)(g_smo_theory_beta_v * 1000.0f);      /* ch4 理论 e_beta (mV -> V) */
+        cur[5] = (int32_t)(g_smo_z_alpha_v * 1000.0f);          /* ch5 SMO 原始 z_alpha (mV -> V) */
+        cur[6] = (int32_t)(g_smo_z_beta_v * 1000.0f);           /* ch6 SMO 原始 z_beta (mV -> V) */
+        cur[7] = (int32_t)(g_smo_e_alpha_hat_v * 1000.0f);      /* ch7 滤波 e_alpha_hat (mV -> V) */
+        cur[8] = (int32_t)(g_smo_e_beta_hat_v * 1000.0f);       /* ch8 滤波 e_beta_hat (mV -> V) */
+        cur[9] = (int32_t)(g_smo_diag_theta_err_deg * 1000.0f); /* ch9 相位误差 (mdeg -> deg) */
+        cur[10] = (int32_t)(g_smo_diag_e_on_q_v * 1000.0f);     /* ch10 e_on_q 投影 (mV -> V) */
+        cur[11] = (int32_t)(g_smo_diag_e_on_d_v * 1000.0f);     /* ch11 e_on_d 投影 (mV -> V) */
+        cur[12] = (int32_t)(g_smo_diag_e_err_v * 1000.0f);      /* ch12 总误差范数 (mV -> V) */
+        cur[13] = (int32_t)(g_smo_diag_e_expect_v * 1000.0f);   /* ch13 理论幅值 ωψf (mV -> V) */
+        cur[14] = (int32_t)(g_smo45_speed_filt_rpm * 1000.0f);  /* ch14 实际转速 (mrpm -> rpm) */
+        cur[15] = (int32_t)(g_smo_diag_theta_err_filt_deg * 1000.0f); /* ch15 相位差滤波 (mdeg -> deg) */
+        return 16;
+    }
 }

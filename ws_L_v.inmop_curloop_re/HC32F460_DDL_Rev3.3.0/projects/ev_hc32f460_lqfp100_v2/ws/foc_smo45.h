@@ -3,22 +3,65 @@
  * @file  foc_smo45.h
  * @brief FOC mode 45 - SMO+PLL 无感速度/电流双闭环（分步开发中）。
  *
- * 第 1 步（当前，已完成）：完全复刻 mode 40（编码器 FOC 速度/电流双闭环）
+ * 第 1 步（已完成）：完全复刻 mode 40（编码器 FOC 速度/电流双闭环）
  * + 启动转速自动爬坡 profile（0→200→500→1000→1500→2000 rpm）+
- * SMO 纯旁观（foc_smo.c，编码器闭环不受影响）：
- *   输入 = 上一拍指令 valpha/vbeta + 同源 Clarke 电流；
- *   输出 = e_alpha_hat/e_beta_hat（VOFA CH11/12），
- *   诊断 = |e_hat| vs ω·ψf、atan2 角 vs 编码器角（CH13）。
- *   判据：匀速下 e_hat 幅值稳定/互差 90°/接近正弦，
- *   幅值 ≈ ω·ψf×(1−R/(k/φ))（k=4.6V 固定，按 2600rpm 整定）。
- * 第 2 步（待做）：PLL 从 e_hat 提取 theta_hat/omega_hat，仍旁观。
- * 第 3 步（待做）：脱编码器无感闭环。
+ * SMO 纯旁观（foc_smo.c，编码器闭环不受影响）。
+ * 第 2 步（已完成）：PLL 旁观（foc_pll.c）从 e_hat 提取 theta_hat/omega_hat，
+ * 与编码器对比。
+ * 第 3 步（当前）：g_smo45_sensorless=1 切无感（θ_park 取 PLL 补偿外推角），
+ * 编码器角保留作裁判。
  *
  * 结构（与 mode 40 相同）：
  *   速度 PI（5ms 节拍）输出 q 轴电流参考 (mA)，id 参考 = 0；
  *   独立 id/iq 电流 PI 在每个电流采样 ISR（20kHz）执行。
  *   启动前置：有效的 mode 24 校准（foc_dcal24 快照）。
- *******************************************************************************
+ *
+ * ============================ 模式速览卡（唯一事实源）========================
+ * 流程：mode 24 校准 → mode 45 → 自动爬坡到 1000rpm → Watch 接管调目标
+ *
+ * 【Watch 可调变量】（名称 = 默认值 单位）
+ *   g_smo45_speed_target_rpm = 0     rpm       目标转速（爬坡到顶后接管）
+ *   g_smo45_auto_ramp        = 1     -         启动自动爬坡开关（0=纯手动）
+ *   g_smo45_sensorless       = 0     -         无感切换开关（1=申请切换，需
+ *                                              g_smo_emf_ok=1；回 0 退出）
+ *   g_smo45_ang_lead_ticks   = 1.5   拍        有感角度超前补偿（0=关，
+ *                                              高速 4500rpm+ 必需）
+ *   g_smo45_iq_filt_alpha    = 0.10  -         iq 反馈滤波系数
+ *   g_smo45_wave_mode        = 0     -         VOFA 布局选择（见下）
+ *   g_smo45_pid_speed_cfg.kp = 1.8   mA/rpm    速度环 P（Watch 改立即生效，
+ *                                              稳态中小步 ±20% 调）
+ *   g_smo45_pid_speed_cfg.ki = 0.2   mA/rpm/s  速度环 I（同上）
+ *   g_pll_comp_bias_deg      = 0     deg       PLL 恒定偏置校准（无感稳态
+ *                                              角度误差均值补偿，见 foc_pll.h）
+ *
+ * 【关键观察变量】
+ *   g_smo45_speed_filt_rpm   PI 反馈真实转速（调参判抖动看这个，勿用
+ *                            CH14 显示滤波值 α=0.05，其滞后大只看趋势）
+ *   g_smo45_vd / g_smo45_vq  电流环输出电压；vq 顶到 ~6.2V = 电压墙
+ *   g_smo45_vsat             电流环饱和标志（1=输出贴限幅）
+ *   g_smo45_sl_active        无感锁存状态（1=Park 角已用 PLL 无感量）
+ *   g_smo_emf_ok             SMO 反电动势自动判定通过（foc_smo.h 有判据）
+ *   g_smo_jdg_fail           判定失败掩码 bit0 转速/bit1 幅值/bit2 相位
+ *   g_smo45_state / g_smo45_evt  状态机与事件（2=过流故障停机）
+ *
+ * 【VOFA 通道】g_smo45_wave_mode 选择（921600bps）：
+ *   wave_mode=0：16ch SMO 验收面板（直流观测量为主）
+ *     ch0 iq(A) ch1 iq滤波(A) ch2 iq参考(A)
+ *     ch3 理论eα(V) ch4 理论eβ(V) ch5 原始zα(V) ch6 原始zβ(V)
+ *     ch7 滤波eα̂(V) ch8 滤波eβ̂(V) ch9 相位误差(deg)
+ *     ch10 e_on_q(V) ch11 e_on_d(V) ch12 误差范数(V) ch13 理论幅值ωψf(V)
+ *     ch14 实际转速-滤波(rpm) ch15 相位误差滤波(deg)
+ *     ⚠ ch3~8 为电频率正弦，VOFA 帧率必混叠只查存在性；验收看 ch9~13
+ *   wave_mode=1：8ch 波形窄帧（~2.9kHz 帧率，看正弦细节降到 1500rpm）
+ *     ch0 zα原始(V) ch1 zβ原始(V) ch2 eα̂滤波(V) ch3 eβ̂滤波(V)
+ *     ch4 理论eα(V) ch5 理论eβ(V) ch6 相位差(deg) ch7 相位差滤波(deg)
+ *   wave_mode=2：16ch PLL/无感验收面板
+ *     ch0 enc原始转速 ch1 enc滤波转速 ch2 ω̂原始 ch3 ω̂低通(无感反馈) (rpm)
+ *     ch4 转速差原始 ch5 转速差滤波 (rpm)
+ *     ch6 角差原始(deg) ch7 角差滤波(deg) ch8 iq(A) ch9 补偿角δ̂(deg)
+ *     ch10 无感锁存(0/1) ch11 |e_hat|(V) ch12 sE同拍角差(deg)
+ *     ch13 目标转速(rpm) ch14 显示滤波转速(rpm) ch15 斜坡输出转速(rpm)
+ * ===========================================================================
  */
 
 #ifndef __FOC_SMO45_H__
@@ -86,8 +129,9 @@ extern volatile uint8_t  g_smo45_running;
 extern volatile uint8_t  g_smo45_state;
 extern volatile uint8_t  g_smo45_evt;
 extern volatile uint8_t  g_smo45_auto_ramp;
-extern volatile uint8_t  g_smo45_wave_mode;   /* VOFA 帧布局：0=15ch 验收面板，1=7ch 波形窄帧
-                                               * （32B @921600 → ~2.9kHz 帧率，2600rpm 6.6 点/周期） */
+extern volatile uint8_t  g_smo45_wave_mode;   /* VOFA 帧布局：0=16ch SMO 验收面板，
+                                               * 1=8ch 波形窄帧（32B @921600 → ~2.9kHz
+                                               * 帧率），2=16ch PLL/无感验收面板 */
 extern volatile float    g_smo45_speed_target_rpm;
 extern volatile float    g_smo45_speed_ramp_rpm;
 extern volatile float    g_smo45_speed_meas_rpm;
@@ -129,6 +173,7 @@ void Foc_Smo45_SetTargetRPM(float target_rpm);
 void Foc_Smo45_Start(void);
 void Foc_Smo45_Stop(void);
 void Foc_Smo45_Step(const stc_i_data_t *pData);
+int  Foc_Smo45_VofaFill(int32_t *cur);   /* 模式自持 VOFA，见顶部速览卡 */
 
 #ifdef __cplusplus
 }

@@ -16,6 +16,8 @@
 #include "encoder.h"
 #include "motor_config.h"
 #include "hc32_ll_tmra.h"
+#include "I.h"            /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
+#include "foc_zizeng.h"   /* g_foc_ialpha/ibeta/iab_mag（VOFA 静止系通道） */
 
 #define SPEED40_ISR_DT_US     (1000000u / FOC_ISR_HZ)
 #define SPEED40_SPD_WIN_TICKS (SPEED40_SPD_WIN_MS * FOC_ISR_HZ / 1000u)
@@ -438,4 +440,42 @@ void Foc_Speed40_Step(const stc_i_data_t *pData)
     rotor_deg = (int32_t)(rotor_rad * SPEED40_RAD2DEG);
     if (rotor_deg >= 360) rotor_deg -= 360;
     g_speed40_rotor_deg = rotor_deg;
+}
+
+/*===========================================================================
+ * 模式自持 VOFA：固定 18ch 布局，通道含义见 foc_speed40.h 顶部速览卡
+ *（唯一事实源）。
+ *===========================================================================*/
+int Foc_Speed40_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);              /* ch0 U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);              /* ch1 V 相电流 (mA -> A) */
+    cur[2]  = (int32_t)(g_i_iw_ma);              /* ch2 W 相电流 (mA -> A) */
+    cur[3]  = (int32_t)(g_foc_ialpha * 1000.0f); /* ch3 静止系 ialpha (mA -> A) */
+    cur[4]  = (int32_t)(g_foc_ibeta * 1000.0f);  /* ch4 静止系 ibeta (mA -> A) */
+    cur[5]  = (int32_t)(g_foc_iq_ma);            /* ch5 控制系 iq (mA -> A) */
+    cur[6]  = (int32_t)(g_speed40_id_ref_ma);    /* ch6 id 参考 (mA -> A) */
+    cur[7]  = (int32_t)(g_speed40_iq_ref_ma);    /* ch7 iq 参考 (mA -> A) */
+    cur[8]  = (int32_t)(g_speed40_vd * 1000.0f); /* ch8 电流环输出 vd (mV -> V) */
+    cur[9]  = (int32_t)(g_speed40_vq * 1000.0f); /* ch9 电流环输出 vq (mV -> V)，
+                                                  * 贴 6.2V = 电压墙 */
+    cur[10] = (int32_t)(g_foc_iab_mag * 1000.0f); /* ch10 静止系电流幅值 (mA -> A) */
+    cur[11] = 0;                                 /* ch11~12 预留 */
+    cur[12] = 0;
+    cur[13] = (int32_t)(g_speed40_speed_ramp_rpm * 1000.0f); /* ch13 斜坡输出转速
+                                                  * (mrpm -> rpm)：内部斜坡限幅整形后的
+                                                  * 真实给定；反馈与它比（ch17）：ch13 慢
+                                                  * =斜坡限幅卡住，ch17 慢=环路/滤波滞后 */
+    cur[14] = (int32_t)(g_speed40_speed_target_rpm * 1000.0f); /* ch14 目标转速
+                                                  * (mrpm -> rpm) */
+    cur[15] = (int32_t)(g_speed40_speed_disp_rpm * 1000.0f);   /* ch15 显示强滤波
+                                                  * 转速 (mrpm -> rpm)，α=0.05
+                                                  * τ≈100ms，刻意滞后，只看趋势 */
+    cur[16] = (int32_t)(g_speed40_iq_filt_ma);   /* ch16 滤波 iq (mA -> A) */
+    cur[17] = (int32_t)(g_speed40_speed_filt_rpm * 1000.0f);   /* ch17 PI 反馈真实转速
+                                                  * (mrpm -> rpm)，α=0.25 τ≈20ms：
+                                                  * 速度环真正吃的那个值，与 ch13
+                                                  * 之差决定 P 项大小。调外环判据用
+                                                  * ch17 追 ch13，不要用 ch15 */
+    return 18;
 }

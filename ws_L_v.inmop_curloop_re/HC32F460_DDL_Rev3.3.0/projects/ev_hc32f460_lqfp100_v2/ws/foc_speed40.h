@@ -7,7 +7,40 @@
  * reference.  The id reference is zero.  The independent id/iq current PIs
  * run every current-sample ISR.  Mode 40 requires a valid mode 24 calibration
  * before start.
- *******************************************************************************
+ *
+ * ============================ 模式速览卡（唯一事实源）========================
+ * 模式：40 = 编码器 FOC 速度/电流双闭环（无自动爬坡，目标纯手动设置，
+ *       内部经斜坡限幅整形）
+ *
+ * 【Watch 可调变量】（名称 = 默认值 单位）
+ *   g_speed40_speed_target_rpm = 0     rpm       目标转速
+ *   g_speed40_iq_filt_alpha    = 0.10  -         iq 反馈滤波系数
+ *   g_speed40_pid_speed_cfg.kp = 1.8   mA/rpm    速度环 P（Watch 改立即生效，
+ *                                                稳态中小步 ±20% 调）
+ *   g_speed40_pid_speed_cfg.ki = 0.2   mA/rpm/s  速度环 I（同上）
+ *
+ * 【关键观察变量】
+ *   g_speed40_speed_filt_rpm   PI 反馈真实转速（调参判超调/振铃看这个；
+ *                              VOFA 已引出到 ch17，CH15 显示滤波值 α=0.05
+ *                              滞后大只看趋势）
+ *   g_speed40_vd / g_speed40_vq 电流环输出电压；vq 顶到 ~6.2V = 电压墙
+ *   g_speed40_vsat             电流环饱和标志（1=输出贴限幅）
+ *   g_speed40_state / g_speed40_evt  状态机与事件（2=过流故障停机）
+ *
+ * 【VOFA 通道】固定 18ch（mode40 专属语义，填充见 Foc_Speed40_VofaFill）：
+ *   ch0~2 三相电流(A)  ch3 静止系ialpha(A)  ch4 静止系ibeta(A)
+ *   ch5 iq(A)  ch6 id参考(A)  ch7 iq参考(A)
+ *   ch8 vd(V)  ch9 vq(V)             ← 验电压墙看 ch9 是否贴 6.2V
+ *   ch10 静止系电流幅值(A)  ch11~12 预留 0
+ *   ch13 斜坡输出转速(rpm)  ← CH15 追 CH14 慢时：ch13 慢=斜坡限幅，
+ *                              ch13 快 ch15 慢=显示滤波/环路滞后
+ *   ch14 目标转速(rpm)  ch15 实际转速-显示强滤波(rpm)  ch16 iq滤波(A)
+ *   ch17 实际转速-PI 反馈(rpm)  ← 速度环真正吃的反馈（α=0.25 @5ms，τ≈20ms）
+ *        调外环只认 ch17：它和 ch13（斜坡给定）之差决定 P 项大小。
+ *        ch15 是 α=0.05 显示强滤波（τ≈100ms），**刻意更滞后**，只用来看趋势；
+ *        两者稳态重合，动态过程中 ch15 必然落后，属预期不是故障。
+ *        ⚠ VOFA+ 需同步把通道数配成 18。
+ * ===========================================================================
  */
 
 #ifndef __FOC_SPEED40_H__
@@ -99,6 +132,7 @@ void Foc_Speed40_SetTargetRPM(float target_rpm);
 void Foc_Speed40_Start(void);
 void Foc_Speed40_Stop(void);
 void Foc_Speed40_Step(const stc_i_data_t *pData);
+int  Foc_Speed40_VofaFill(int32_t *cur);  /* 模式自持 VOFA，见顶部速览卡 */
 
 #ifdef __cplusplus
 }
