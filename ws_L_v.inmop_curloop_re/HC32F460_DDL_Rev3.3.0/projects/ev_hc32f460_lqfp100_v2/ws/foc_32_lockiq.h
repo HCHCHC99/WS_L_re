@@ -73,7 +73,7 @@
  *        3 ALIGN_VERIFY（回90°复测跟踪，位移≈90°电）/ 4 LOCKED_WAIT_HANDOFF（已锁定等交接）
  *        5 LOCK_FAIL（超时/跟踪失败，拒绝启动）/ 6 FAULT_OC
  *   g_lockiq_off_deg   已注入 mode 31 的偏移 (deg)
- *   事件码 LOCKIQ_EVT_*：1 LOCKED / 2 FAIL_TIMEOUT / 3 FAIL_TRACK
+ *   事件码 FOC32_EVT_*：1 LOCKED / 2 FAIL_TIMEOUT / 3 FAIL_TRACK
  *   （事件经 foc_obs 在主循环打印并执行交接）
  *
  * 【VOFA 通道】**自持布局，固定 16ch**（实现见 foc_32_lockiq.c
@@ -111,9 +111,9 @@ extern "C" {
 /* 1 = RTT prints on, 0 = off */
 #define FOC_LOCKIQ_DBG   1
 #if FOC_LOCKIQ_DBG
-    #define LOCKIQ_DBG(fmt, ...)   MAIN_D("[LOCKIQ] " fmt, ##__VA_ARGS__)
+    #define FOC32_DBG(fmt, ...)   MAIN_D("[LOCKIQ] " fmt, ##__VA_ARGS__)
 #else
-    #define LOCKIQ_DBG(fmt, ...)   ((void)0)
+    #define FOC32_DBG(fmt, ...)   ((void)0)
 #endif
 
 /* ============================================================================
@@ -123,35 +123,35 @@ extern "C" {
  *   连续 QUIET_NEED 个静止窗口才算稳定（双窗复核，防瞬时噪声骗过）
  *   ALPHA/VERIFY 各有 TIMEOUT 超时：始终不静 -> 失败，拒绝启动
  * ==========================================================================*/
-#define LOCKIQ_BETA_MS        500u
-#define LOCKIQ_WIN_MS         300u
-#define LOCKIQ_TIMEOUT_MS     3000u
-#define LOCKIQ_WIN_TOL_CNTS   4        /* 窗口位移容差 (counts)，约3.5°电角度 */
-#define LOCKIQ_QUIET_NEED     2u       /* 连续静止窗口数 */
-#define LOCKIQ_TRACK_TOL_CNTS 12       /* VERIFY 跟踪误差容差 (counts)，约10°电 */
+#define FOC32_BETA_MS        500u
+#define FOC32_WIN_MS         300u
+#define FOC32_TIMEOUT_MS     3000u
+#define FOC32_WIN_TOL_CNTS   4        /* 窗口位移容差 (counts)，约3.5°电角度 */
+#define FOC32_QUIET_NEED     2u       /* 连续静止窗口数 */
+#define FOC32_TRACK_TOL_CNTS 12       /* VERIFY 跟踪误差容差 (counts)，约10°电 */
 
-#define LOCKIQ_BETA_CNT     ((uint32_t)LOCKIQ_BETA_MS * FOC_ISR_HZ / 1000u)
-#define LOCKIQ_WIN_CNT      ((uint32_t)LOCKIQ_WIN_MS * FOC_ISR_HZ / 1000u)
-#define LOCKIQ_TIMEOUT_CNT  ((uint32_t)LOCKIQ_TIMEOUT_MS * FOC_ISR_HZ / 1000u)
+#define FOC32_BETA_CNT     ((uint32_t)FOC32_BETA_MS * FOC_ISR_HZ / 1000u)
+#define FOC32_WIN_CNT      ((uint32_t)FOC32_WIN_MS * FOC_ISR_HZ / 1000u)
+#define FOC32_TIMEOUT_CNT  ((uint32_t)FOC32_TIMEOUT_MS * FOC_ISR_HZ / 1000u)
 
 /* ============================================================================
  * mode 32 运行状态机 (g_lockiq_step)
  *   停止(mode 0)后保持最后状态不清除，下次成功启动时复位
  * ==========================================================================*/
 typedef enum {
-    LOCKIQ_STEP_IDLE                = 0, /* 上电初始/未启动 */
-    LOCKIQ_STEP_ALIGN_BETA          = 1, /* 磁场定 90°，转子吸附中 */
-    LOCKIQ_STEP_ALIGN_ALPHA         = 2, /* 磁场定 0°，等待转子静止 */
-    LOCKIQ_STEP_ALIGN_VERIFY        = 3, /* 磁场定 90°，复测跟踪(位移≈90°电) */
-    LOCKIQ_STEP_LOCKED_WAIT_HANDOFF = 4, /* 已锁定+注入完成，等 main.c 交接 */
-    LOCKIQ_STEP_LOCK_FAIL           = 5, /* 超时/跟踪失败，拒绝启动 */
-    LOCKIQ_STEP_FAULT_OC            = 6, /* 过流保护停机 */
+    FOC32_STEP_IDLE                = 0, /* 上电初始/未启动 */
+    FOC32_STEP_ALIGN_BETA          = 1, /* 磁场定 90°，转子吸附中 */
+    FOC32_STEP_ALIGN_ALPHA         = 2, /* 磁场定 0°，等待转子静止 */
+    FOC32_STEP_ALIGN_VERIFY        = 3, /* 磁场定 90°，复测跟踪(位移≈90°电) */
+    FOC32_STEP_LOCKED_WAIT_HANDOFF = 4, /* 已锁定+注入完成，等 main.c 交接 */
+    FOC32_STEP_LOCK_FAIL           = 5, /* 超时/跟踪失败，拒绝启动 */
+    FOC32_STEP_FAULT_OC            = 6, /* 过流保护停机 */
 } lockiq_step_t;
 
 /* 事件码 (g_lockiq_evt_code)，由观察模块 foc_obs (Foc_Obs_Task) 处理 */
-#define LOCKIQ_EVT_LOCKED        1u   /* 锁定成功，应调 Foc_StartIqPi() 交接 */
-#define LOCKIQ_EVT_FAIL_TIMEOUT  2u   /* 等静止超时，应 Stop */
-#define LOCKIQ_EVT_FAIL_TRACK    3u   /* 跟踪复测失败，应 Stop */
+#define FOC32_EVT_LOCKED        1u   /* 锁定成功，应调 Foc_IqPi_Start() 交接 */
+#define FOC32_EVT_FAIL_TIMEOUT  2u   /* 等静止超时，应 Stop */
+#define FOC32_EVT_FAIL_TRACK    3u   /* 跟踪复测失败，应 Stop */
 
 /* ============================================================================
  * Keil Watch 可调变量 / 观测量（定义见 foc_32_lockiq.c）
@@ -170,7 +170,7 @@ extern volatile int32_t g_lockiq_off_deg;       /* 已注入 mode 31 的偏移 (
  ******************************************************************************/
 
 /* 启动模式32：清故障 -> PWM 启动 -> 直流对齐锁定偏移 -> 置事件等 foc_obs
- * 交接 Foc_StartIqPi()。不依赖 mode 30（会覆盖其锁定值与方向基准）。 */
+ * 交接 Foc_IqPi_Start()。不依赖 mode 30（会覆盖其锁定值与方向基准）。 */
 void Foc_LockIqPi_Start(void);
 
 /* 停止模式32（含对齐失败后的停机；不影响已交接运行的 mode 31） */

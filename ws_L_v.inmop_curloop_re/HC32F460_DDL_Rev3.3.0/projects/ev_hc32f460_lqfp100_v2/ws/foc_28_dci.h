@@ -22,7 +22,7 @@
  *   4. kp 扫参（Watch 改 g_dci_pid_*_cfg.kp）：0.5 → 1.0 → 2.0
  *      判据：CH5(iq) 快速接近 CH7(iq_ref) 且不超过（不振铃、eq_pp 不发散）
  *      注意 P-only 稳态差距 = R·i_ref/(kp+R) 属正常（BEMF=0、kp=0.5 → 77%）
- *   5. P 合格后：Watch 置 i_valid=1 + ki=DCI_PI_KI 收尾，eq_mean → 0
+ *   5. P 合格后：Watch 置 i_valid=1 + ki=FOC28_PI_KI 收尾，eq_mean → 0
  *
  * ============================================================================
  * 【与 mode 27 的关系（第 1 步遗留说明）】
@@ -43,7 +43,7 @@
  *      （i_valid=0）-> vd/vq -> 反 Park（转子角）-> SVPWM。
  *
  * 角度框架（与 mode 27 相同的增量累积式）：
- *   每拍 wrap-safe 差分 -> ±DCI_ENC_DELTA_MAX(32) counts 限幅 -> s_enc_pos
+ *   每拍 wrap-safe 差分 -> ±FOC28_ENC_DELTA_MAX(32) counts 限幅 -> s_enc_pos
  *   累加；s_off_rel = ALPHA 锁零点瞬间相对计数；转子电角 =
  *   mod((s_enc_pos - s_off_rel) × 编码器方向, CPR) × 360°×极对数/CPR。
  *   RUN 控制系 = 转子系（Park/反 Park 都在转子角）。
@@ -145,37 +145,37 @@ extern "C" {
 /* 1 = RTT prints on, 0 = off */
 #define FOC_DCI_DBG   1
 #if FOC_DCI_DBG
-    #define DCI_DBG(fmt, ...)   MAIN_D("[DCI] " fmt, ##__VA_ARGS__)
+    #define FOC28_DBG(fmt, ...)   MAIN_D("[DCI] " fmt, ##__VA_ARGS__)
 #else
-    #define DCI_DBG(fmt, ...)   ((void)0)
+    #define FOC28_DBG(fmt, ...)   ((void)0)
 #endif
 
 /*=============================================================================
  * 时长/窗口（编译期常量，FOC_ISR_HZ tick 换算在 .c 内完成）
  *=============================================================================*/
-#define DCI_BETA_MS       2000u  /* 校准 BETA 吸附时长 */
-#define DCI_ALPHA_MS      2000u  /* 校准 ALPHA 吸附时长 */
-#define DCI_SPEED_WIN_MS  200u   /* 转速测量窗口 */
-#define DCI_PP_WIN_MS     5000u  /* id/iq 峰峰值统计窗口 */
-#define DCI_MEAN_WIN_MS   3000u  /* id/iq 均值统计窗口 */
-#define DCI_ERR_WIN_MS    5000u  /* 电流环误差统计窗口 */
+#define FOC28_BETA_MS       2000u  /* 校准 BETA 吸附时长 */
+#define FOC28_ALPHA_MS      2000u  /* 校准 ALPHA 吸附时长 */
+#define FOC28_SPEED_WIN_MS  200u   /* 转速测量窗口 */
+#define FOC28_PP_WIN_MS     5000u  /* id/iq 峰峰值统计窗口 */
+#define FOC28_MEAN_WIN_MS   3000u  /* id/iq 均值统计窗口 */
+#define FOC28_ERR_WIN_MS    5000u  /* 电流环误差统计窗口 */
 
 /*=============================================================================
  * 电流环参数（P 重调阶段：i_valid=false 纯 P。转子捏死（BEMF=0）下调 P：
  * 判据 = 快速接近目标电流且不超过（不振铃）。
- * P 合格后 Watch 置 g_dci_pid_*_cfg.i_valid=1 + ki=DCI_PI_KI 收尾）
+ * P 合格后 Watch 置 g_dci_pid_*_cfg.i_valid=1 + ki=FOC28_PI_KI 收尾）
  *=============================================================================*/
-#define DCI_PI_KP         0.5f   /* PI 比例增益 (V/A)。P-only 门槛 kp≈(3~7)×R≈0.5~1；
+#define FOC28_PI_KP         0.5f   /* PI 比例增益 (V/A)。P-only 门槛 kp≈(3~7)×R≈0.5~1；
                                     kp 过小 P 环产不出克服 R+BEMF 的电压（电机不动）；
                                     kp 过大（≈L/Ts 量级）采样延迟引发振铃 */
-#define DCI_PI_KI         300.0f /* PI 积分增益（V/A/s）≈ kp×R/L（kp=0.5, L≈0.26mH 实测反推，
+#define FOC28_PI_KI         300.0f /* PI 积分增益（V/A/s）≈ kp×R/L（kp=0.5, L≈0.26mH 实测反推，
                                     零极点对消起点），从小往大调 */
-#define DCI_PI_UMAX_V     3.5f   /* PI 输出限幅 (V)，|vd/vq| ≤ UMAX（与 mode 31 同款；
+#define FOC28_PI_UMAX_V     3.5f   /* PI 输出限幅 (V)，|vd/vq| ≤ UMAX（与 mode 31 同款；
                                     3A 矢量可保持至 ~5300rpm，再高触及饱和限速） */
-#define DCI_ITERM_MAX_V   3.2f   /* 积分项限幅 (V)，必须 > 最大 BEMF 3.05V @ 891Hz 天花板 */
-#define DCI_I_REF_MA      500.0f /* 电流矢量幅值参考 (mA) —— 调 I 阶段默认 ≈摩擦电流；
+#define FOC28_ITERM_MAX_V   3.2f   /* 积分项限幅 (V)，必须 > 最大 BEMF 3.05V @ 891Hz 天花板 */
+#define FOC28_I_REF_MA      500.0f /* 电流矢量幅值参考 (mA) —— 调 I 阶段默认 ≈摩擦电流；
                                     eq_mean≈0 后 Watch 逐步上调 250→500→1000→3000 */
-#define DCI_I_RAMP_MA_S   0.0f   /* I_ref 软启动斜率 (mA/s)。<=0 = 直通（阶跃激励，调 P 用）；
+#define FOC28_I_RAMP_MA_S   0.0f   /* I_ref 软启动斜率 (mA/s)。<=0 = 直通（阶跃激励，调 P 用）；
                                     Watch 置正数（如 1000）启用软启动：参考幅值每拍向目标爬
                                     一小步（小目标），0->1000mA 约 1s 走完，避免转矩突跳 */
 
@@ -183,27 +183,27 @@ extern "C" {
  * 编码器增量限幅（与 mode 27 同：物理极限 7800rpm -> 单拍真实增量上限
  * ≈26.6 counts，超过判定为毛刺，钳位防功角框架永久污染）
  *=============================================================================*/
-#define DCI_ENC_DELTA_MAX 32
+#define FOC28_ENC_DELTA_MAX 32
 
 /*=============================================================================
  * 状态机（g_dci_state）：mode 28 专用，校准后固定进入 RUN。
  *=============================================================================*/
 
-#define DCI_STEP_IDLE       0u  /* 未运行 */
-#define DCI_STEP_CALIB      1u  /* 零矢量电流零偏校准（foc_calib，~210ms） */
-#define DCI_STEP_CAL_BETA   2u  /* 校准：磁场 90°，2s */
-#define DCI_STEP_CAL_ALPHA  3u  /* 校准：磁场 0°，2s，结束锁零点 */
-#define DCI_STEP_RUN        4u  /* 功角闭环拖动（磁场 = 转子 + delta） */
-#define DCI_STEP_FAULT_OC   5u  /* 过流停机 */
+#define FOC28_STEP_IDLE       0u  /* 未运行 */
+#define FOC28_STEP_CALIB      1u  /* 零矢量电流零偏校准（foc_calib，~210ms） */
+#define FOC28_STEP_CAL_BETA   2u  /* 校准：磁场 90°，2s */
+#define FOC28_STEP_CAL_ALPHA  3u  /* 校准：磁场 0°，2s，结束锁零点 */
+#define FOC28_STEP_RUN        4u  /* 功角闭环拖动（磁场 = 转子 + delta） */
+#define FOC28_STEP_FAULT_OC   5u  /* 过流停机 */
 
 /*=============================================================================
  * 事件码（g_dci_evt，ISR 置位，Foc_Obs_Task 打印后清零）
  *=============================================================================*/
-#define DCI_EVT_CALIB_DONE  1u
-#define DCI_EVT_BETA_DONE   2u
-#define DCI_EVT_LOCKED      3u
-#define DCI_EVT_RAMP_DONE   4u
-#define DCI_EVT_OC          5u
+#define FOC28_EVT_CALIB_DONE  1u
+#define FOC28_EVT_BETA_DONE   2u
+#define FOC28_EVT_LOCKED      3u
+#define FOC28_EVT_RAMP_DONE   4u
+#define FOC28_EVT_OC          5u
 
 /*=============================================================================
  * Keil Watch 可调变量 / 观测量（定义见 foc_28_dci.c）
@@ -213,8 +213,8 @@ extern volatile float    g_dci_dlt_targ_deg;  /* 功角爬坡终点 (deg, 默认
 extern volatile uint32_t g_dci_dlt_tr_ms;     /* 功角爬坡过渡时间 (ms, 0=立即, Start不复位) */
 extern volatile float    g_dci_volt_v;        /* 电压幅值 (V, 默认0.6, Start复位; =调速旋钮) */
 extern volatile uint8_t  g_dci_running;       /* 1 = mode 28 正在运行 */
-extern volatile uint8_t  g_dci_state;         /* DCI_STEP_xxx */
-extern volatile uint8_t  g_dci_evt;           /* DCI_EVT_xxx */
+extern volatile uint8_t  g_dci_state;         /* FOC28_STEP_xxx */
+extern volatile uint8_t  g_dci_evt;           /* FOC28_EVT_xxx */
 extern volatile int32_t  g_dci_offset;        /* 校准锁零点 (hw绝对帧counts, 显示/对比用) */
 extern volatile float    g_dci_dlt_now_deg;   /* 当前 delta 指令 (deg, 爬坡中实时) */
 extern volatile float    g_dci_speed_hz;      /* 实测电频率 (Hz, 200ms窗口, 带符号) */
@@ -223,16 +223,16 @@ extern volatile int32_t  g_dci_rotor_deg;     /* 转子电角度 (deg, 0~359, �
 extern volatile int32_t  g_dci_diff_deg;      /* 功角实测 = field-rotor (deg, -180~180) */
 extern volatile float    g_dci_id_ma;         /* 真实转子系 id (mA, 零偏校正后) */
 extern volatile float    g_dci_iq_ma;         /* 真实转子系 iq (mA, 零偏校正后) */
-extern volatile float    g_dci_id_pp_ma;      /* id 峰峰值 (mA, DCI_PP_WIN_MS 窗口每 5s 刷新) */
+extern volatile float    g_dci_id_pp_ma;      /* id 峰峰值 (mA, FOC28_PP_WIN_MS 窗口每 5s 刷新) */
 extern volatile float    g_dci_iq_pp_ma;      /* iq 峰峰值 (mA, 同上) */
-extern volatile float    g_dci_id_mean_ma;    /* id 均值 (mA, DCI_MEAN_WIN_MS 窗口每 3s 刷新) */
+extern volatile float    g_dci_id_mean_ma;    /* id 均值 (mA, FOC28_MEAN_WIN_MS 窗口每 3s 刷新) */
 extern volatile float    g_dci_iq_mean_ma;    /* iq 均值 (mA, 同上) */
 extern volatile float    g_dci_i_ref_ma;      /* 电流矢量幅值参考 (mA, Start 不复位, Watch 可调) */
 extern volatile float    g_dci_id_ref_ma;     /* d 轴电流参考 (mA, 实时 = I_ref·cosδ) */
 extern volatile float    g_dci_iq_ref_ma;     /* q 轴电流参考 (mA, 实时 = 斜坡后幅值·sinδ) */
 extern volatile float    g_dci_i_ramp_ma_s;   /* I_ref 软启动斜率 (mA/s, Watch 可调；<=0 = 直通阶跃) */
 extern volatile uint8_t  g_dci_vsat;          /* 电压饱和标志 (1 = 任一轴顶到 UMAX，调参数据作废) */
-extern volatile float    g_dci_ed_mean_ma;    /* d 轴误差均值 (mA, DCI_ERR_WIN_MS 窗口刷新) */
+extern volatile float    g_dci_ed_mean_ma;    /* d 轴误差均值 (mA, FOC28_ERR_WIN_MS 窗口刷新) */
 extern volatile float    g_dci_eq_mean_ma;    /* q 轴误差均值 (mA, 同上；P-only 稳态落差) */
 extern volatile float    g_dci_ed_pp_ma;      /* d 轴误差峰峰值 (mA, 同上；增大 = 振荡) */
 extern volatile float    g_dci_eq_pp_ma;      /* q 轴误差峰峰值 (mA, 同上) */

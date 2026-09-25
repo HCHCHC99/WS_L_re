@@ -46,9 +46,9 @@ void Foc_Init(void)
     Foc_CurLoop_InitPids();
     Foc_IqPi_InitPids();
     Foc_Dci_InitPids();
-    Foc_Drun29_InitPids();
+    Foc_Drun_InitPids();
     Foc_Drun41_InitPids();
-    Foc_Speed40_InitPids();
+    Foc_Speed_InitPids();
     Foc_Smo45_InitPids();
     I_RegisterFocCallback(Foc_Isr);
     s_bInited = 1u;
@@ -175,15 +175,15 @@ void Foc_Isr(const stc_i_data_t *pData)
         } else if (g_dcl_running) {
             Foc_Dcl_Step(pData);
         } else if (g_dcal24_running) {
-            Foc_Dcal24_Step(pData);
+            Foc_Dcal_Step(pData);
         } else if (g_dci_running) {
             Foc_Dci_Step(pData);
         } else if (g_drun29_running) {
-            Foc_Drun29_Step(pData);
+            Foc_Drun_Step(pData);
         } else if (g_drun41_running) {
             Foc_Drun41_Step(pData);
         } else if (g_speed40_running) {
-            Foc_Speed40_Step(pData);
+            Foc_Speed_Step(pData);
         } else if (g_smo45_running) {
             Foc_Smo45_Step(pData);
         } else {
@@ -199,7 +199,7 @@ void Foc_Isr(const stc_i_data_t *pData)
 
     /* ========== ZIZENG 模式 (mode 30) ========== */
     if (g_zizeng_running) {
-        Foc_Zizeng_Step(pData);
+        Foc_Ramp_Step(pData);
         return;
     }
 

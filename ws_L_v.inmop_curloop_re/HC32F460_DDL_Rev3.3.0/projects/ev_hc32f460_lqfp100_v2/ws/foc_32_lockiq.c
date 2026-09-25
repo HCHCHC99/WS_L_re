@@ -66,7 +66,7 @@
  * Keil Watch 可调变量 / 观测量
  ******************************************************************************/
 volatile uint8_t g_lockiq_running  = 0;
-volatile lockiq_step_t g_lockiq_step = LOCKIQ_STEP_IDLE;
+volatile lockiq_step_t g_lockiq_step = FOC32_STEP_IDLE;
 volatile float   g_lockiq_align_volt_v = FOC_ALIGN_VOLT_V;
 volatile int32_t g_lockiq_off_deg     = 0;
 
@@ -148,17 +148,17 @@ static void LockIqPi_LockAndSignal(void)
     float off_inject = 0.0f;
 
     /* 注入 mode 31 取值路径（foc_31_iqpi.c 零改动） */
-    Foc_Zizeng_SetOffsetRad(off_inject);
+    Foc_Ramp_SetOffsetRad(off_inject);
     /* 本征方向基准：iq>0 => 计数增量符号 = sign(ENC_DIR)（见文件头推导） */
-    Foc_Zizeng_SetDragDir((int8_t)FOC_ENC_DIR);
+    Foc_Ramp_SetDragDir((int8_t)FOC_ENC_DIR);
 
     g_lockiq_off_deg = (int32_t)(off_inject * 57.2958f);
 
-    g_lockiq_evt_code     = LOCKIQ_EVT_LOCKED;
+    g_lockiq_evt_code     = FOC32_EVT_LOCKED;
     g_lockiq_evt_off_deg = g_lockiq_off_deg;
     g_lockiq_evt_flag     = 1u;
 
-    g_lockiq_step = LOCKIQ_STEP_LOCKED_WAIT_HANDOFF;
+    g_lockiq_step = FOC32_STEP_LOCKED_WAIT_HANDOFF;
 }
 
 /*******************************************************************************
@@ -172,7 +172,7 @@ void Foc_LockIqPi_Start(void)
 
     Foc_Core_ClearFault();
     g_lockiq_running = 1;
-    g_lockiq_step    = LOCKIQ_STEP_ALIGN_BETA;
+    g_lockiq_step    = FOC32_STEP_ALIGN_BETA;
 
     g_lockiq_off_deg       = 0;
     g_lockiq_win_moved      = 0;
@@ -203,10 +203,10 @@ void Foc_LockIqPi_Start(void)
     g_foc_vq    = 0.0f;
     Foc_Core_ResetEma();
 
-    LOCKIQ_DBG("Started: volt=%d mV, beta=%d ms, win=%d ms, tol=%d",
+    FOC32_DBG("Started: volt=%d mV, beta=%d ms, win=%d ms, tol=%d",
                (int)(g_lockiq_align_volt_v * 1000.0f + 0.5f),
-               (int)LOCKIQ_BETA_MS, (int)LOCKIQ_WIN_MS,
-               (int)LOCKIQ_WIN_TOL_CNTS);
+               (int)FOC32_BETA_MS, (int)FOC32_WIN_MS,
+               (int)FOC32_WIN_TOL_CNTS);
 }
 
 /*******************************************************************************
@@ -223,7 +223,7 @@ void Foc_LockIqPi_Stop(void)
     g_foc_du = 0.0f;
     g_foc_dv = 0.0f;
     g_foc_dw = 0.0f;
-    LOCKIQ_DBG("Stopped");
+    FOC32_DBG("Stopped");
 }
 
 /*******************************************************************************
@@ -242,7 +242,7 @@ void Foc_LockIqPi_Step(const stc_i_data_t *pData)
     if (Foc_Core_OverCurrent(pData)) {
         Foc_Core_FaultStop(1u);
         g_lockiq_running = 0;
-        g_lockiq_step = LOCKIQ_STEP_FAULT_OC;   /* 停机后保持，Watch 可查 */
+        g_lockiq_step = FOC32_STEP_FAULT_OC;   /* 停机后保持，Watch 可查 */
         return;
     }
 
@@ -265,11 +265,11 @@ void Foc_LockIqPi_Step(const stc_i_data_t *pData)
      *   输出零矢量把转子放开，交接间隙转子会滚离对齐位（Watch 可见 pos
      *   漂移），框架基准随之漂移，是"有时正转有时反转"的诱因之一。
      * LOCK_FAIL: 零矢量等待 foc_obs 停机（不吸持）。 */
-    if (g_lockiq_step == LOCKIQ_STEP_LOCKED_WAIT_HANDOFF) {
+    if (g_lockiq_step == FOC32_STEP_LOCKED_WAIT_HANDOFF) {
         LockIqPi_OutputVolt(pData, FOC_MATH_HALF_PI);
         return;
     }
-    if (g_lockiq_step == LOCKIQ_STEP_LOCK_FAIL) {
+    if (g_lockiq_step == FOC32_STEP_LOCK_FAIL) {
         TMR4_PWM_SetDuty3Phase(50.0f, 50.0f, 50.0f);
         g_foc_du = 50.0f;
         g_foc_dv = 50.0f;
@@ -282,11 +282,11 @@ void Foc_LockIqPi_Step(const stc_i_data_t *pData)
     }
 
     /* ===== 对齐加压（BETA: 90° / ALPHA: 0° / VERIFY: 90°） ===== */
-    if (g_lockiq_step == LOCKIQ_STEP_ALIGN_BETA) {
+    if (g_lockiq_step == FOC32_STEP_ALIGN_BETA) {
         LockIqPi_OutputVolt(pData, FOC_MATH_HALF_PI);
-    } else if (g_lockiq_step == LOCKIQ_STEP_ALIGN_ALPHA) {
+    } else if (g_lockiq_step == FOC32_STEP_ALIGN_ALPHA) {
         LockIqPi_OutputVolt(pData, 0.0f);
-    } else if (g_lockiq_step == LOCKIQ_STEP_ALIGN_VERIFY) {
+    } else if (g_lockiq_step == FOC32_STEP_ALIGN_VERIFY) {
         LockIqPi_OutputVolt(pData, FOC_MATH_HALF_PI);
     } else {
         return;
@@ -295,9 +295,9 @@ void Foc_LockIqPi_Step(const stc_i_data_t *pData)
     s_phase_tick++;
 
     /* ===== BETA: 盲等吸附完成 -> ALPHA ===== */
-    if (g_lockiq_step == LOCKIQ_STEP_ALIGN_BETA) {
-        if (s_phase_tick >= LOCKIQ_BETA_CNT) {
-            g_lockiq_step = LOCKIQ_STEP_ALIGN_ALPHA;
+    if (g_lockiq_step == FOC32_STEP_ALIGN_BETA) {
+        if (s_phase_tick >= FOC32_BETA_CNT) {
+            g_lockiq_step = FOC32_STEP_ALIGN_ALPHA;
             s_phase_tick = 0u;
             LockIqPi_ResetWindow();
         }
@@ -309,7 +309,7 @@ void Foc_LockIqPi_Step(const stc_i_data_t *pData)
         s_win_sum += (float)s_enc_pos;
         s_win_cnt++;
 
-        if (s_win_cnt >= LOCKIQ_WIN_CNT) {
+        if (s_win_cnt >= FOC32_WIN_CNT) {
             float avg = s_win_sum / (float)s_win_cnt;
             float moved = avg - s_win_ref;
             float moved_abs = (moved < 0.0f) ? -moved : moved;
@@ -320,18 +320,18 @@ void Foc_LockIqPi_Step(const stc_i_data_t *pData)
             g_lockiq_win_moved = (int32_t)moved;
             g_lockiq_win_evals++;
 
-            if (moved_abs <= (float)LOCKIQ_WIN_TOL_CNTS) {
+            if (moved_abs <= (float)FOC32_WIN_TOL_CNTS) {
                 s_quiet++;
             } else {
                 s_quiet = 0u;
             }
             s_win_ref = avg;
 
-            if (s_quiet >= LOCKIQ_QUIET_NEED) {
-                if (g_lockiq_step == LOCKIQ_STEP_ALIGN_ALPHA) {
+            if (s_quiet >= FOC32_QUIET_NEED) {
+                if (g_lockiq_step == FOC32_STEP_ALIGN_ALPHA) {
                     /* ALPHA 稳定 -> 快照锁定位置，进入 VERIFY 复测 */
                     s_alpha_avg = avg;
-                    g_lockiq_step = LOCKIQ_STEP_ALIGN_VERIFY;
+                    g_lockiq_step = FOC32_STEP_ALIGN_VERIFY;
                     s_phase_tick = 0u;
                     LockIqPi_ResetWindow();
                     return;
@@ -352,16 +352,16 @@ void Foc_LockIqPi_Step(const stc_i_data_t *pData)
                     }
                     g_lockiq_track_err_cnts = (int32_t)err;
 
-                    if ((err >= -(float)LOCKIQ_TRACK_TOL_CNTS) &&
-                        (err <=  (float)LOCKIQ_TRACK_TOL_CNTS)) {
+                    if ((err >= -(float)FOC32_TRACK_TOL_CNTS) &&
+                        (err <=  (float)FOC32_TRACK_TOL_CNTS)) {
                         LockIqPi_LockAndSignal();
                     } else {
                         /* 转子跟踪失败（卡死/堵转/编码器异常）：
                          * 拒绝锁定，宁可不起动 */
-                        g_lockiq_evt_code = LOCKIQ_EVT_FAIL_TRACK;
+                        g_lockiq_evt_code = FOC32_EVT_FAIL_TRACK;
                         g_lockiq_evt_off_deg = 0;
                         g_lockiq_evt_flag = 1u;
-                        g_lockiq_step = LOCKIQ_STEP_LOCK_FAIL;
+                        g_lockiq_step = FOC32_STEP_LOCK_FAIL;
                     }
                 }
                 return;
@@ -369,11 +369,11 @@ void Foc_LockIqPi_Step(const stc_i_data_t *pData)
         }
 
         /* 相位超时（ALPHA/VERIFY 各自独立计时） */
-        if (s_phase_tick >= LOCKIQ_TIMEOUT_CNT) {
-            g_lockiq_evt_code = LOCKIQ_EVT_FAIL_TIMEOUT;
+        if (s_phase_tick >= FOC32_TIMEOUT_CNT) {
+            g_lockiq_evt_code = FOC32_EVT_FAIL_TIMEOUT;
             g_lockiq_evt_off_deg = 0;
             g_lockiq_evt_flag = 1u;
-            g_lockiq_step = LOCKIQ_STEP_LOCK_FAIL;
+            g_lockiq_step = FOC32_STEP_LOCK_FAIL;
         }
     }
 }

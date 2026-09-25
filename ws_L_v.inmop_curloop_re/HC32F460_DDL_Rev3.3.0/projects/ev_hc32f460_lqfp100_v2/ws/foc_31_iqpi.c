@@ -31,10 +31,10 @@
  * Keil Watch 可调变量 / 观测量
  ******************************************************************************/
 volatile uint8_t g_iqpi_running        = 0;
-volatile iqpi_step_t g_iqpi_step       = IQPI_STEP_IDLE;   /* 当前/最后状态，Watch 看枚举名 */
-volatile float   g_iqpi_iq_ref_ma      = IQPI_IQ_REF_MA;
+volatile iqpi_step_t g_iqpi_step       = FOC31_STEP_IDLE;   /* 当前/最后状态，Watch 看枚举名 */
+volatile float   g_iqpi_iq_ref_ma      = FOC31_IQ_REF_MA;
 volatile float   g_iqpi_iq_ref_ramp_ma = 0.0f;
-volatile float   g_iqpi_iq_ramp_ma_s   = IQPI_IQ_RAMP_MA_S;
+volatile float   g_iqpi_iq_ramp_ma_s   = FOC31_IQ_RAMP_MA_S;
 volatile float   g_iqpi_theta_rad      = 0.0f;
 
 /* 注：状态历史 / 转向诊断量 / 翻转事件快照（g_iqpi_step_hist、
@@ -49,12 +49,12 @@ pid_config_t g_iqpi_pid_id_cfg = {
     .p_valid      = true,
     .i_valid      = true,
     .d_valid      = false,
-    .kp           = IQPI_PI_KP,
-    .ki           = IQPI_PI_KI,
+    .kp           = FOC31_PI_KP,
+    .ki           = FOC31_PI_KI,
     .kd           = 0.0f,
-    .output_min   = -IQPI_PI_UMAX_V,
-    .output_max   =  IQPI_PI_UMAX_V,
-    .integral_max = IQPI_INTEGRAL_MAX,
+    .output_min   = -FOC31_PI_UMAX_V,
+    .output_max   =  FOC31_PI_UMAX_V,
+    .integral_max = FOC31_INTEGRAL_MAX,
     .i_term_max   = 0.0f,
     .update_ms    = 0,
 };
@@ -64,12 +64,12 @@ pid_config_t g_iqpi_pid_iq_cfg = {
     .p_valid      = true,
     .i_valid      = true,
     .d_valid      = false,
-    .kp           = IQPI_PI_KP,
-    .ki           = IQPI_PI_KI,
+    .kp           = FOC31_PI_KP,
+    .ki           = FOC31_PI_KI,
     .kd           = 0.0f,
-    .output_min   = -IQPI_PI_UMAX_V,
-    .output_max   =  IQPI_PI_UMAX_V,
-    .integral_max = IQPI_INTEGRAL_MAX,
+    .output_min   = -FOC31_PI_UMAX_V,
+    .output_max   =  FOC31_PI_UMAX_V,
+    .integral_max = FOC31_INTEGRAL_MAX,
     .i_term_max   = 0.0f,
     .update_ms    = 0,
 };
@@ -119,13 +119,13 @@ void Foc_IqPi_InitPids(void)
 }
 
 /*******************************************************************************
- * Foc_StartIqPi - mode 31 启动（需 mode 30 已锁定偏移）
+ * Foc_IqPi_Start - mode 31 启动（需 mode 30 已锁定偏移）
  ******************************************************************************/
-void Foc_StartIqPi(void)
+void Foc_IqPi_Start(void)
 {
-    if (!Foc_Zizeng_GetOffsetRad(&s_zizeng_off_rad)) {
-        IQPI_DBG("ERROR: ZIZENG offset not locked, run mode 30 first");
-        Iqpi_SetStep(IQPI_STEP_ERR_NO_OFFSET);   /* 不清历史，Watch 可查 */
+    if (!Foc_Ramp_GetOffsetRad(&s_zizeng_off_rad)) {
+        FOC31_DBG("ERROR: ZIZENG offset not locked, run mode 30 first");
+        Iqpi_SetStep(FOC31_STEP_ERR_NO_OFFSET);   /* 不清历史，Watch 可查 */
         return;
     }
 
@@ -136,7 +136,7 @@ void Foc_StartIqPi(void)
 
     /* 新的一次运行：清空历史重新记录（历史缓冲在 foc_obs.c） */
     Foc_Obs_IqpiHistClear();
-    Iqpi_SetStep(IQPI_STEP_PWM_ZERO_VECTOR);
+    Iqpi_SetStep(FOC31_STEP_PWM_ZERO_VECTOR);
 
     s_enc_initialized = 0;
     s_enc_pos = 0;
@@ -153,7 +153,7 @@ void Foc_StartIqPi(void)
     g_iqpi_expect_dir = 0;
     g_iqpi_evt_flag   = 0;
     g_iqpi_evt_seq    = 0;
-    s_ref_dir = Foc_Zizeng_GetDragDir();   /* mode 30 实测拖动方向基准 */
+    s_ref_dir = Foc_Ramp_GetDragDir();   /* mode 30 实测拖动方向基准 */
     g_iqpi_ref_dir = s_ref_dir;
 
     TMR4_PWM_SetFocMode(FOC_DEADTIME_NS);
@@ -173,7 +173,7 @@ void Foc_StartIqPi(void)
     PID_Reset(&s_pid_id);
     PID_Reset(&s_pid_iq);
 
-    IQPI_DBG("Started: off=%d deg, iq_ref=%d mA, kp=%d m, ki=%d, ref_dir=%d",
+    FOC31_DBG("Started: off=%d deg, iq_ref=%d mA, kp=%d m, ki=%d, ref_dir=%d",
              (int)(s_zizeng_off_rad * 57.2958f), (int)g_iqpi_iq_ref_ma,
              (int)(g_iqpi_pid_iq_cfg.kp * 1000.0f),
              (int)g_iqpi_pid_iq_cfg.ki,
@@ -181,9 +181,9 @@ void Foc_StartIqPi(void)
 }
 
 /*******************************************************************************
- * Foc_StopIqPi - mode 31 停止
+ * Foc_IqPi_Stop - mode 31 停止
  ******************************************************************************/
-void Foc_StopIqPi(void)
+void Foc_IqPi_Stop(void)
 {
     /* 停止不清状态：g_iqpi_step 保持最后状态（如 FAULT_OC / VQ_SAT），
      * 切到 mode 0 后 Watch 仍可查看停机原因；下次成功启动时才复位 */
@@ -194,7 +194,7 @@ void Foc_StopIqPi(void)
     g_foc_du = 0.0f;
     g_foc_dv = 0.0f;
     g_foc_dw = 0.0f;
-    IQPI_DBG("Stopped");
+    FOC31_DBG("Stopped");
 }
 
 /*******************************************************************************
@@ -216,7 +216,7 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
     if (Foc_Core_OverCurrent(pData)) {
         Foc_Core_FaultStop(1u);
         g_iqpi_running = 0;
-        Iqpi_SetStep(IQPI_STEP_FAULT_OC);   /* 停机后保持，Watch 可查 */
+        Iqpi_SetStep(FOC31_STEP_FAULT_OC);   /* 停机后保持，Watch 可查 */
         return;
     }
 
@@ -246,7 +246,7 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
         g_foc_iq_ma = 0.0f;
         g_foc_vd = 0.0f;    /* 校准窗口 PI 未运行, 清掉上次运行残值 */
         g_foc_vq = 0.0f;
-        Iqpi_SetStep(IQPI_STEP_PWM_ZERO_VECTOR);
+        Iqpi_SetStep(FOC31_STEP_PWM_ZERO_VECTOR);
         return;
     }
 
@@ -254,7 +254,7 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
      * 校准窗口里转子自由，会从 mode 32 对齐位滚走一段（Watch 里 pos 可见
      * 漂移）。方向检测基准 s_stall_enc_ref 若从 mode 31 启动就起算，第一
      * 窗会把"校准期漂移 + 闭环转动"混在一起：漂移与预期方向相反且够大时
-     * 触发误翻转 [IQPI_FLIP]——框架本来正确却被翻反，电机真反转。
+     * 触发误翻转 [FOC31_FLIP]——框架本来正确却被翻反，电机真反转。
      * 此处在闭环真正启动的第一拍重新对基准，第一窗只测闭环自身运动。 */
     if (!s_loop_started) {
         s_loop_started  = 1u;
@@ -339,9 +339,9 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
             float vd_lim = 0.98f * g_iqpi_pid_id_cfg.output_max;
             if ((vq >= vq_lim) || (vq <= -vq_lim) ||
                 (vd >= vd_lim) || (vd <= -vd_lim)) {
-                Iqpi_SetStep(IQPI_STEP_RUNNING_VQ_SAT);
+                Iqpi_SetStep(FOC31_STEP_RUNNING_VQ_SAT);
             } else {
-                Iqpi_SetStep(IQPI_STEP_CLOSED_LOOP);
+                Iqpi_SetStep(FOC31_STEP_CLOSED_LOOP);
             }
         }
 
@@ -349,11 +349,11 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
          * CLOSED_LOOP 与 VQ_SAT 均累积; 条件不满足仅"暂停", 不清进度
          * (否则斜坡初期/饱和段/电流过零任一拍都会作废窗口,
          *   方向检查 ev 永远无法运行, 自动纠正形同虚设)。 */
-        if ((g_iqpi_step == IQPI_STEP_CLOSED_LOOP) ||
-            (g_iqpi_step == IQPI_STEP_RUNNING_VQ_SAT)) {
-            if ((ref_abs > IQPI_STALL_IQ_MIN_MA) && (iq_abs > IQPI_STALL_IQ_MIN_MA)) {
+        if ((g_iqpi_step == FOC31_STEP_CLOSED_LOOP) ||
+            (g_iqpi_step == FOC31_STEP_RUNNING_VQ_SAT)) {
+            if ((ref_abs > FOC31_STALL_IQ_MIN_MA) && (iq_abs > FOC31_STALL_IQ_MIN_MA)) {
                 s_stall_tick++;
-                if (s_stall_tick >= IQPI_STALL_WIN_MS * (FOC_ISR_HZ / 1000u)) {
+                if (s_stall_tick >= FOC31_STALL_WIN_MS * (FOC_ISR_HZ / 1000u)) {
                     int32_t moved = s_enc_pos - s_stall_enc_ref;
                     int32_t moved_abs = (moved < 0) ? -moved : moved;
 
@@ -362,7 +362,7 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
                     g_iqpi_win_evals++;          /* 诊断: 完成一次窗口评估 */
                     g_iqpi_win_moved = moved;
 
-                    if (moved_abs < (int32_t)IQPI_STALL_MIN_CNTS) {
+                    if (moved_abs < (int32_t)FOC31_STALL_MIN_CNTS) {
                         s_stall_flag = 1u;              /* 没动 -> 疑似堵转 */
                     } else {
                         s_stall_flag = 0u;
@@ -382,7 +382,7 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
                                     s_zizeng_off_rad -= FOC_MATH_2PI;
                                 }
                                 g_iqpi_flip_cnt++;
-                                Iqpi_SetStep(IQPI_STEP_DIR_FLIPPED);
+                                Iqpi_SetStep(FOC31_STEP_DIR_FLIPPED);
                                 /* 翻转事件快照: main.c 检测 flag 后打印一次 */
                                 g_iqpi_evt_seq    = g_iqpi_flip_cnt;
                                 g_iqpi_evt_pos    = s_enc_pos;
@@ -396,7 +396,7 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
                     }
                 }
                 if (s_stall_flag) {
-                    Iqpi_SetStep(IQPI_STEP_RUNNING_STALL);
+                    Iqpi_SetStep(FOC31_STEP_RUNNING_STALL);
                 }
             }
             /* 电流未建立(斜坡初期/参考为0): 本拍暂停累积, 已累积进度保留 */

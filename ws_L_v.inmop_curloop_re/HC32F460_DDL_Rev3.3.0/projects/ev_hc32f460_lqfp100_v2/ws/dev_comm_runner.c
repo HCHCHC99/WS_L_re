@@ -77,19 +77,19 @@ static void CommRunner_StopFocModes(void)
         Foc_Dcl_Stop();
     }
     if (g_dcal24_running) {
-        Foc_Dcal24_Stop();
+        Foc_Dcal_Stop();
     }
     if (g_dci_running) {
         Foc_Dci_Stop();
     }
     if (g_drun29_running) {
-        Foc_Drun29_Stop();
+        Foc_Drun_Stop();
     }
     if (g_drun41_running) {
         Foc_Drun41_Stop();
     }
     if (g_speed40_running) {
-        Foc_Speed40_Stop();
+        Foc_Speed_Stop();
     }
     if (g_smo45_running) {
         Foc_Smo45_Stop();
@@ -98,13 +98,13 @@ static void CommRunner_StopFocModes(void)
         Foc_Stop();
     }
     if (g_zizeng_running) {
-        Foc_StopZizeng();
+        Foc_Ramp_Stop();
     }
     if (g_lockiq_running) {
         Foc_LockIqPi_Stop();
     }
     if (g_iqpi_running) {
-        Foc_StopIqPi();
+        Foc_IqPi_Stop();
     }
 }
 
@@ -150,21 +150,21 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
     case COMM_RUNNER_FOC_ALIGN:
         CommRunner_StopFocModes();
         Commutation_Stop();
-        Foc_StartAlign();
+        Foc_Align_Start();
         RUNNER_DBG("FOC_ALIGN (mode 23)");
         break;
 
     case COMM_RUNNER_ZIZENG:
         CommRunner_StopFocModes();
         Commutation_Stop();
-        Foc_StartZizeng();
+        Foc_Ramp_Start();
         RUNNER_DBG("ZIZENG (mode 30)");
         break;
 
     case COMM_RUNNER_IQ_PI:
         CommRunner_StopFocModes();
         Commutation_Stop();
-        Foc_StartIqPi();
+        Foc_IqPi_Start();
         RUNNER_DBG("IQ_PI (mode 31)");
         break;
 
@@ -192,14 +192,14 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
     case COMM_RUNNER_DCAL:
         CommRunner_StopFocModes();
         Commutation_Stop();
-        Foc_Dcal24_Start();
+        Foc_Dcal_Start();
         RUNNER_DBG("DCAL (mode 24, cal-only)");
         break;
 
     case COMM_RUNNER_DRUN:
         CommRunner_StopFocModes();
         Commutation_Stop();
-        Foc_Drun29_Start();
+        Foc_Drun_Start();
         RUNNER_DBG("DRUN (mode 29, run-only)");
         break;
 
@@ -213,7 +213,7 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
     case COMM_RUNNER_SPEED_FOC:
         CommRunner_StopFocModes();
         Commutation_Stop();
-        Foc_Speed40_Start();
+        Foc_Speed_Start();
         RUNNER_DBG("SPEED_FOC (mode 40)");
         break;
 
@@ -281,7 +281,7 @@ uint8_t CommRunner_IsStalled(void) { return 0; }
 uint8_t CommRunner_CurLoopActive(void) { return 0; }
 void CommRunner_SetTargetRPM(float rpm)
 {
-    Foc_Speed40_SetTargetRPM(rpm);
+    Foc_Speed_SetTargetRPM(rpm);
 }
 
 float CommRunner_GetTargetRPM(void)

@@ -337,9 +337,9 @@ int main(void)
              * ⚠ 顺序有意义：g_dci_running 同时标记 mode 24/28/29 系，
              *   必须先把已拆出的独立模块（24/29/41）判掉，最后才轮到 28。 */
             if      (g_smo45_running)     { n = Foc_Smo45_VofaFill(cur); }
-            else if (g_speed40_running)   { n = Foc_Speed40_VofaFill(cur); }
+            else if (g_speed40_running)   { n = Foc_Speed_VofaFill(cur); }   /* 18ch */
             else if (g_dcal24_running)    { n = 0; }   /* mode24 待迁移 */
-            else if (g_drun29_running)    { n = Foc_Drun29_VofaFill(cur); }  /* 19ch */
+            else if (g_drun29_running)    { n = Foc_Drun_VofaFill(cur); }    /* 19ch */
             else if (g_drun41_running)    { n = Foc_Drun41_VofaFill(cur); }  /* 21ch */
             else if (g_dci_running)       { n = Foc_Dci_VofaFill(cur); }     /* 17ch */
             else if (g_dcl_running)       { n = Foc_Dcl_VofaFill(cur); }     /* 17ch */

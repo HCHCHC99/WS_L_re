@@ -30,7 +30,7 @@
  *      线性爬坡到 g_dcl_dlt_targ_deg（默认 45°），历时
  *      g_dcl_dlt_tr_ms（默认 2000ms）。每 50µs 一拍：
  *        磁场角 = 转子实测电角 + delta_now
- *      到点后置 DCL_EVT_RAMP_DONE 事件一次。
+ *      到点后置 FOC27_EVT_RAMP_DONE 事件一次。
  *   3. 电压幅值 g_dcl_volt_v（默认 0.6V）：调它 = 调转速（直流电机式）。
  *
  * 输出约定（q 轴电压，与 mode 26/30 一致）：
@@ -40,7 +40,7 @@
  *
  * 编码器路径（本模式编码器从"观察者"升级为"控制者"）：
  *   - 增量累积式读法（与 mode 31 同思路）：每拍 wrap-safe 差分后
- *     ±DCL_ENC_DELTA_MAX(32) counts 限幅再累加。物理依据：7800rpm
+ *     ±FOC27_ENC_DELTA_MAX(32) counts 限幅再累加。物理依据：7800rpm
  *     极限下单拍真实增量最多 26.6 counts，超过必是毛刺。
  *   - 限幅把单次毛刺对功角框架的永久污染封顶在 ±32 counts ≈ ±2.8° 电角
  *     （1 count = 360°/4096 ≈ 0.088° 机械 = 0.879° 电角）。
@@ -130,41 +130,41 @@ extern "C" {
 /* 1 = RTT prints on, 0 = off */
 #define FOC_DCL_DBG   1
 #if FOC_DCL_DBG
-    #define DCL_DBG(fmt, ...)   MAIN_D("[DCL] " fmt, ##__VA_ARGS__)
+    #define FOC27_DBG(fmt, ...)   MAIN_D("[DCL] " fmt, ##__VA_ARGS__)
 #else
-    #define DCL_DBG(fmt, ...)   ((void)0)
+    #define FOC27_DBG(fmt, ...)   ((void)0)
 #endif
 
 /*=============================================================================
  * 时长/窗口（编译期常量，FOC_ISR_HZ tick 换算在 .c 内完成）
  *=============================================================================*/
-#define DCL_BETA_MS       2000u  /* 校准 BETA 吸附时长 */
-#define DCL_ALPHA_MS      2000u  /* 校准 ALPHA 吸附时长 */
-#define DCL_SPEED_WIN_MS  200u   /* 转速测量窗口 */
-#define DCL_PP_WIN_MS     5000u  /* id/iq 峰峰值统计窗口 */
+#define FOC27_BETA_MS       2000u  /* 校准 BETA 吸附时长 */
+#define FOC27_ALPHA_MS      2000u  /* 校准 ALPHA 吸附时长 */
+#define FOC27_SPEED_WIN_MS  200u   /* 转速测量窗口 */
+#define FOC27_PP_WIN_MS     5000u  /* id/iq 峰峰值统计窗口 */
 
 /*=============================================================================
  * 编码器增量限幅（物理极限 7800rpm -> 单拍真实增量上限 ≈26.6 counts，
  * 超过判定为毛刺，钳位防功角框架永久污染）
  *=============================================================================*/
-#define DCL_ENC_DELTA_MAX 32
+#define FOC27_ENC_DELTA_MAX 32
 
 /*=============================================================================
  * 状态机（g_dcl_state）
  *=============================================================================*/
-#define DCL_STEP_IDLE       0u  /* 未运行 */
-#define DCL_STEP_CAL_BETA   1u  /* 校准：磁场 90°，2s */
-#define DCL_STEP_CAL_ALPHA  2u  /* 校准：磁场 0°，2s，结束锁零点 */
-#define DCL_STEP_RUN        3u  /* 功角闭环拖动（磁场 = 转子 + delta） */
-#define DCL_STEP_FAULT_OC   4u  /* 过流停机 */
+#define FOC27_STEP_IDLE       0u  /* 未运行 */
+#define FOC27_STEP_CAL_BETA   1u  /* 校准：磁场 90°，2s */
+#define FOC27_STEP_CAL_ALPHA  2u  /* 校准：磁场 0°，2s，结束锁零点 */
+#define FOC27_STEP_RUN        3u  /* 功角闭环拖动（磁场 = 转子 + delta） */
+#define FOC27_STEP_FAULT_OC   4u  /* 过流停机 */
 
 /*=============================================================================
  * 事件码（g_dcl_evt，ISR 置位，Foc_Obs_Task 打印后清零）
  *=============================================================================*/
-#define DCL_EVT_BETA_DONE  1u
-#define DCL_EVT_LOCKED     2u
-#define DCL_EVT_RAMP_DONE  3u
-#define DCL_EVT_OC         4u
+#define FOC27_EVT_BETA_DONE  1u
+#define FOC27_EVT_LOCKED     2u
+#define FOC27_EVT_RAMP_DONE  3u
+#define FOC27_EVT_OC         4u
 
 /*=============================================================================
  * Keil Watch 可调变量 / 观测量（定义见 foc_27_dcl.c）
@@ -174,8 +174,8 @@ extern volatile float    g_dcl_dlt_targ_deg;  /* 功角爬坡终点 (deg, 默认
 extern volatile uint32_t g_dcl_dlt_tr_ms;     /* 功角爬坡过渡时间 (ms, 0=立即, Start不复位) */
 extern volatile float    g_dcl_volt_v;        /* 电压幅值 (V, 默认0.6, Start复位; =调速旋钮) */
 extern volatile uint8_t  g_dcl_running;       /* 1 = 正在运行 */
-extern volatile uint8_t  g_dcl_state;         /* DCL_STEP_xxx */
-extern volatile uint8_t  g_dcl_evt;           /* DCL_EVT_xxx */
+extern volatile uint8_t  g_dcl_state;         /* FOC27_STEP_xxx */
+extern volatile uint8_t  g_dcl_evt;           /* FOC27_EVT_xxx */
 extern volatile int32_t  g_dcl_offset;        /* 校准锁零点 (hw绝对帧counts, 显示/对比用) */
 extern volatile float    g_dcl_dlt_now_deg;   /* 当前 delta 指令 (deg, 爬坡中实时) */
 extern volatile float    g_dcl_speed_hz;      /* 实测电频率 (Hz, 200ms窗口, 带符号) */
@@ -184,7 +184,7 @@ extern volatile int32_t  g_dcl_rotor_deg;     /* 转子电角度 (deg, 0~359, �
 extern volatile int32_t  g_dcl_diff_deg;      /* 功角实测 = field-rotor (deg, -180~180) */
 extern volatile float    g_dcl_id_ma;         /* 真实转子系 id (mA, 磁链分量) */
 extern volatile float    g_dcl_iq_ma;         /* 真实转子系 iq (mA, 力矩分量) */
-extern volatile float    g_dcl_id_pp_ma;      /* id 峰峰值 (mA, DCL_PP_WIN_MS 窗口每 5s 刷新) */
+extern volatile float    g_dcl_id_pp_ma;      /* id 峰峰值 (mA, FOC27_PP_WIN_MS 窗口每 5s 刷新) */
 extern volatile float    g_dcl_iq_pp_ma;      /* iq 峰峰值 (mA, 同上) */
 extern volatile int32_t  g_dcl_enc_pos;       /* 编码器相对计数镜像 (毛刺排查用) */
 extern volatile float    g_dcl_du;            /* 三相占空比观测 (%) */

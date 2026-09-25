@@ -74,15 +74,15 @@ void Foc_Init(void);
  *                        : (g_calang_running ? Foc_CalAngle_Step
  *                        : (g_olf_running ? Foc_Olf_Step
  *                        : (g_dcl_running ? Foc_Dcl_Step
- *                        : (g_dcal24_running ? Foc_Dcal24_Step
+ *                        : (g_dcal24_running ? Foc_Dcal_Step
  *                        : (g_dci_running ? Foc_Dci_Step
- *                        : (g_drun29_running ? Foc_Drun29_Step
+ *                        : (g_drun29_running ? Foc_Drun_Step
  *                        : (g_drun41_running ? Foc_Drun41_Step
- *                        : (g_speed40_running ? Foc_Speed40_Step
+ *                        : (g_speed40_running ? Foc_Speed_Step
  *                        : (g_smo45_running ? Foc_Smo45_Step
  *                        : Foc_Align_Step)))))
  *   FOC_MODE_CURLOOP  -> Foc_CurLoop_Step（内部再按状态机分派）
- *   g_zizeng_running  -> Foc_Zizeng_Step
+ *   g_zizeng_running  -> Foc_Ramp_Step
  *   g_lockiq_running  -> Foc_LockIqPi_Step（锁定后由 main.c 交接 mode 31）
  *   g_iqpi_running    -> Foc_IqPi_Step
  */

@@ -47,7 +47,7 @@
  *   g_drun29_step_frac_pct                 判据百分比（每次 Start 复位为 75）
  *
  * 【VOFA 通道】**自持布局，固定 19ch**（实现见 foc_29_drun.c
- *   Foc_Drun29_VofaFill，单位换算：传"毫单位"，SendScaled 内部 ×0.001）：
+ *   Foc_Drun_VofaFill，单位换算：传"毫单位"，SendScaled 内部 ×0.001）：
  *   ch0~2  三相电流(A)              ch3 静止系 ialpha(A)
  *   ch4    静止系 ibeta(A)
  *   ch5    **iq 反馈(A)**           ch6  **id 反馈(A)**        ← 环反馈
@@ -60,7 +60,7 @@
  *   ch16   显示用滤波 iq(A)（EMA；PI 仍用 ch5 原始 iq）
  *   ch17   功角 delta(deg)          ch18 实测电频率(Hz)
  *   ⚠ 共 19ch（原通用布局为 17ch）——切到本模式时 VOFA+ 通道数需同步改为 19。
- *   ⚠ **改通道数：改 Foc_Drun29_VofaFill 末尾的 return 值**。
+ *   ⚠ **改通道数：改 Foc_Drun_VofaFill 末尾的 return 值**。
  * ===========================================================================
  */
 
@@ -75,44 +75,44 @@
 extern "C" {
 #endif
 
-#define DRUN29_DBG   1
-#if DRUN29_DBG
-#define DRUN29_LOG(fmt, ...)  MAIN_D("[DRUN29] " fmt, ##__VA_ARGS__)
+#define FOC29_DBG   1
+#if FOC29_DBG
+#define FOC29_LOG(fmt, ...)  MAIN_D("[DRUN29] " fmt, ##__VA_ARGS__)
 #else
-#define DRUN29_LOG(fmt, ...)  ((void)0)
+#define FOC29_LOG(fmt, ...)  ((void)0)
 #endif
 
-#define DRUN29_PI_KP             0.5f
-#define DRUN29_PI_KI             300.0f
-#define DRUN29_PI_UMAX_V         3.5f
-#define DRUN29_ITERM_MAX_V       3.2f
-#define DRUN29_IQ_FILT_ALPHA     0.10f
-#define DRUN29_I_REF_MA          500.0f
-#define DRUN29_I_RAMP_MA_S       0.0f
-#define DRUN29_ENC_DELTA_MAX     32
+#define FOC29_PI_KP             0.5f
+#define FOC29_PI_KI             300.0f
+#define FOC29_PI_UMAX_V         3.5f
+#define FOC29_ITERM_MAX_V       3.2f
+#define FOC29_IQ_FILT_ALPHA     0.10f
+#define FOC29_I_REF_MA          500.0f
+#define FOC29_I_RAMP_MA_S       0.0f
+#define FOC29_ENC_DELTA_MAX     32
 
-#define DRUN29_SPEED_WIN_MS      200u
-#define DRUN29_PP_WIN_MS         5000u
-#define DRUN29_MEAN_WIN_MS       3000u
-#define DRUN29_ERR_WIN_MS        5000u
+#define FOC29_SPEED_WIN_MS      200u
+#define FOC29_PP_WIN_MS         5000u
+#define FOC29_MEAN_WIN_MS       3000u
+#define FOC29_ERR_WIN_MS        5000u
 
-#define DRUN29_STEP_IDLE         0u
-#define DRUN29_STEP_RUN          1u
-#define DRUN29_STEP_FAULT_OC     2u
+#define FOC29_STEP_IDLE         0u
+#define FOC29_STEP_RUN          1u
+#define FOC29_STEP_FAULT_OC     2u
 
-#define DRUN29_EVT_RAMP_DONE     1u
-#define DRUN29_EVT_OC            2u
+#define FOC29_EVT_RAMP_DONE     1u
+#define FOC29_EVT_OC            2u
 
-#define DRUN29_STEP_DEADBAND_MA  50.0f
-#define DRUN29_STEP_MIN_MA       100.0f
-#define DRUN29_STEP_TIMEOUT_US   200000u
-#define DRUN29_STEP_CONFIRM_TICK 3u
-#define DRUN29_STEP_TIME_TIMEOUT 0xFFFFFFFFu
+#define FOC29_STEP_DEADBAND_MA  50.0f
+#define FOC29_STEP_MIN_MA       100.0f
+#define FOC29_STEP_TIMEOUT_US   200000u
+#define FOC29_STEP_CONFIRM_TICK 3u
+#define FOC29_STEP_TIME_TIMEOUT 0xFFFFFFFFu
 
-#define DRUN29_STEP_ST_IDLE      0u
-#define DRUN29_STEP_ST_WAIT      1u
-#define DRUN29_STEP_ST_DONE      2u
-#define DRUN29_STEP_ST_TIMEOUT   3u
+#define FOC29_STEP_ST_IDLE      0u
+#define FOC29_STEP_ST_WAIT      1u
+#define FOC29_STEP_ST_DONE      2u
+#define FOC29_STEP_ST_TIMEOUT   3u
 
 extern volatile uint8_t  g_drun29_running;
 extern volatile uint8_t  g_drun29_state;
@@ -149,8 +149,8 @@ extern volatile float    g_drun29_dw;
 
 /* Step-response instrumentation.  Times are measured from the first ISR where
  * the selected axis reference differs from its previous value by more than
- * DRUN29_STEP_DEADBAND_MA.  A crossing must remain present for
- * DRUN29_STEP_CONFIRM_TICK samples before it is accepted. */
+ * FOC29_STEP_DEADBAND_MA.  A crossing must remain present for
+ * FOC29_STEP_CONFIRM_TICK samples before it is accepted. */
 extern volatile uint32_t g_drun29_time_us;
 extern volatile float    g_drun29_step_frac_pct;
 extern volatile uint8_t  g_drun29_id_step_state;
@@ -163,11 +163,11 @@ extern volatile uint32_t g_drun29_iq_step_t90_us;
 extern pid_config_t g_drun29_pid_id_cfg;
 extern pid_config_t g_drun29_pid_iq_cfg;
 
-void Foc_Drun29_InitPids(void);
-void Foc_Drun29_Start(void);
-void Foc_Drun29_Stop(void);
-void Foc_Drun29_Step(const stc_i_data_t *pData);
-int  Foc_Drun29_VofaFill(int32_t *cur);   /* 模式自持 VOFA，19ch，见顶部速览卡 */
+void Foc_Drun_InitPids(void);
+void Foc_Drun_Start(void);
+void Foc_Drun_Stop(void);
+void Foc_Drun_Step(const stc_i_data_t *pData);
+int  Foc_Drun_VofaFill(int32_t *cur);   /* 模式自持 VOFA，19ch，见顶部速览卡 */
 
 #ifdef __cplusplus
 }

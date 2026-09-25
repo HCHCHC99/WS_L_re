@@ -40,7 +40,7 @@
 /*******************************************************************************
  * mode 31 观察量定义（原 foc_31_iqpi.c）
  ******************************************************************************/
-volatile iqpi_step_t g_iqpi_step_hist[IQPI_HISTORY_LEN];   /* 状态历史, [0]最旧 */
+volatile iqpi_step_t g_iqpi_step_hist[FOC31_HISTORY_LEN];   /* 状态历史, [0]最旧 */
 volatile uint8_t g_iqpi_step_hist_cnt  = 0;                /* 历史有效条数 0..10 */
 volatile uint8_t g_iqpi_flip_cnt       = 0;                /* 框架180°自动翻转次数 */
 
@@ -79,8 +79,8 @@ void Foc_Obs_IqpiHistClear(void)
 {
     uint8_t i;
 
-    for (i = 0; i < IQPI_HISTORY_LEN; i++) {
-        g_iqpi_step_hist[i] = IQPI_STEP_IDLE;
+    for (i = 0; i < FOC31_HISTORY_LEN; i++) {
+        g_iqpi_step_hist[i] = FOC31_STEP_IDLE;
     }
     g_iqpi_step_hist_cnt = 0;
 }
@@ -93,14 +93,14 @@ void Foc_Obs_IqpiRecordStep(iqpi_step_t s)
 {
     uint8_t i;
 
-    if (g_iqpi_step_hist_cnt < IQPI_HISTORY_LEN) {
+    if (g_iqpi_step_hist_cnt < FOC31_HISTORY_LEN) {
         g_iqpi_step_hist[g_iqpi_step_hist_cnt] = s;
         g_iqpi_step_hist_cnt++;
     } else {
-        for (i = 1; i < IQPI_HISTORY_LEN; i++) {
+        for (i = 1; i < FOC31_HISTORY_LEN; i++) {
             g_iqpi_step_hist[i - 1] = g_iqpi_step_hist[i];
         }
-        g_iqpi_step_hist[IQPI_HISTORY_LEN - 1u] = s;
+        g_iqpi_step_hist[FOC31_HISTORY_LEN - 1u] = s;
     }
 }
 
@@ -241,25 +241,25 @@ void Foc_Obs_Task(void)
         uint8_t evt = g_calang_evt;
         g_calang_evt = 0u;
         switch (evt) {
-        case CALANG_EVT_BETA_DONE:
-            CALANG_DBG("BETA done -> ALPHA 0deg");
+        case FOC25_EVT_BETA_DONE:
+            FOC25_DBG("BETA done -> ALPHA 0deg");
             break;
-        case CALANG_EVT_LOCKED:
-            CALANG_DBG("LOCKED offset=%d deg",
+        case FOC25_EVT_LOCKED:
+            FOC25_DBG("LOCKED offset=%d deg",
                     (int)((g_calang_offset * 360) / (int32_t)ENCODER_CPR));
             break;
-        case CALANG_EVT_DONE_OK:
-            CALANG_DBG("HOLD ok target=%d meas=%d err=%d x0.1deg",
+        case FOC25_EVT_DONE_OK:
+            FOC25_DBG("HOLD ok target=%d meas=%d err=%d x0.1deg",
                     (int)g_calang_target_deg, (int)g_calang_meas_deg,
                     (int)g_calang_err_deg);
             break;
-        case CALANG_EVT_DONE_FAIL:
-            CALANG_DBG("HOLD FAIL moved=%d cnts target=%d meas=%d x0.1deg",
+        case FOC25_EVT_DONE_FAIL:
+            FOC25_DBG("HOLD FAIL moved=%d cnts target=%d meas=%d x0.1deg",
                     (int)g_calang_win_moved, (int)g_calang_target_deg,
                     (int)g_calang_meas_deg);
             break;
-        case CALANG_EVT_OC:
-            CALANG_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+        case FOC25_EVT_OC:
+            FOC25_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
             CommRunner_SetMode(COMM_RUNNER_STOP);
             break;
         default:
@@ -272,22 +272,22 @@ void Foc_Obs_Task(void)
         uint8_t evt = g_olf_evt;
         g_olf_evt = 0u;
         switch (evt) {
-        case OLF_EVT_BETA_DONE:
-            OLF_DBG("BETA done -> ALPHA 0deg");
+        case FOC26_EVT_BETA_DONE:
+            FOC26_DBG("BETA done -> ALPHA 0deg");
             break;
-        case OLF_EVT_LOCKED:
-            OLF_DBG("LOCKED offset=%d deg -> drag f %d->%d mHz tr=%d ms",
+        case FOC26_EVT_LOCKED:
+            FOC26_DBG("LOCKED offset=%d deg -> drag f %d->%d mHz tr=%d ms",
                     (int)((g_olf_offset * 360) / (int32_t)ENCODER_CPR),
                     (int)(g_olf_freq_init_hz * 1000.0f),
                     (int)(g_olf_freq_targ_hz * 1000.0f),
                     (int)g_olf_freq_tr_ms);
             break;
-        case OLF_EVT_RAMP_DONE:
-            OLF_DBG("freq ramp done f=%d mHz diff=%d deg",
+        case FOC26_EVT_RAMP_DONE:
+            FOC26_DBG("freq ramp done f=%d mHz diff=%d deg",
                     (int)(g_olf_freq_hz * 1000.0f), (int)g_olf_diff_deg);
             break;
-        case OLF_EVT_OC:
-            OLF_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+        case FOC26_EVT_OC:
+            FOC26_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
             CommRunner_SetMode(COMM_RUNNER_STOP);
             break;
         default:
@@ -296,12 +296,12 @@ void Foc_Obs_Task(void)
     }
 
     /* ---- mode 26 拖动实验数据（200ms 周期，全整型；diff=负载角 delta） ---- */
-    if (g_olf_running && (g_olf_state == OLF_STEP_DRAG)) {
+    if (g_olf_running && (g_olf_state == FOC26_STEP_DRAG)) {
         static uint32_t s_last_olf_dbg = 0u;
         uint32_t now = tickTimer_GetCount();
         if ((now - s_last_olf_dbg) >= 200u) {
             s_last_olf_dbg = now;
-            OLF_DBG("f=%d mHz fld=%d deg rot=%d deg diff=%d deg id=%d iq=%d mA",
+            FOC26_DBG("f=%d mHz fld=%d deg rot=%d deg diff=%d deg id=%d iq=%d mA",
                     (int)(g_olf_freq_hz * 1000.0f),   /* 磁场转速 (mHz) */
                     (int)g_olf_field_deg,             /* 磁场电角度 (deg, 0~359) */
                     (int)g_olf_rotor_deg,             /* 转子电角度 (deg, 0~359) */
@@ -312,16 +312,16 @@ void Foc_Obs_Task(void)
     }
 
     /* ---- mode 26 峰峰值记录（foc_26_olf 内部 5s 窗口刷新，此处检测变化打印） ---- */
-    if (g_olf_running && (g_olf_state == OLF_STEP_DRAG)) {
+    if (g_olf_running && (g_olf_state == FOC26_STEP_DRAG)) {
         static float s_last_olf_id_pp = -1.0f;
         static float s_last_olf_iq_pp = -1.0f;
         if ((g_olf_id_pp_ma != s_last_olf_id_pp)
                 || (g_olf_iq_pp_ma != s_last_olf_iq_pp)) {
             s_last_olf_id_pp = g_olf_id_pp_ma;
             s_last_olf_iq_pp = g_olf_iq_pp_ma;
-            OLF_DBG("idPP=%d iqPP=%d mA (%d s window)",
+            FOC26_DBG("idPP=%d iqPP=%d mA (%d s window)",
                     (int)g_olf_id_pp_ma, (int)g_olf_iq_pp_ma,
-                    (int)(OLF_PP_WIN_MS / 1000u));
+                    (int)(FOC26_PP_WIN_MS / 1000u));
         }
     }
 
@@ -330,21 +330,21 @@ void Foc_Obs_Task(void)
         uint8_t evt = g_dcl_evt;
         g_dcl_evt = 0u;
         switch (evt) {
-        case DCL_EVT_BETA_DONE:
-            DCL_DBG("BETA done -> ALPHA 0deg");
+        case FOC27_EVT_BETA_DONE:
+            FOC27_DBG("BETA done -> ALPHA 0deg");
             break;
-        case DCL_EVT_LOCKED:
-            DCL_DBG("LOCKED off=%d deg -> run dlt %d->%d deg tr=%d ms",
+        case FOC27_EVT_LOCKED:
+            FOC27_DBG("LOCKED off=%d deg -> run dlt %d->%d deg tr=%d ms",
                     (int)((g_dcl_offset * 360) / (int32_t)ENCODER_CPR),
                     (int)g_dcl_dlt_init_deg, (int)g_dcl_dlt_targ_deg,
                     (int)g_dcl_dlt_tr_ms);
             break;
-        case DCL_EVT_RAMP_DONE:
-            DCL_DBG("ramp done dlt=%d deg spd=%d mHz",
+        case FOC27_EVT_RAMP_DONE:
+            FOC27_DBG("ramp done dlt=%d deg spd=%d mHz",
                     (int)g_dcl_dlt_now_deg, (int)(g_dcl_speed_hz * 1000.0f));
             break;
-        case DCL_EVT_OC:
-            DCL_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+        case FOC27_EVT_OC:
+            FOC27_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
             CommRunner_SetMode(COMM_RUNNER_STOP);
             break;
         default:
@@ -353,12 +353,12 @@ void Foc_Obs_Task(void)
     }
 
     /* ---- mode 27 功角闭环运行数据（200ms 周期，全整型） ---- */
-    if (g_dcl_running && (g_dcl_state == DCL_STEP_RUN)) {
+    if (g_dcl_running && (g_dcl_state == FOC27_STEP_RUN)) {
         static uint32_t s_last_dcl_dbg = 0u;
         uint32_t now = tickTimer_GetCount();
         if ((now - s_last_dcl_dbg) >= 200u) {
             s_last_dcl_dbg = now;
-            DCL_DBG("dlt=%d deg spd=%d mHz fld=%d deg rot=%d deg diff=%d deg id=%d iq=%d mA",
+            FOC27_DBG("dlt=%d deg spd=%d mHz fld=%d deg rot=%d deg diff=%d deg id=%d iq=%d mA",
                     (int)g_dcl_dlt_now_deg,           /* 当前 delta 指令 (deg) */
                     (int)(g_dcl_speed_hz * 1000.0f),  /* 实测电频率 (mHz, 带符号) */
                     (int)g_dcl_field_deg,             /* 磁场电角度 (deg, 0~359) */
@@ -370,16 +370,16 @@ void Foc_Obs_Task(void)
     }
 
     /* ---- mode 27 峰峰值记录（foc_27_dcl 内部 5s 窗口刷新，此处检测变化打印） ---- */
-    if (g_dcl_running && (g_dcl_state == DCL_STEP_RUN)) {
+    if (g_dcl_running && (g_dcl_state == FOC27_STEP_RUN)) {
         static float s_last_dcl_id_pp = -1.0f;
         static float s_last_dcl_iq_pp = -1.0f;
         if ((g_dcl_id_pp_ma != s_last_dcl_id_pp)
                 || (g_dcl_iq_pp_ma != s_last_dcl_iq_pp)) {
             s_last_dcl_id_pp = g_dcl_id_pp_ma;
             s_last_dcl_iq_pp = g_dcl_iq_pp_ma;
-            DCL_DBG("idPP=%d iqPP=%d mA (%d s window)",
+            FOC27_DBG("idPP=%d iqPP=%d mA (%d s window)",
                     (int)g_dcl_id_pp_ma, (int)g_dcl_iq_pp_ma,
-                    (int)(DCL_PP_WIN_MS / 1000u));
+                    (int)(FOC27_PP_WIN_MS / 1000u));
         }
     }
 
@@ -388,23 +388,23 @@ void Foc_Obs_Task(void)
         uint8_t evt = g_dcal24_evt;
         g_dcal24_evt = 0u;
         switch (evt) {
-        case DCAL24_EVT_ZERO_DONE:
-            DCAL24_LOG("zero-offset locked iu=%d iv=%d iw=%d mA",
+        case FOC24_EVT_ZERO_DONE:
+            FOC24_LOG("zero-offset locked iu=%d iv=%d iw=%d mA",
                        (int)g_dcal24_zero_u_ma, (int)g_dcal24_zero_v_ma,
                        (int)g_dcal24_zero_w_ma);
             break;
-        case DCAL24_EVT_BETA_DONE:
-            DCAL24_LOG("BETA done hw=%d -> ALPHA 0deg", (int)g_dcal24_beta_hw);
+        case FOC24_EVT_BETA_DONE:
+            FOC24_LOG("BETA done hw=%d -> ALPHA 0deg", (int)g_dcal24_beta_hw);
             break;
-        case DCAL24_EVT_DONE:
-            DCAL24_LOG("done: beta=%d alpha=%d moved=%d offset=%d cnts (%d deg) -> mode 0",
+        case FOC24_EVT_DONE:
+            FOC24_LOG("done: beta=%d alpha=%d moved=%d offset=%d cnts (%d deg) -> mode 0",
                        (int)g_dcal24_beta_hw, (int)g_dcal24_alpha_hw,
                        (int)g_dcal24_moved, (int)g_dcal24_offset,
                        (int)((g_dcal24_offset * 360) / (int32_t)ENCODER_CPR));
             CommRunner_SetMode(COMM_RUNNER_STOP);
             break;
-        case DCAL24_EVT_OC:
-            DCAL24_LOG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+        case FOC24_EVT_OC:
+            FOC24_LOG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
             CommRunner_SetMode(COMM_RUNNER_STOP);
             break;
         default:
@@ -417,26 +417,26 @@ void Foc_Obs_Task(void)
         uint8_t evt = g_dci_evt;
         g_dci_evt = 0u;
         switch (evt) {
-        case DCI_EVT_CALIB_DONE:
-            DCI_DBG("zero-offset locked iu=%d iv=%d iw=%d mA",
+        case FOC28_EVT_CALIB_DONE:
+            FOC28_DBG("zero-offset locked iu=%d iv=%d iw=%d mA",
                     (int)g_calib_iu_off_ma, (int)g_calib_iv_off_ma,
                     (int)g_calib_iw_off_ma);
             break;
-        case DCI_EVT_BETA_DONE:
-            DCI_DBG("BETA done -> ALPHA 0deg");
+        case FOC28_EVT_BETA_DONE:
+            FOC28_DBG("BETA done -> ALPHA 0deg");
             break;
-        case DCI_EVT_LOCKED:
-            DCI_DBG("LOCKED off=%d deg -> run dlt %d->%d deg tr=%d ms",
+        case FOC28_EVT_LOCKED:
+            FOC28_DBG("LOCKED off=%d deg -> run dlt %d->%d deg tr=%d ms",
                     (int)((g_dci_offset * 360) / (int32_t)ENCODER_CPR),
                     (int)g_dci_dlt_init_deg, (int)g_dci_dlt_targ_deg,
                     (int)g_dci_dlt_tr_ms);
             break;
-        case DCI_EVT_RAMP_DONE:
-            DCI_DBG("ramp done dlt=%d deg spd=%d mHz",
+        case FOC28_EVT_RAMP_DONE:
+            FOC28_DBG("ramp done dlt=%d deg spd=%d mHz",
                     (int)g_dci_dlt_now_deg, (int)(g_dci_speed_hz * 1000.0f));
             break;
-        case DCI_EVT_OC:
-            DCI_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+        case FOC28_EVT_OC:
+            FOC28_DBG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
             CommRunner_SetMode(COMM_RUNNER_STOP);
             break;
         default:
@@ -445,12 +445,12 @@ void Foc_Obs_Task(void)
     }
 
     /* ---- mode 28 功角闭环运行数据（200ms 周期，全整型；电流环版） ---- */
-    if (g_dci_running && (g_dci_state == DCI_STEP_RUN)) {
+    if (g_dci_running && (g_dci_state == FOC28_STEP_RUN)) {
         static uint32_t s_last_dci_dbg = 0u;
         uint32_t now = tickTimer_GetCount();
         if ((now - s_last_dci_dbg) >= 200u) {
             s_last_dci_dbg = now;
-            DCI_DBG("dlt=%d deg spd=%d mHz diff=%d deg idRef=%d iqRef=%d mA id=%d iq=%d mA vd=%d mV vq=%d mV sat=%d",
+            FOC28_DBG("dlt=%d deg spd=%d mHz diff=%d deg idRef=%d iqRef=%d mA id=%d iq=%d mA vd=%d mV vq=%d mV sat=%d",
                     (int)g_dci_dlt_now_deg,           /* 当前 delta 指令 (deg) */
                     (int)(g_dci_speed_hz * 1000.0f),  /* 实测电频率 (mHz, 带符号) */
                     (int)g_dci_diff_deg,              /* 参考功角 (deg, =dlt) */
@@ -465,45 +465,45 @@ void Foc_Obs_Task(void)
     }
 
     /* ---- mode 28 峰峰值记录（foc_28_dci 内部 5s 窗口刷新，此处检测变化打印） ---- */
-    if (g_dci_running && (g_dci_state == DCI_STEP_RUN)) {
+    if (g_dci_running && (g_dci_state == FOC28_STEP_RUN)) {
         static float s_last_dci_id_pp = -1.0f;
         static float s_last_dci_iq_pp = -1.0f;
         if ((g_dci_id_pp_ma != s_last_dci_id_pp)
                 || (g_dci_iq_pp_ma != s_last_dci_iq_pp)) {
             s_last_dci_id_pp = g_dci_id_pp_ma;
             s_last_dci_iq_pp = g_dci_iq_pp_ma;
-            DCI_DBG("idPP=%d iqPP=%d mA (%d s window)",
+            FOC28_DBG("idPP=%d iqPP=%d mA (%d s window)",
                     (int)g_dci_id_pp_ma, (int)g_dci_iq_pp_ma,
-                    (int)(DCI_PP_WIN_MS / 1000u));
+                    (int)(FOC28_PP_WIN_MS / 1000u));
         }
     }
 
     /* ---- mode 28 均值记录（foc_28_dci 内部 3s 窗口刷新，此处检测变化打印） ---- */
-    if (g_dci_running && (g_dci_state == DCI_STEP_RUN)) {
+    if (g_dci_running && (g_dci_state == FOC28_STEP_RUN)) {
         static float s_last_dci_id_mean = 1e9f;
         static float s_last_dci_iq_mean = 1e9f;
         if ((g_dci_id_mean_ma != s_last_dci_id_mean)
                 || (g_dci_iq_mean_ma != s_last_dci_iq_mean)) {
             s_last_dci_id_mean = g_dci_id_mean_ma;
             s_last_dci_iq_mean = g_dci_iq_mean_ma;
-            DCI_DBG("idMean=%d iqMean=%d mA (%d s window)",
+            FOC28_DBG("idMean=%d iqMean=%d mA (%d s window)",
                     (int)g_dci_id_mean_ma, (int)g_dci_iq_mean_ma,
-                    (int)(DCI_MEAN_WIN_MS / 1000u));
+                    (int)(FOC28_MEAN_WIN_MS / 1000u));
         }
     }
 
     /* ---- mode 28 误差统计（foc_28_dci 内部 5s 窗口刷新，P 调参主判据） ---- */
-    if (g_dci_running && (g_dci_state == DCI_STEP_RUN)) {
+    if (g_dci_running && (g_dci_state == FOC28_STEP_RUN)) {
         static float s_last_dci_ed = 1e9f;
         static float s_last_dci_eq = 1e9f;
         if ((g_dci_ed_mean_ma != s_last_dci_ed)
                 || (g_dci_eq_mean_ma != s_last_dci_eq)) {
             s_last_dci_ed = g_dci_ed_mean_ma;
             s_last_dci_eq = g_dci_eq_mean_ma;
-            DCI_DBG("edMean=%d eqMean=%d edPP=%d eqPP=%d mA (%d s win)%s",
+            FOC28_DBG("edMean=%d eqMean=%d edPP=%d eqPP=%d mA (%d s win)%s",
                     (int)g_dci_ed_mean_ma, (int)g_dci_eq_mean_ma,
                     (int)g_dci_ed_pp_ma, (int)g_dci_eq_pp_ma,
-                    (int)(DCI_ERR_WIN_MS / 1000u),
+                    (int)(FOC28_ERR_WIN_MS / 1000u),
                     g_dci_vsat ? " [SAT]" : "");
         }
     }
@@ -513,14 +513,14 @@ void Foc_Obs_Task(void)
         uint8_t evt = g_drun29_evt;
         g_drun29_evt = 0u;
         switch (evt) {
-        case DRUN29_EVT_RAMP_DONE:
-            DRUN29_LOG("ramp done dlt=%d deg spd=%d mHz rot=%d cnt",
+        case FOC29_EVT_RAMP_DONE:
+            FOC29_LOG("ramp done dlt=%d deg spd=%d mHz rot=%d cnt",
                        (int)g_drun29_dlt_now_deg,
                        (int)(g_drun29_speed_hz * 1000.0f),
                        (int)g_drun29_rotor_count);
             break;
-        case DRUN29_EVT_OC:
-            DRUN29_LOG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+        case FOC29_EVT_OC:
+            FOC29_LOG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
             CommRunner_SetMode(COMM_RUNNER_STOP);
             break;
         default:
@@ -529,12 +529,12 @@ void Foc_Obs_Task(void)
     }
 
     /* ---- mode 29 独立电流环运行数据（200ms 周期） ---- */
-    if (g_drun29_running && (g_drun29_state == DRUN29_STEP_RUN)) {
+    if (g_drun29_running && (g_drun29_state == FOC29_STEP_RUN)) {
         static uint32_t s_last_drun29_dbg = 0u;
         uint32_t now = tickTimer_GetCount();
         if ((now - s_last_drun29_dbg) >= 200u) {
             s_last_drun29_dbg = now;
-            DRUN29_LOG("dlt=%d deg spd=%d mHz rot=%d cnt idRef=%d iqRef=%d mA id=%d iq=%d mA vd=%d mV vq=%d mV sat=%d",
+            FOC29_LOG("dlt=%d deg spd=%d mHz rot=%d cnt idRef=%d iqRef=%d mA id=%d iq=%d mA vd=%d mV vq=%d mV sat=%d",
                        (int)g_drun29_dlt_now_deg,
                        (int)(g_drun29_speed_hz * 1000.0f),
                        (int)g_drun29_rotor_count,
@@ -549,17 +549,17 @@ void Foc_Obs_Task(void)
     }
 
     /* ---- mode 29 独立误差统计 ---- */
-    if (g_drun29_running && (g_drun29_state == DRUN29_STEP_RUN)) {
+    if (g_drun29_running && (g_drun29_state == FOC29_STEP_RUN)) {
         static float s_last_drun29_ed = 1e9f;
         static float s_last_drun29_eq = 1e9f;
         if ((g_drun29_ed_mean_ma != s_last_drun29_ed)
                 || (g_drun29_eq_mean_ma != s_last_drun29_eq)) {
             s_last_drun29_ed = g_drun29_ed_mean_ma;
             s_last_drun29_eq = g_drun29_eq_mean_ma;
-            DRUN29_LOG("edMean=%d eqMean=%d edPP=%d eqPP=%d mA (%d s win)%s",
+            FOC29_LOG("edMean=%d eqMean=%d edPP=%d eqPP=%d mA (%d s win)%s",
                        (int)g_drun29_ed_mean_ma, (int)g_drun29_eq_mean_ma,
                        (int)g_drun29_ed_pp_ma, (int)g_drun29_eq_pp_ma,
-                       (int)(DRUN29_ERR_WIN_MS / 1000u),
+                       (int)(FOC29_ERR_WIN_MS / 1000u),
                        g_drun29_vsat ? " [SAT]" : "");
         }
     }
@@ -569,14 +569,14 @@ void Foc_Obs_Task(void)
         uint8_t evt = g_drun41_evt;
         g_drun41_evt = 0u;
         switch (evt) {
-        case DRUN41_EVT_RAMP_DONE:
-            DRUN41_LOG("ramp done dlt=%d deg spd=%d mHz rot=%d cnt",
+        case FOC41_EVT_RAMP_DONE:
+            FOC41_LOG("ramp done dlt=%d deg spd=%d mHz rot=%d cnt",
                        (int)g_drun41_dlt_now_deg,
                        (int)(g_drun41_speed_hz * 1000.0f),
                        (int)g_drun41_rotor_count);
             break;
-        case DRUN41_EVT_OC:
-            DRUN41_LOG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+        case FOC41_EVT_OC:
+            FOC41_LOG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
             CommRunner_SetMode(COMM_RUNNER_STOP);
             break;
         default:
@@ -584,12 +584,12 @@ void Foc_Obs_Task(void)
         }
     }
 
-    if (g_drun41_running && (g_drun41_state == DRUN41_STEP_RUN)) {
+    if (g_drun41_running && (g_drun41_state == FOC41_STEP_RUN)) {
         static uint32_t s_last_drun41_dbg = 0u;
         uint32_t now = tickTimer_GetCount();
         if ((now - s_last_drun41_dbg) >= 200u) {
             s_last_drun41_dbg = now;
-            DRUN41_LOG("dlt=%d deg spd=%d mHz idRef=%d iqRef=%d mA id=%d iq=%d mA vdPi=%d vqPi=%d vdFF=%d vqFF=%d mV sat=%d ff=%u",
+            FOC41_LOG("dlt=%d deg spd=%d mHz idRef=%d iqRef=%d mA id=%d iq=%d mA vdPi=%d vqPi=%d vdFF=%d vqFF=%d mV sat=%d ff=%u",
                        (int)g_drun41_dlt_now_deg,
                        (int)(g_drun41_speed_hz * 1000.0f),
                        (int)g_drun41_id_ref_ma,
@@ -639,7 +639,7 @@ void Foc_Obs_Task(void)
         uint32_t now = tickTimer_GetCount();
         if ((now - s_last_zz_dbg) >= 200u) {
             s_last_zz_dbg = now;
-            OBS_DBG("[ZIZENG_DBG] cnt=%d rpm=%d enc_dir=%d theta=%d deg rotor=%d deg diff=%d deg",
+            OBS_DBG("[FOC30_DBG] cnt=%d rpm=%d enc_dir=%d theta=%d deg rotor=%d deg diff=%d deg",
                     (int)g_enc_count,                     /* 编码器累积计数(counts,4倍频,带符号) */
                     (int)g_enc_speed_rpm,                 /* 机械转速估算(RPM) */
                     (int)g_foc_enc_dir,                   /* 编码器方向符号(+1/-1) */
@@ -655,7 +655,7 @@ void Foc_Obs_Task(void)
         uint32_t now = tickTimer_GetCount();
         if ((now - s_last_iqpi_dbg) >= 200u) {
             s_last_iqpi_dbg = now;
-            OBS_DBG("[IQPI_MON] st=%d iq=%d id=%d vq=%d vd=%d rr=%d win=%d ev=%d cd=%d ed=%d rd=%d flip=%d pos=%d ",
+            OBS_DBG("[FOC31_MON] st=%d iq=%d id=%d vq=%d vd=%d rr=%d win=%d ev=%d cd=%d ed=%d rd=%d flip=%d pos=%d ",
                     (int)g_iqpi_step,                   /* 状态: 2=零矢量校准 3=闭环 4=vq饱和 5=堵转 6=过流 7=已翻转 */
                     (int)g_foc_iq_ma, (int)g_foc_id_ma, /* 控制系电流 iq/id (mA), 应跟随 rr/0 */
                     (int)(g_foc_vq * 1000.0f),          /* q轴电压指令(mV), ±3500=±限幅(顶格=饱和) */
@@ -674,7 +674,7 @@ void Foc_Obs_Task(void)
     /* ---- mode 31 翻转事件（ISR 置 flag，此处打印一次后清零） ---- */
     if (g_iqpi_evt_flag) {
         g_iqpi_evt_flag = 0u;
-        OBS_DBG("[IQPI_FLIP] n=%d pos=%d iq=%d vq=%d off=%d deg cd=%d ed=%d rd=%d",
+        OBS_DBG("[FOC31_FLIP] n=%d pos=%d iq=%d vq=%d off=%d deg cd=%d ed=%d rd=%d",
                 (int)g_iqpi_evt_seq, (int)g_iqpi_evt_pos,
                 (int)g_iqpi_evt_iq_ma, (int)g_iqpi_evt_vq_mv,
                 (int)g_iqpi_evt_off_deg,
@@ -686,12 +686,12 @@ void Foc_Obs_Task(void)
     if (g_lockiq_evt_flag) {
         uint8_t lock_code = g_lockiq_evt_code;
         g_lockiq_evt_flag = 0u;
-        if ((lock_code == LOCKIQ_EVT_LOCKED) && g_lockiq_running) {
+        if ((lock_code == FOC32_EVT_LOCKED) && g_lockiq_running) {
             OBS_DBG("[LOCKIQ] locked off=%d deg dir=%d -> handoff iqpi",
                     (int)g_lockiq_evt_off_deg, (int)g_foc_enc_dir);
             g_lockiq_running = 0u;   /* 交接: ISR 停发 mode 32 */
-            Foc_StartIqPi();         /* mode 31 接管（偏移/方向已注入） */
-        } else if (lock_code == LOCKIQ_EVT_LOCKED) {
+            Foc_IqPi_Start();         /* mode 31 接管（偏移/方向已注入） */
+        } else if (lock_code == FOC32_EVT_LOCKED) {
             /* 事件置位后、处理前模式已被切走（如已进 mode 0）：跳过交接 */
             OBS_DBG("[LOCKIQ] locked off=%d deg but mode moved, skip handoff",
                     (int)g_lockiq_evt_off_deg);

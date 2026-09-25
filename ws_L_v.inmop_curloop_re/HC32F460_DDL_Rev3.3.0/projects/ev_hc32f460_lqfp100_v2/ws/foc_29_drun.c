@@ -19,18 +19,18 @@
 #include "hc32_ll_tmra.h"
 #include "I.h"   /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
 
-#define DRUN29_ISR_DT_US  (1000000u / FOC_ISR_HZ)
+#define FOC29_ISR_DT_US  (1000000u / FOC_ISR_HZ)
 
-#define DRUN29_SPEED_WIN_TICKS  ((uint32_t)DRUN29_SPEED_WIN_MS * FOC_ISR_HZ / 1000u)
-#define DRUN29_PP_WIN_TICKS     ((uint32_t)DRUN29_PP_WIN_MS * FOC_ISR_HZ / 1000u)
-#define DRUN29_MEAN_WIN_TICKS   ((uint32_t)DRUN29_MEAN_WIN_MS * FOC_ISR_HZ / 1000u)
-#define DRUN29_ERR_WIN_TICKS    ((uint32_t)DRUN29_ERR_WIN_MS * FOC_ISR_HZ / 1000u)
+#define FOC29_SPEED_WIN_TICKS  ((uint32_t)FOC29_SPEED_WIN_MS * FOC_ISR_HZ / 1000u)
+#define FOC29_PP_WIN_TICKS     ((uint32_t)FOC29_PP_WIN_MS * FOC_ISR_HZ / 1000u)
+#define FOC29_MEAN_WIN_TICKS   ((uint32_t)FOC29_MEAN_WIN_MS * FOC_ISR_HZ / 1000u)
+#define FOC29_ERR_WIN_TICKS    ((uint32_t)FOC29_ERR_WIN_MS * FOC_ISR_HZ / 1000u)
 
-#define DRUN29_RAD2DEG  57.2958f
-#define DRUN29_DEG2RAD  0.0174533f
+#define FOC29_RAD2DEG  57.2958f
+#define FOC29_DEG2RAD  0.0174533f
 
 volatile uint8_t  g_drun29_running       = 0u;
-volatile uint8_t  g_drun29_state         = DRUN29_STEP_IDLE;
+volatile uint8_t  g_drun29_state         = FOC29_STEP_IDLE;
 volatile uint8_t  g_drun29_evt           = 0u;
 volatile float    g_drun29_dlt_init_deg  = 90.0f;
 volatile float    g_drun29_dlt_targ_deg  = 90.0f;
@@ -44,15 +44,15 @@ volatile int32_t  g_drun29_rotor_count   = 0;
 volatile float    g_drun29_id_ma         = 0.0f;
 volatile float    g_drun29_iq_ma         = 0.0f;
 volatile float    g_drun29_iq_filt_ma    = 0.0f;
-volatile float    g_drun29_iq_filt_alpha = DRUN29_IQ_FILT_ALPHA;
+volatile float    g_drun29_iq_filt_alpha = FOC29_IQ_FILT_ALPHA;
 volatile float    g_drun29_id_pp_ma      = 0.0f;
 volatile float    g_drun29_iq_pp_ma      = 0.0f;
 volatile float    g_drun29_id_mean_ma    = 0.0f;
 volatile float    g_drun29_iq_mean_ma    = 0.0f;
-volatile float    g_drun29_i_ref_ma      = DRUN29_I_REF_MA;
+volatile float    g_drun29_i_ref_ma      = FOC29_I_REF_MA;
 volatile float    g_drun29_id_ref_ma     = 0.0f;
 volatile float    g_drun29_iq_ref_ma     = 0.0f;
-volatile float    g_drun29_i_ramp_ma_s   = DRUN29_I_RAMP_MA_S;
+volatile float    g_drun29_i_ramp_ma_s   = FOC29_I_RAMP_MA_S;
 volatile uint8_t  g_drun29_vsat          = 0u;
 volatile float    g_drun29_ed_mean_ma    = 0.0f;
 volatile float    g_drun29_eq_mean_ma    = 0.0f;
@@ -63,25 +63,25 @@ volatile float    g_drun29_dv            = 50.0f;
 volatile float    g_drun29_dw            = 50.0f;
 volatile uint32_t g_drun29_time_us       = 0u;
 volatile float    g_drun29_step_frac_pct = 90.0f;
-volatile uint8_t  g_drun29_id_step_state = DRUN29_STEP_ST_IDLE;
-volatile uint8_t  g_drun29_iq_step_state = DRUN29_STEP_ST_IDLE;
+volatile uint8_t  g_drun29_id_step_state = FOC29_STEP_ST_IDLE;
+volatile uint8_t  g_drun29_iq_step_state = FOC29_STEP_ST_IDLE;
 volatile float    g_drun29_id_step_target_ma = 0.0f;
 volatile float    g_drun29_iq_step_target_ma = 0.0f;
-volatile uint32_t g_drun29_id_step_t90_us = DRUN29_STEP_TIME_TIMEOUT;
-volatile uint32_t g_drun29_iq_step_t90_us = DRUN29_STEP_TIME_TIMEOUT;
+volatile uint32_t g_drun29_id_step_t90_us = FOC29_STEP_TIME_TIMEOUT;
+volatile uint32_t g_drun29_iq_step_t90_us = FOC29_STEP_TIME_TIMEOUT;
 
 pid_config_t g_drun29_pid_id_cfg = {
     .enabled = true,
     .p_valid = true,
     .i_valid = true,
     .d_valid = false,
-    .kp = DRUN29_PI_KP,
-    .ki = DRUN29_PI_KI,
+    .kp = FOC29_PI_KP,
+    .ki = FOC29_PI_KI,
     .kd = 0.0f,
-    .output_min = -DRUN29_PI_UMAX_V,
-    .output_max =  DRUN29_PI_UMAX_V,
-    .integral_max = DRUN29_ITERM_MAX_V,
-    .i_term_max = DRUN29_ITERM_MAX_V,
+    .output_min = -FOC29_PI_UMAX_V,
+    .output_max =  FOC29_PI_UMAX_V,
+    .integral_max = FOC29_ITERM_MAX_V,
+    .i_term_max = FOC29_ITERM_MAX_V,
     .update_ms = 0,
 };
 
@@ -90,19 +90,18 @@ pid_config_t g_drun29_pid_iq_cfg = {
     .p_valid = true,
     .i_valid = true,
     .d_valid = false,
-    .kp = DRUN29_PI_KP,
-    .ki = DRUN29_PI_KI,
+    .kp = FOC29_PI_KP,
+    .ki = FOC29_PI_KI,
     .kd = 0.0f,
-    .output_min = -DRUN29_PI_UMAX_V,
-    .output_max =  DRUN29_PI_UMAX_V,
-    .integral_max = DRUN29_ITERM_MAX_V,
-    .i_term_max = DRUN29_ITERM_MAX_V,
+    .output_min = -FOC29_PI_UMAX_V,
+    .output_max =  FOC29_PI_UMAX_V,
+    .integral_max = FOC29_ITERM_MAX_V,
+    .i_term_max = FOC29_ITERM_MAX_V,
     .update_ms = 0,
 };
 
 static pid_state_t s_pid_id;
 static pid_state_t s_pid_iq;
-static foc_dcal24_result_t s_calibration;
 
 static int32_t s_rotor_count;
 static uint16_t s_encoder_prev_hw;
@@ -186,7 +185,7 @@ static void Drun29_ResetLoopState(void)
     s_ed_max = 0.0f;
     s_eq_min = 0.0f;
     s_eq_max = 0.0f;
-    s_id_step.state = DRUN29_STEP_ST_IDLE;
+    s_id_step.state = FOC29_STEP_ST_IDLE;
     s_id_step.entry_armed = 1u;
     s_id_step.target_ma = 0.0f;
     s_id_step.prev_ref_ma = 0.0f;
@@ -227,12 +226,12 @@ static void Drun29_ClearObservables(void)
     g_drun29_dw = 50.0f;
     g_drun29_time_us = 0u;
     g_drun29_step_frac_pct = 75.0f;
-    g_drun29_id_step_state = DRUN29_STEP_ST_IDLE;
-    g_drun29_iq_step_state = DRUN29_STEP_ST_IDLE;
+    g_drun29_id_step_state = FOC29_STEP_ST_IDLE;
+    g_drun29_iq_step_state = FOC29_STEP_ST_IDLE;
     g_drun29_id_step_target_ma = 0.0f;
     g_drun29_iq_step_target_ma = 0.0f;
-    g_drun29_id_step_t90_us = DRUN29_STEP_TIME_TIMEOUT;
-    g_drun29_iq_step_t90_us = DRUN29_STEP_TIME_TIMEOUT;
+    g_drun29_id_step_t90_us = FOC29_STEP_TIME_TIMEOUT;
+    g_drun29_iq_step_t90_us = FOC29_STEP_TIME_TIMEOUT;
 }
 
 static void Drun29_PpFeed(float id, float iq)
@@ -248,7 +247,7 @@ static void Drun29_PpFeed(float id, float iq)
         if (iq > s_iq_max) s_iq_max = iq;
     }
 
-    if (++s_pp_tick >= DRUN29_PP_WIN_TICKS) {
+    if (++s_pp_tick >= FOC29_PP_WIN_TICKS) {
         s_pp_tick = 0u;
         g_drun29_id_pp_ma = (s_id_max - s_id_min) * 1000.0f;
         g_drun29_iq_pp_ma = (s_iq_max - s_iq_min) * 1000.0f;
@@ -320,12 +319,12 @@ static void Drun29_StepFeed(drun29_step_track_t *track,
         fraction = 0.9f;
     }
 
-    if (track->state == DRUN29_STEP_ST_WAIT) {
+    if (track->state == FOC29_STEP_ST_WAIT) {
         /* The measurement is armed only by the first ISR after entering
          * mode 29. Later Watch changes do not restart this timer. */
-        if ((now_us - track->start_us) >= DRUN29_STEP_TIMEOUT_US) {
-            track->state = DRUN29_STEP_ST_TIMEOUT;
-            *time_out = DRUN29_STEP_TIME_TIMEOUT;
+        if ((now_us - track->start_us) >= FOC29_STEP_TIMEOUT_US) {
+            track->state = FOC29_STEP_ST_TIMEOUT;
+            *time_out = FOC29_STEP_TIME_TIMEOUT;
         } else {
             threshold_ma = track->target_ma * fraction;
             if (track->target_ma >= 0.0f) {
@@ -339,8 +338,8 @@ static void Drun29_StepFeed(drun29_step_track_t *track,
                     track->cross_us = now_us;
                 }
                 track->cross_tick++;
-                if (track->cross_tick >= DRUN29_STEP_CONFIRM_TICK) {
-                    track->state = DRUN29_STEP_ST_DONE;
+                if (track->cross_tick >= FOC29_STEP_CONFIRM_TICK) {
+                    track->state = FOC29_STEP_ST_DONE;
                     *time_out = track->cross_us;
                 }
             } else {
@@ -349,9 +348,9 @@ static void Drun29_StepFeed(drun29_step_track_t *track,
             }
         }
     } else if ((track->entry_armed != 0u)
-               && ((ref_ma >= DRUN29_STEP_MIN_MA)
-                   || (ref_ma <= -DRUN29_STEP_MIN_MA))) {
-        track->state = DRUN29_STEP_ST_WAIT;
+               && ((ref_ma >= FOC29_STEP_MIN_MA)
+                   || (ref_ma <= -FOC29_STEP_MIN_MA))) {
+        track->state = FOC29_STEP_ST_WAIT;
         track->entry_armed = 0u;
         track->target_ma = ref_ma;
         track->start_us = now_us;
@@ -365,29 +364,28 @@ static void Drun29_StepFeed(drun29_step_track_t *track,
     *state_out = track->state;
 }
 
-void Foc_Drun29_InitPids(void)
+void Foc_Drun_InitPids(void)
 {
     PID_Init(&s_pid_id, &g_drun29_pid_id_cfg);
     PID_Init(&s_pid_iq, &g_drun29_pid_iq_cfg);
 }
 
-void Foc_Drun29_Start(void)
+void Foc_Drun_Start(void)
 {
     foc_dcal24_result_t calibration;
     uint16_t hardware_count;
     int32_t encoder_dir;
 
-    if (Foc_Dcal24_GetResult(&calibration) == 0u) {
+    if (Foc_Dcal_GetResult(&calibration) == 0u) {
         g_drun29_running = 0u;
-        g_drun29_state = DRUN29_STEP_IDLE;
-        DRUN29_LOG("ERROR: no mode 24 calibration; run mode 24 first");
+        g_drun29_state = FOC29_STEP_IDLE;
+        FOC29_LOG("ERROR: no mode 24 calibration; run mode 24 first");
         return;
     }
 
     Foc_Core_ClearFault();
     Drun29_ResetLoopState();
     Drun29_ClearObservables();
-    s_calibration = calibration;
     s_zero_u_ma = calibration.zero_u_ma;
     s_zero_v_ma = calibration.zero_v_ma;
     s_zero_w_ma = calibration.zero_w_ma;
@@ -418,9 +416,9 @@ void Foc_Drun29_Start(void)
     PID_Reset(&s_pid_iq);
 
     g_drun29_running = 1u;
-    g_drun29_state = DRUN29_STEP_RUN;
+    g_drun29_state = FOC29_STEP_RUN;
     Foc_Core_PwmStart();
-    DRUN29_LOG("start rot=%d cnt dlt=%d->%d deg tr=%ums Iref=%dmA kp=%dm iValid=%u",
+    FOC29_LOG("start rot=%d cnt dlt=%d->%d deg tr=%ums Iref=%dmA kp=%dm iValid=%u",
                (int)s_rotor_count,
                (int)g_drun29_dlt_init_deg, (int)g_drun29_dlt_targ_deg,
                (unsigned)g_drun29_dlt_tr_ms, (int)g_drun29_i_ref_ma,
@@ -428,7 +426,7 @@ void Foc_Drun29_Start(void)
                (unsigned)g_drun29_pid_iq_cfg.i_valid);
 }
 
-void Foc_Drun29_Stop(void)
+void Foc_Drun_Stop(void)
 {
     if (g_drun29_running) {
         g_drun29_running = 0u;
@@ -438,12 +436,12 @@ void Foc_Drun29_Stop(void)
             Foc_Core_PwmStop();
             Foc_Core_SetStateMachine(FOC_STATE_IDLE);
         }
-        DRUN29_LOG("stopped");
+        FOC29_LOG("stopped");
     }
     Drun29_ClearCurrentFeedback();
 }
 
-void Foc_Drun29_Step(const stc_i_data_t *pData)
+void Foc_Drun_Step(const stc_i_data_t *pData)
 {
     stc_i_data_t data;
     float id, iq, ramp_step, delta_deg, delta_rad, id_ref, iq_ref, vd, vq;
@@ -454,15 +452,15 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
     uint32_t now_us;
 
     if (Foc_Core_OverCurrent(pData)) {
-        g_drun29_state = DRUN29_STEP_FAULT_OC;
-        g_drun29_evt = DRUN29_EVT_OC;
+        g_drun29_state = FOC29_STEP_FAULT_OC;
+        g_drun29_evt = FOC29_EVT_OC;
         g_drun29_running = 0u;
         Foc_Core_FaultStop(1u);
         Drun29_ClearCurrentFeedback();
         return;
     }
 
-    if (g_drun29_state != DRUN29_STEP_RUN) {
+    if (g_drun29_state != FOC29_STEP_RUN) {
         return;
     }
 
@@ -479,7 +477,7 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
     g_drun29_dlt_now_deg = delta_deg;
     if ((s_ramp_done == 0u) && (s_run_tick >= ramp_ticks)) {
         s_ramp_done = 1u;
-        g_drun29_evt = DRUN29_EVT_RAMP_DONE;
+        g_drun29_evt = FOC29_EVT_RAMP_DONE;
     }
     s_run_tick++;
 
@@ -490,11 +488,11 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
     }
     hardware_delta = (int32_t)(int16_t)((uint16_t)hardware_count - s_encoder_prev_hw);
     s_encoder_prev_hw = hardware_count;
-    if (hardware_delta > DRUN29_ENC_DELTA_MAX) {
-        hardware_delta = DRUN29_ENC_DELTA_MAX;
+    if (hardware_delta > FOC29_ENC_DELTA_MAX) {
+        hardware_delta = FOC29_ENC_DELTA_MAX;
     }
-    if (hardware_delta < -DRUN29_ENC_DELTA_MAX) {
-        hardware_delta = -DRUN29_ENC_DELTA_MAX;
+    if (hardware_delta < -FOC29_ENC_DELTA_MAX) {
+        hardware_delta = -FOC29_ENC_DELTA_MAX;
     }
     corrected_delta = hardware_delta * (int32_t)g_foc_enc_dir;
     s_rotor_count = Foc_Core_ModPos(s_rotor_count + corrected_delta,
@@ -529,10 +527,10 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
 
     s_id_sum_ma += (int32_t)(id * 1000.0f);
     s_iq_sum_ma += (int32_t)(iq * 1000.0f);
-    if (++s_mean_tick >= DRUN29_MEAN_WIN_TICKS) {
+    if (++s_mean_tick >= FOC29_MEAN_WIN_TICKS) {
         s_mean_tick = 0u;
-        g_drun29_id_mean_ma = (float)s_id_sum_ma / (float)DRUN29_MEAN_WIN_TICKS;
-        g_drun29_iq_mean_ma = (float)s_iq_sum_ma / (float)DRUN29_MEAN_WIN_TICKS;
+        g_drun29_id_mean_ma = (float)s_id_sum_ma / (float)FOC29_MEAN_WIN_TICKS;
+        g_drun29_iq_mean_ma = (float)s_iq_sum_ma / (float)FOC29_MEAN_WIN_TICKS;
         s_id_sum_ma = 0;
         s_iq_sum_ma = 0;
     }
@@ -550,7 +548,7 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
         s_i_ref_ramp = g_drun29_i_ref_ma;
     }
 
-    delta_rad = delta_deg * DRUN29_DEG2RAD;
+    delta_rad = delta_deg * FOC29_DEG2RAD;
     id_ref = (s_i_ref_ramp * 0.001f) * Foc_Math_Cos(delta_rad);
     iq_ref = (s_i_ref_ramp * 0.001f) * Foc_Math_Sin(delta_rad);
     g_drun29_id_ref_ma = id_ref * 1000.0f;
@@ -564,14 +562,14 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
                     &g_drun29_iq_step_t90_us,
                     g_drun29_iq_ref_ma, g_drun29_iq_ma, now_us);
 
-    vd = PID_UpdateUs(&s_pid_id, id_ref, id, DRUN29_ISR_DT_US);
-    vq = PID_UpdateUs(&s_pid_iq, iq_ref, iq, DRUN29_ISR_DT_US);
+    vd = PID_UpdateUs(&s_pid_id, id_ref, id, FOC29_ISR_DT_US);
+    vq = PID_UpdateUs(&s_pid_iq, iq_ref, iq, FOC29_ISR_DT_US);
     g_foc_vd = vd;
     g_foc_vq = vq;
-    g_drun29_vsat = ((vd <= -DRUN29_PI_UMAX_V + 0.01f) ||
-                     (vd >=  DRUN29_PI_UMAX_V - 0.01f) ||
-                     (vq <= -DRUN29_PI_UMAX_V + 0.01f) ||
-                     (vq >=  DRUN29_PI_UMAX_V - 0.01f)) ? 1u : 0u;
+    g_drun29_vsat = ((vd <= -FOC29_PI_UMAX_V + 0.01f) ||
+                     (vd >=  FOC29_PI_UMAX_V - 0.01f) ||
+                     (vq <= -FOC29_PI_UMAX_V + 0.01f) ||
+                     (vq >=  FOC29_PI_UMAX_V - 0.01f)) ? 1u : 0u;
 
     cos_r = Foc_Math_Cos(rotor_rad);
     sin_r = Foc_Math_Sin(rotor_rad);
@@ -606,10 +604,10 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
         }
         s_ed_sum_ma += error_d;
         s_eq_sum_ma += error_q;
-        if (++s_err_tick >= DRUN29_ERR_WIN_TICKS) {
+        if (++s_err_tick >= FOC29_ERR_WIN_TICKS) {
             s_err_tick = 0u;
-            g_drun29_ed_mean_ma = (float)s_ed_sum_ma / (float)DRUN29_ERR_WIN_TICKS;
-            g_drun29_eq_mean_ma = (float)s_eq_sum_ma / (float)DRUN29_ERR_WIN_TICKS;
+            g_drun29_ed_mean_ma = (float)s_ed_sum_ma / (float)FOC29_ERR_WIN_TICKS;
+            g_drun29_eq_mean_ma = (float)s_eq_sum_ma / (float)FOC29_ERR_WIN_TICKS;
             g_drun29_ed_pp_ma = s_ed_max - s_ed_min;
             g_drun29_eq_pp_ma = s_eq_max - s_eq_min;
             s_ed_sum_ma = 0;
@@ -620,17 +618,17 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
     }
 
     s_speed_acc += corrected_delta;
-    if (++s_speed_tick >= DRUN29_SPEED_WIN_TICKS) {
+    if (++s_speed_tick >= FOC29_SPEED_WIN_TICKS) {
         g_drun29_speed_hz = (float)s_speed_acc * (float)FOC_POLE_PAIRS
-                          * (1000.0f / (float)DRUN29_SPEED_WIN_MS)
+                          * (1000.0f / (float)FOC29_SPEED_WIN_MS)
                           / (float)ENCODER_CPR;
         s_speed_tick = 0u;
         s_speed_acc = 0;
     }
 
-    field_deg = (int32_t)((rotor_rad + delta_rad) * DRUN29_RAD2DEG);
+    field_deg = (int32_t)((rotor_rad + delta_rad) * FOC29_RAD2DEG);
     if (field_deg >= 360) field_deg -= 360;
-    rotor_deg = (int32_t)(rotor_rad * DRUN29_RAD2DEG);
+    rotor_deg = (int32_t)(rotor_rad * FOC29_RAD2DEG);
     angle_diff = field_deg - rotor_deg;
     angle_diff = 180 - Foc_Core_ModPos(180 - angle_diff, 360);
     g_drun29_field_deg = field_deg;
@@ -647,7 +645,7 @@ void Foc_Drun29_Step(const stc_i_data_t *pData)
  * 单位换算：传"毫单位"，SendScaled 内部 ×0.001。
  *   电流 mA→A，电压 mV→V，角度 mdeg→deg
  *===========================================================================*/
-int Foc_Drun29_VofaFill(int32_t *cur)
+int Foc_Drun_VofaFill(int32_t *cur)
 {
     cur[0]  = (int32_t)(g_i_iu_ma);                  /* ch0  U 相电流 (mA -> A) */
     cur[1]  = (int32_t)(g_i_iv_ma);                  /* ch1  V 相电流 */

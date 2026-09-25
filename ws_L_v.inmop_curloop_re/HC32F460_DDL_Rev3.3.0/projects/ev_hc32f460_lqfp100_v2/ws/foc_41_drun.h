@@ -78,45 +78,45 @@
 extern "C" {
 #endif
 
-#define DRUN41_DBG   1
-#if DRUN41_DBG
-#define DRUN41_LOG(fmt, ...)  MAIN_D("[DRUN41] " fmt, ##__VA_ARGS__)
+#define FOC41_DBG   1
+#if FOC41_DBG
+#define FOC41_LOG(fmt, ...)  MAIN_D("[DRUN41] " fmt, ##__VA_ARGS__)
 #else
-#define DRUN41_LOG(fmt, ...)  ((void)0)
+#define FOC41_LOG(fmt, ...)  ((void)0)
 #endif
 
-#define DRUN41_PI_KP             0.5f
-#define DRUN41_PI_KI             300.0f
-#define DRUN41_PI_UMAX_V         3.5f
-#define DRUN41_ITERM_MAX_V       3.2f
-#define DRUN41_VMAX_DEFAULT_V    6.0f
-#define DRUN41_IQ_FILT_ALPHA     0.10f
-#define DRUN41_I_REF_MA          500.0f
-#define DRUN41_I_RAMP_MA_S       0.0f
-#define DRUN41_ENC_DELTA_MAX     32
+#define FOC41_PI_KP             0.5f
+#define FOC41_PI_KI             300.0f
+#define FOC41_PI_UMAX_V         3.5f
+#define FOC41_ITERM_MAX_V       3.2f
+#define FOC41_VMAX_DEFAULT_V    6.0f
+#define FOC41_IQ_FILT_ALPHA     0.10f
+#define FOC41_I_REF_MA          500.0f
+#define FOC41_I_RAMP_MA_S       0.0f
+#define FOC41_ENC_DELTA_MAX     32
 
-#define DRUN41_SPEED_WIN_MS      200u
-#define DRUN41_PP_WIN_MS         5000u
-#define DRUN41_MEAN_WIN_MS       3000u
-#define DRUN41_ERR_WIN_MS        5000u
+#define FOC41_SPEED_WIN_MS      200u
+#define FOC41_PP_WIN_MS         5000u
+#define FOC41_MEAN_WIN_MS       3000u
+#define FOC41_ERR_WIN_MS        5000u
 
-#define DRUN41_STEP_IDLE         0u
-#define DRUN41_STEP_RUN          1u
-#define DRUN41_STEP_FAULT_OC     2u
+#define FOC41_STEP_IDLE         0u
+#define FOC41_STEP_RUN          1u
+#define FOC41_STEP_FAULT_OC     2u
 
-#define DRUN41_EVT_RAMP_DONE     1u
-#define DRUN41_EVT_OC            2u
+#define FOC41_EVT_RAMP_DONE     1u
+#define FOC41_EVT_OC            2u
 
-#define DRUN41_STEP_DEADBAND_MA  50.0f
-#define DRUN41_STEP_MIN_MA       100.0f
-#define DRUN41_STEP_TIMEOUT_US   200000u
-#define DRUN41_STEP_CONFIRM_TICK 3u
-#define DRUN41_STEP_TIME_TIMEOUT 0xFFFFFFFFu
+#define FOC41_STEP_DEADBAND_MA  50.0f
+#define FOC41_STEP_MIN_MA       100.0f
+#define FOC41_STEP_TIMEOUT_US   200000u
+#define FOC41_STEP_CONFIRM_TICK 3u
+#define FOC41_STEP_TIME_TIMEOUT 0xFFFFFFFFu
 
-#define DRUN41_STEP_ST_IDLE      0u
-#define DRUN41_STEP_ST_WAIT      1u
-#define DRUN41_STEP_ST_DONE      2u
-#define DRUN41_STEP_ST_TIMEOUT   3u
+#define FOC41_STEP_ST_IDLE      0u
+#define FOC41_STEP_ST_WAIT      1u
+#define FOC41_STEP_ST_DONE      2u
+#define FOC41_STEP_ST_TIMEOUT   3u
 
 extern volatile uint8_t  g_drun41_running;
 extern volatile uint8_t  g_drun41_state;
@@ -163,8 +163,8 @@ extern volatile float    g_drun41_vmax_v;
 
 /* Step-response instrumentation.  Times are measured from the first ISR where
  * the selected axis reference differs from its previous value by more than
- * DRUN41_STEP_DEADBAND_MA.  A crossing must remain present for
- * DRUN41_STEP_CONFIRM_TICK samples before it is accepted. */
+ * FOC41_STEP_DEADBAND_MA.  A crossing must remain present for
+ * FOC41_STEP_CONFIRM_TICK samples before it is accepted. */
 extern volatile uint32_t g_drun41_time_us;
 extern volatile float    g_drun41_step_frac_pct;
 extern volatile uint8_t  g_drun41_id_step_state;

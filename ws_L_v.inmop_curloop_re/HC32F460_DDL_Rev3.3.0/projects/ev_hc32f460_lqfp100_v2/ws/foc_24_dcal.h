@@ -36,7 +36,7 @@
  *   g_foc_elec_deg      校准后 mode 0 下实时电角度（捏转子可见跟随）
  *
  * 【给其他模式的接口】
- *   UINT8 Foc_Dcal24_GetResult(foc_dcal24_result_t *r)  ← 返回 0 = 无有效校准
+ *   UINT8 Foc_Dcal_GetResult(foc_dcal24_result_t *r)  ← 返回 0 = 无有效校准
  *     结构体含：valid / offset / zero_u_ma / zero_v_ma / zero_w_ma
  *     **按值拷贝，无运行时共享状态**
  *
@@ -59,29 +59,29 @@
 extern "C" {
 #endif
 
-#define DCAL24_DBG   1
-#if DCAL24_DBG
-#define DCAL24_LOG(fmt, ...)  MAIN_D("[DCAL24] " fmt, ##__VA_ARGS__)
+#define FOC24_DBG   1
+#if FOC24_DBG
+#define FOC24_LOG(fmt, ...)  MAIN_D("[DCAL24] " fmt, ##__VA_ARGS__)
 #else
-#define DCAL24_LOG(fmt, ...)  ((void)0)
+#define FOC24_LOG(fmt, ...)  ((void)0)
 #endif
 
-#define DCAL24_ZERO_SKIP_SAMPLES  200u
-#define DCAL24_ZERO_AVG_SAMPLES   4000u
-#define DCAL24_BETA_MS            2000u
-#define DCAL24_ALPHA_MS           2000u
+#define FOC24_ZERO_SKIP_SAMPLES  200u
+#define FOC24_ZERO_AVG_SAMPLES   4000u
+#define FOC24_BETA_MS            2000u
+#define FOC24_ALPHA_MS           2000u
 
-#define DCAL24_STEP_IDLE       0u
-#define DCAL24_STEP_ZERO       1u
-#define DCAL24_STEP_BETA       2u
-#define DCAL24_STEP_ALPHA      3u
-#define DCAL24_STEP_DONE       4u
-#define DCAL24_STEP_FAULT_OC   5u
+#define FOC24_STEP_IDLE       0u
+#define FOC24_STEP_ZERO       1u
+#define FOC24_STEP_BETA       2u
+#define FOC24_STEP_ALPHA      3u
+#define FOC24_STEP_DONE       4u
+#define FOC24_STEP_FAULT_OC   5u
 
-#define DCAL24_EVT_ZERO_DONE   1u
-#define DCAL24_EVT_BETA_DONE   2u
-#define DCAL24_EVT_DONE        3u
-#define DCAL24_EVT_OC          4u
+#define FOC24_EVT_ZERO_DONE   1u
+#define FOC24_EVT_BETA_DONE   2u
+#define FOC24_EVT_DONE        3u
+#define FOC24_EVT_OC          4u
 
 typedef struct {
     uint8_t valid;
@@ -103,10 +103,10 @@ extern volatile float    g_dcal24_zero_v_ma;
 extern volatile float    g_dcal24_zero_w_ma;
 extern volatile float    g_dcal24_volt_v;
 
-void Foc_Dcal24_Start(void);
-void Foc_Dcal24_Stop(void);
-void Foc_Dcal24_Step(const stc_i_data_t *pData);
-uint8_t Foc_Dcal24_GetResult(foc_dcal24_result_t *result);
+void Foc_Dcal_Start(void);
+void Foc_Dcal_Stop(void);
+void Foc_Dcal_Step(const stc_i_data_t *pData);
+uint8_t Foc_Dcal_GetResult(foc_dcal24_result_t *result);
 
 #ifdef __cplusplus
 }

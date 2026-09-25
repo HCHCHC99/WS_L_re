@@ -118,38 +118,38 @@ extern "C" {
 /* 1 = RTT prints on, 0 = off */
 #define FOC_CAL_ANGLE_DBG   1
 #if FOC_CAL_ANGLE_DBG
-    #define CALANG_DBG(fmt, ...)   MAIN_D("[CALANG] " fmt, ##__VA_ARGS__)
+    #define FOC25_DBG(fmt, ...)   MAIN_D("[CALANG] " fmt, ##__VA_ARGS__)
 #else
-    #define CALANG_DBG(fmt, ...)   ((void)0)
+    #define FOC25_DBG(fmt, ...)   ((void)0)
 #endif
 
 /*=============================================================================
  * 时长（编译期常量，FOC_ISR_HZ tick 换算在 .c 内完成）
  *=============================================================================*/
-#define CALANG_BETA_MS     2000u  /* 校准 BETA 吸附时长 */
-#define CALANG_ALPHA_MS    2000u  /* 校准 ALPHA 吸附时长 */
-#define CALANG_HOLD_MS     2000u  /* 目标角吸附时长 */
-#define CALANG_VERIFY_MS    500u  /* 吸稳校验窗时长 */
+#define FOC25_BETA_MS     2000u  /* 校准 BETA 吸附时长 */
+#define FOC25_ALPHA_MS    2000u  /* 校准 ALPHA 吸附时长 */
+#define FOC25_HOLD_MS     2000u  /* 目标角吸附时长 */
+#define FOC25_VERIFY_MS    500u  /* 吸稳校验窗时长 */
 
 /*=============================================================================
  * 状态机（g_calang_state）
  *=============================================================================*/
-#define CALANG_STEP_IDLE         0u  /* 未运行 */
-#define CALANG_STEP_CAL_BETA     1u  /* 校准：磁场 90°，2s */
-#define CALANG_STEP_CAL_ALPHA    2u  /* 校准：磁场 0°，2s，结束锁零点 */
-#define CALANG_STEP_BRAKE_WAIT   3u  /* 刹车 50/50/50，等输入改值 */
-#define CALANG_STEP_HOLD_ATTRACT 4u  /* 磁场指向目标角，吸附 2s */
-#define CALANG_STEP_HOLD_VERIFY  5u  /* 磁场保持，500ms 校验窗判吸稳 */
-#define CALANG_STEP_FAULT_OC     6u  /* 过流停机 */
+#define FOC25_STEP_IDLE         0u  /* 未运行 */
+#define FOC25_STEP_CAL_BETA     1u  /* 校准：磁场 90°，2s */
+#define FOC25_STEP_CAL_ALPHA    2u  /* 校准：磁场 0°，2s，结束锁零点 */
+#define FOC25_STEP_BRAKE_WAIT   3u  /* 刹车 50/50/50，等输入改值 */
+#define FOC25_STEP_HOLD_ATTRACT 4u  /* 磁场指向目标角，吸附 2s */
+#define FOC25_STEP_HOLD_VERIFY  5u  /* 磁场保持，500ms 校验窗判吸稳 */
+#define FOC25_STEP_FAULT_OC     6u  /* 过流停机 */
 
 /*=============================================================================
  * 事件码（g_calang_evt，ISR 置位，Foc_Obs_Task 打印后清零）
  *=============================================================================*/
-#define CALANG_EVT_BETA_DONE  1u
-#define CALANG_EVT_LOCKED     2u
-#define CALANG_EVT_DONE_OK    3u
-#define CALANG_EVT_DONE_FAIL  4u
-#define CALANG_EVT_OC         5u
+#define FOC25_EVT_BETA_DONE  1u
+#define FOC25_EVT_LOCKED     2u
+#define FOC25_EVT_DONE_OK    3u
+#define FOC25_EVT_DONE_FAIL  4u
+#define FOC25_EVT_OC         5u
 
 /*=============================================================================
  * Keil Watch 可调变量 / 观测量（定义见 foc_25_calangle.c）
@@ -157,8 +157,8 @@ extern "C" {
 extern volatile int32_t  g_foc_angle_input;  /* 用户输入目标电角度 ×0.1° (0~3599, 改值即触发) */
 extern volatile float    g_calang_volt_v;    /* 吸附电压 (V, 默认 FOC_ALIGN_VOLT_V) */
 extern volatile uint8_t  g_calang_running;   /* 1 = 正在运行 */
-extern volatile uint8_t  g_calang_state;     /* CALANG_STEP_xxx */
-extern volatile uint8_t  g_calang_evt;       /* CALANG_EVT_xxx */
+extern volatile uint8_t  g_calang_state;     /* FOC25_STEP_xxx */
+extern volatile uint8_t  g_calang_evt;       /* FOC25_EVT_xxx */
 extern volatile int32_t  g_calang_stable_cnts; /* 校验窗静止判据 (counts, 默认 8) */
 extern volatile int32_t  g_calang_target_deg;  /* 快照：锁存的目标角 ×0.1° (0~3599) */
 extern volatile int32_t  g_calang_meas_deg;    /* 快照：校验结束实测电角度 ×0.1° (0~3599) */

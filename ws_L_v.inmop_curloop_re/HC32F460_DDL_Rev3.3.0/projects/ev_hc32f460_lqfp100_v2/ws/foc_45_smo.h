@@ -84,58 +84,58 @@
 extern "C" {
 #endif
 
-#define SMO45_DBG   1
-#if SMO45_DBG
-#define SMO45_LOG(fmt, ...)  MAIN_D("[SMO45] " fmt, ##__VA_ARGS__)
+#define FOC45_DBG   1
+#if FOC45_DBG
+#define FOC45_LOG(fmt, ...)  MAIN_D("[SMO45] " fmt, ##__VA_ARGS__)
 #else
-#define SMO45_LOG(fmt, ...)  ((void)0)
+#define FOC45_LOG(fmt, ...)  ((void)0)
 #endif
 
 /* Inner current PI: start from the verified mode 29 values.
  * ⚠ UMAX 3.5→6.2（Step4 高速）：4800rpm 反电动势已 ≈3.4V，3.5V 限幅是
  *   高速第一电压墙。上限约束：12V 母线 SVPWM 线性区相电压峰值 = 12/√3
  *   = 6.93V，留 ~10% 余量防过调制。ITERM 同步放大防积分 early 饱和。 */
-#define SMO45_PI_KP             0.5f
-#define SMO45_PI_KI             300.0f
-#define SMO45_PI_UMAX_V         6.2f
-#define SMO45_ITERM_MAX_V       6.0f
-#define SMO45_IQ_FILT_ALPHA     0.10f
+#define FOC45_PI_KP             0.5f
+#define FOC45_PI_KI             300.0f
+#define FOC45_PI_UMAX_V         6.2f
+#define FOC45_ITERM_MAX_V       6.0f
+#define FOC45_IQ_FILT_ALPHA     0.10f
 
 /* Outer speed PI output is a signed q-axis current reference in mA. */
-#define SMO45_SPD_KP_MA_PER_RPM       1.8f
-#define SMO45_SPD_KI_MA_PER_RPM_S     0.2f
-#define SMO45_SPD_IQ_LIMIT_MA         ((float)FOC_MOTOR_MAX_CURRENT_A \
+#define FOC45_SPD_KP_MA_PER_RPM       1.8f
+#define FOC45_SPD_KI_MA_PER_RPM_S     0.2f
+#define FOC45_SPD_IQ_LIMIT_MA         ((float)FOC_MOTOR_MAX_CURRENT_A \
                                       * 1000.0f * 0.20f)
 
 /* Safety envelope derived from motor_config.h. */
-#define SMO45_SPEED_REF_LIMIT_RPM     ((float)FOC_MOTOR_MAX_SPEED_RPM)
-#define SMO45_ACCEL_LIMIT_RPM_S       ((float)FOC_MOTOR_MAX_SPEED_RPM \
+#define FOC45_SPEED_REF_LIMIT_RPM     ((float)FOC_MOTOR_MAX_SPEED_RPM)
+#define FOC45_ACCEL_LIMIT_RPM_S       ((float)FOC_MOTOR_MAX_SPEED_RPM \
                                       * 0.25f)
 
-#define SMO45_SPD_WIN_MS              5u
-#define SMO45_SPD_WIN_US              (SMO45_SPD_WIN_MS * 1000u)
-#define SMO45_SPD_FILT_ALPHA          0.25f
+#define FOC45_SPD_WIN_MS              5u
+#define FOC45_SPD_WIN_US              (FOC45_SPD_WIN_MS * 1000u)
+#define FOC45_SPD_FILT_ALPHA          0.25f
 /* 显示专用滤波（VOFA 曲线平滑用；α 越小越平滑越滞后，不进 PI 反馈） */
-#define SMO45_SPD_DISP_ALPHA          0.05f
+#define FOC45_SPD_DISP_ALPHA          0.05f
 /* 编码器每拍增量限幅 = 单拍物理极限 × 1.35 裕度。物理极限 = 7800rpm 折算到每拍：
  *   10 kHz（100µs/拍）：7800/60×4096×100µs = 53 counts → 限幅 72
  *   20 kHz（ 50µs/拍）：26.5 counts               → 限幅 36  ← 2026-09-23 同步改
  * ⚠ 原 32 只支持到 4687rpm（10kHz 时）：超限后测速削顶 + s_rotor_count 角度积分丢拍
  * （Park 角持续落后，高速转矩错位）——高速上不去的第一堵墙。
  * ⚠ 若再改 MOTOR_PWM_FREQ_HZ，此值须按 1/f 同步缩放 */
-#define SMO45_ENC_DELTA_MAX           36
+#define FOC45_ENC_DELTA_MAX           36
 
 /* 启动自动转速 profile（g_smo45_auto_ramp=1 时生效，到顶后停止写入）：
  * 秒 0/1/2/3 -> 0/200/500/1000 rpm，之后保持 1000（Watch 可接管）
  * （Step 4 无感首切定在 1000rpm） */
-#define SMO45_AUTO_RAMP_DEFAULT       1u
-#define SMO45_AUTO_RAMP_SECS          3u
+#define FOC45_AUTO_RAMP_DEFAULT       1u
+#define FOC45_AUTO_RAMP_SECS          3u
 
-#define SMO45_STEP_IDLE               0u
-#define SMO45_STEP_RUN                1u
-#define SMO45_STEP_FAULT_OC           2u
+#define FOC45_STEP_IDLE               0u
+#define FOC45_STEP_RUN                1u
+#define FOC45_STEP_FAULT_OC           2u
 
-#define SMO45_EVT_OC                  1u
+#define FOC45_EVT_OC                  1u
 
 extern volatile uint8_t  g_smo45_running;
 extern volatile uint8_t  g_smo45_state;

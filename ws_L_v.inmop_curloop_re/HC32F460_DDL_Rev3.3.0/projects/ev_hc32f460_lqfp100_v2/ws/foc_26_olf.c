@@ -42,12 +42,12 @@
 #include "I.h"                  /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
 
 /* 阶段时长 -> ISR tick 数 */
-#define OLF_BETA_TICKS    ((uint32_t)OLF_BETA_MS    * (uint32_t)FOC_ISR_HZ / 1000u)
-#define OLF_ALPHA_TICKS   ((uint32_t)OLF_ALPHA_MS   * (uint32_t)FOC_ISR_HZ / 1000u)
-#define OLF_PP_WIN_TICKS  ((uint32_t)OLF_PP_WIN_MS  * (uint32_t)FOC_ISR_HZ / 1000u)
+#define FOC26_BETA_TICKS    ((uint32_t)FOC26_BETA_MS    * (uint32_t)FOC_ISR_HZ / 1000u)
+#define FOC26_ALPHA_TICKS   ((uint32_t)FOC26_ALPHA_MS   * (uint32_t)FOC_ISR_HZ / 1000u)
+#define FOC26_PP_WIN_TICKS  ((uint32_t)FOC26_PP_WIN_MS  * (uint32_t)FOC_ISR_HZ / 1000u)
 
 /* 电角度 rad -> deg 换算（观测显示用，取整） */
-#define OLF_RAD2DEG   57.2958f
+#define FOC26_RAD2DEG   57.2958f
 
 /*******************************************************************************
  * Watch 观测量 / 可调变量
@@ -60,7 +60,7 @@ volatile int32_t  g_olf_step_010  = 1;      /* 自增步长 ×0.1°/步（1≈�
 volatile int32_t  g_olf_dir       = 1;      /* 自增方向：+1=角度加，-1=角度减 */
 volatile float    g_olf_volt_v    = 0.6f;   /* 拖动电压，与 mode 30 默认相同 (≈5A) */
 volatile uint8_t  g_olf_running   = 0u;
-volatile uint8_t  g_olf_state     = OLF_STEP_IDLE;
+volatile uint8_t  g_olf_state     = FOC26_STEP_IDLE;
 volatile uint8_t  g_olf_evt       = 0u;
 volatile int32_t  g_olf_offset    = 0;
 volatile int32_t  g_olf_field_deg = 0;
@@ -68,7 +68,7 @@ volatile int32_t  g_olf_rotor_deg = 0;
 volatile int32_t  g_olf_diff_deg  = 0;
 volatile float    g_olf_id_ma     = 0.0f;
 volatile float    g_olf_iq_ma     = 0.0f;
-volatile float    g_olf_id_pp_ma  = 0.0f;   /* id 峰峰值 (mA, 每 OLF_PP_WIN_MS 刷新) */
+volatile float    g_olf_id_pp_ma  = 0.0f;   /* id 峰峰值 (mA, 每 FOC26_PP_WIN_MS 刷新) */
 volatile float    g_olf_iq_pp_ma  = 0.0f;   /* iq 峰峰值 (mA, 同上) */
 volatile float    g_olf_theta_rad = 0.0f;
 volatile float    g_olf_du        = 50.0f;
@@ -91,7 +91,7 @@ static float    s_iq_max  = 0.0f;
 
 /*******************************************************************************
  * 内部助手：峰峰值喂数（ISR 内调用）
- *   每拍更新窗口内 min/max，满 OLF_PP_WIN_TICKS 时锁存峰峰值并以下一拍
+ *   每拍更新窗口内 min/max，满 FOC26_PP_WIN_TICKS 时锁存峰峰值并以下一拍
  *   样本为新窗口起点（窗口无缝衔接，无重叠无遗漏）。入参单位 A。
  ******************************************************************************/
 static void Olf_PpFeed(float id, float iq)
@@ -106,7 +106,7 @@ static void Olf_PpFeed(float id, float iq)
         if (iq < s_iq_min) { s_iq_min = iq; }
         if (iq > s_iq_max) { s_iq_max = iq; }
     }
-    if (++s_pp_tick >= OLF_PP_WIN_TICKS) {
+    if (++s_pp_tick >= FOC26_PP_WIN_TICKS) {
         s_pp_tick = 0u;
         g_olf_id_pp_ma = (s_id_max - s_id_min) * 1000.0f;
         g_olf_iq_pp_ma = (s_iq_max - s_iq_min) * 1000.0f;
@@ -170,7 +170,7 @@ void Foc_Olf_Start(void)
     g_foc_align_state = 1u;
 
     g_olf_running   = 1u;
-    g_olf_state     = OLF_STEP_CAL_BETA;
+    g_olf_state     = FOC26_STEP_CAL_BETA;
     g_olf_evt       = 0u;
     s_phase_tick    = 0u;
     s_run_tick      = 0u;
@@ -198,7 +198,7 @@ void Foc_Olf_Start(void)
 
     Foc_Core_PwmStart();   /* 零矢量起 PWM（g_foc_active=1），下一拍开始吸附 */
 
-    OLF_DBG("start calib BETA 90deg f %d->%d mHz tr=%d ms volt=%d mV step=%d010deg dir=%d",
+    FOC26_DBG("start calib BETA 90deg f %d->%d mHz tr=%d ms volt=%d mV step=%d010deg dir=%d",
             (int)(g_olf_freq_init_hz * 1000.0f), (int)(g_olf_freq_targ_hz * 1000.0f),
             (int)g_olf_freq_tr_ms, (int)(g_olf_volt_v * 1000.0f),
             (int)g_olf_step_010, (int)g_olf_dir);
@@ -216,8 +216,8 @@ void Foc_Olf_Step(const stc_i_data_t *pData)
 
     /* ===== OC 保护（原始 pData，去抖在 Foc_Core_OverCurrent 内） ===== */
     if (Foc_Core_OverCurrent(pData)) {
-        g_olf_state   = OLF_STEP_FAULT_OC;
-        g_olf_evt     = OLF_EVT_OC;
+        g_olf_state   = FOC26_STEP_FAULT_OC;
+        g_olf_evt     = FOC26_EVT_OC;
         g_olf_running = 0u;
         Foc_Core_FaultStop(1u);   /* 置故障 + 关 PWM + active=0 + IDLE */
         return;
@@ -225,20 +225,20 @@ void Foc_Olf_Step(const stc_i_data_t *pData)
 
     switch (g_olf_state) {
     /* ===== 校准 BETA：磁场定 90°（theta=0, 场=theta+90°），2s ===== */
-    case OLF_STEP_CAL_BETA:
+    case FOC26_STEP_CAL_BETA:
         Olf_OutputField(pData, 0.0f);
-        if (++s_phase_tick >= OLF_BETA_TICKS) {
+        if (++s_phase_tick >= FOC26_BETA_TICKS) {
             s_phase_tick = 0u;
             g_olf_theta_rad = -FOC_MATH_HALF_PI;   /* ALPHA 场 0° -> theta=-90° */
-            g_olf_state  = OLF_STEP_CAL_ALPHA;
-            g_olf_evt    = OLF_EVT_BETA_DONE;
+            g_olf_state  = FOC26_STEP_CAL_ALPHA;
+            g_olf_evt    = FOC26_EVT_BETA_DONE;
         }
         break;
 
     /* ===== 校准 ALPHA：磁场定 0°（theta=-90°），2s，结束锁零点 -> 拖动 ===== */
-    case OLF_STEP_CAL_ALPHA:
+    case FOC26_STEP_CAL_ALPHA:
         Olf_OutputField(pData, -FOC_MATH_HALF_PI);
-        if (++s_phase_tick >= OLF_ALPHA_TICKS) {
+        if (++s_phase_tick >= FOC26_ALPHA_TICKS) {
             /* 零点：ALPHA 结束时转子 d 轴在静止系 0°（与 mode 20/25 同框架） */
             hw  = TMRA_GetCountValue(CM_TMRA_1);
             off = Foc_Core_ModPos((int32_t)hw * (int32_t)g_foc_enc_dir,
@@ -250,13 +250,13 @@ void Foc_Olf_Step(const stc_i_data_t *pData)
             s_phase_tick    = 0u;
             s_run_tick      = 0u;
             s_ramp_done     = 0u;
-            g_olf_state     = OLF_STEP_DRAG;
-            g_olf_evt       = OLF_EVT_LOCKED;
+            g_olf_state     = FOC26_STEP_DRAG;
+            g_olf_evt       = FOC26_EVT_LOCKED;
         }
         break;
 
     /* ===== 拖动：频率斜坡 + 磁场角自增 + 真实转子系观测（实验主体） ===== */
-    case OLF_STEP_DRAG:
+    case FOC26_STEP_DRAG:
         /* 0. 频率斜坡：f = init + (targ-init)×w，w = elapsed/tr 线性，
          *    init/targ/tr 每拍实时读 Watch（运行中改 = 按新值重算轨迹）。
          *    tr=0 立即到目标；到点置 RAMP_DONE 一次（与 mode 27 同语义）。 */
@@ -274,7 +274,7 @@ void Foc_Olf_Step(const stc_i_data_t *pData)
         g_olf_freq_hz = frq;
         if ((s_ramp_done == 0u) && (s_run_tick >= tr_ticks)) {
             s_ramp_done = 1u;
-            g_olf_evt   = OLF_EVT_RAMP_DONE;
+            g_olf_evt   = FOC26_EVT_RAMP_DONE;
         }
         s_run_tick++;
 
@@ -330,11 +330,11 @@ void Foc_Olf_Step(const stc_i_data_t *pData)
         /* 5. 角度观测（整型电角度 deg）+ 负载角折叠 (-180,180]
          *    磁场角 = theta+90°（q 轴约定），theta∈[0,2π) -> fld∈[90,449]，
          *    超 360 减一圈 */
-        fld_deg = (int32_t)((theta + FOC_MATH_HALF_PI) * OLF_RAD2DEG);
+        fld_deg = (int32_t)((theta + FOC_MATH_HALF_PI) * FOC26_RAD2DEG);
         if (fld_deg >= 360) {
             fld_deg -= 360;
         }
-        rot_deg = (int32_t)(rot_rad * OLF_RAD2DEG);
+        rot_deg = (int32_t)(rot_rad * FOC26_RAD2DEG);
         dfd     = fld_deg - rot_deg;
         dfd     = 180 - Foc_Core_ModPos(180 - dfd, 360);
 
@@ -343,7 +343,7 @@ void Foc_Olf_Step(const stc_i_data_t *pData)
         g_olf_diff_deg  = dfd;
         break;
 
-    case OLF_STEP_FAULT_OC:
+    case FOC26_STEP_FAULT_OC:
     default:
         /* 故障/未知状态：不发波，等待主循环切模式 */
         break;
@@ -364,7 +364,7 @@ void Foc_Olf_Stop(void)
             Foc_Core_PwmStop();
             Foc_Core_SetStateMachine(FOC_STATE_IDLE);
         }
-        OLF_DBG("stopped");
+        FOC26_DBG("stopped");
     }
 }
 

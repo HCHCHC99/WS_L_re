@@ -32,7 +32,7 @@
  *   g_speed40_vsat             电流环饱和标志（1=输出贴限幅）
  *   g_speed40_state / g_speed40_evt  状态机与事件（2=过流故障停机）
  *
- * 【VOFA 通道】固定 18ch（mode40 专属语义，填充见 Foc_Speed40_VofaFill）：
+ * 【VOFA 通道】固定 18ch（mode40 专属语义，填充见 Foc_Speed_VofaFill）：
  *   ch0~2 三相电流(A)  ch3 静止系ialpha(A)  ch4 静止系ibeta(A)
  *   ch5 iq(A)  ch6 id参考(A)  ch7 iq参考(A)
  *   ch8 vd(V)  ch9 vq(V)             ← 验电压墙看 ch9 是否贴 6.2V
@@ -59,11 +59,11 @@
 extern "C" {
 #endif
 
-#define SPEED40_DBG   1
-#if SPEED40_DBG
-#define SPEED40_LOG(fmt, ...)  MAIN_D("[SPEED40] " fmt, ##__VA_ARGS__)
+#define FOC40_DBG   1
+#if FOC40_DBG
+#define FOC40_LOG(fmt, ...)  MAIN_D("[SPEED40] " fmt, ##__VA_ARGS__)
 #else
-#define SPEED40_LOG(fmt, ...)  ((void)0)
+#define FOC40_LOG(fmt, ...)  ((void)0)
 #endif
 
 /* Inner current PI.
@@ -87,13 +87,13 @@ extern "C" {
  *   接近临界阻尼（ζ=1 对应 kp≈0.108），比原来的过阻尼(2.66)更"刚好"。
  *
  * 注：运行时可用 Watch 改 g_speed40_pid_id_cfg / iq_cfg .kp，此处为上电默认值。 */
-#define SPEED40_PI_KP             0.1f
-#define SPEED40_PI_KI             300.0f
+#define FOC40_PI_KP             0.1f
+#define FOC40_PI_KI             300.0f
 /* ⚠ UMAX 3.5→6.2 / ITERM 3.2→6.0（与 mode 45 SMO45 同步，2026-09-23）：
  *   12V 母线 SVPWM 线性区相电压峰值 6.93V，原 3.5V 是高速电压墙（卡 ~4800rpm） */
-#define SPEED40_PI_UMAX_V         6.2f
-#define SPEED40_ITERM_MAX_V       6.0f
-#define SPEED40_IQ_FILT_ALPHA     0.10f
+#define FOC40_PI_UMAX_V         6.2f
+#define FOC40_ITERM_MAX_V       6.0f
+#define FOC40_IQ_FILT_ALPHA     0.10f
 
 /* Outer speed PI output is a signed q-axis current reference in mA.
  * 2026-09-23 调参轨迹：kp 1.8 → 4.0 → 2.0 → **0.8**；
@@ -115,24 +115,24 @@ extern "C" {
  *   ki 主导稳态差收敛（且越大 PI 零点越高、相位裕度反而**提高**）。
  *
  * 注：运行时可用 Watch 改 g_speed40_pid_speed_cfg.kp/.ki，此处仅为上电默认值。 */
-#define SPEED40_SPD_KP_MA_PER_RPM       0.8f
-#define SPEED40_SPD_KI_MA_PER_RPM_S     0.03f
+#define FOC40_SPD_KP_MA_PER_RPM       0.8f
+#define FOC40_SPD_KI_MA_PER_RPM_S     0.03f
 /* 速度环输出限幅 = 最大电流 × 20%（17A × 0.2 = 3400mA）。
  * 取 20% 而非更高：17A 是峰值能力（厂商规格书原文「最大电流」），
  * 按其 20% 折算已相当于一个合理的连续工作点。 */
-#define SPEED40_SPD_IQ_LIMIT_MA         ((float)FOC_MOTOR_MAX_CURRENT_A \
+#define FOC40_SPD_IQ_LIMIT_MA         ((float)FOC_MOTOR_MAX_CURRENT_A \
                                         * 1000.0f * 0.20f)
 
 /* Safety envelope derived from motor_config.h. */
-#define SPEED40_SPEED_REF_LIMIT_RPM     ((float)FOC_MOTOR_MAX_SPEED_RPM)
-#define SPEED40_ACCEL_LIMIT_RPM_S       ((float)FOC_MOTOR_MAX_SPEED_RPM \
+#define FOC40_SPEED_REF_LIMIT_RPM     ((float)FOC_MOTOR_MAX_SPEED_RPM)
+#define FOC40_ACCEL_LIMIT_RPM_S       ((float)FOC_MOTOR_MAX_SPEED_RPM \
                                         * 0.25f)
 
-#define SPEED40_SPD_WIN_MS              5u
-#define SPEED40_SPD_WIN_US              (SPEED40_SPD_WIN_MS * 1000u)
-#define SPEED40_SPD_FILT_ALPHA          0.25f
+#define FOC40_SPD_WIN_MS              5u
+#define FOC40_SPD_WIN_US              (FOC40_SPD_WIN_MS * 1000u)
+#define FOC40_SPD_FILT_ALPHA          0.25f
 /* 显示专用滤波（VOFA 曲线平滑用；α 越小越平滑越滞后，不进 PI 反馈） */
-#define SPEED40_SPD_DISP_ALPHA          0.05f
+#define FOC40_SPD_DISP_ALPHA          0.05f
 /* 编码器每拍增量限幅 = 单拍物理极限 × 1.35 裕度。
  * 物理极限 = 7800rpm 折算到"每个 ISR 拍"的 counts 数。
  *   10 kHz（100µs/拍）：53 counts → 限幅 72
@@ -141,13 +141,13 @@ extern "C" {
  *   角度积分丢拍（高速下 Park 角落后）。限幅必须始终 ≥ 物理极限，
  *   否则高速时会削顶；但也不能过大，否则编码器毛刺被当真转速放行。
  * ⚠ 若再改 MOTOR_PWM_FREQ_HZ，此值须按 1/f 同步缩放 */
-#define SPEED40_ENC_DELTA_MAX           36
+#define FOC40_ENC_DELTA_MAX           36
 
-#define SPEED40_STEP_IDLE               0u
-#define SPEED40_STEP_RUN                1u
-#define SPEED40_STEP_FAULT_OC           2u
+#define FOC40_STEP_IDLE               0u
+#define FOC40_STEP_RUN                1u
+#define FOC40_STEP_FAULT_OC           2u
 
-#define SPEED40_EVT_OC                  1u
+#define FOC40_EVT_OC                  1u
 
 extern volatile uint8_t  g_speed40_running;
 extern volatile uint8_t  g_speed40_state;
@@ -180,12 +180,12 @@ extern pid_config_t g_speed40_pid_speed_cfg;
 extern pid_config_t g_speed40_pid_id_cfg;
 extern pid_config_t g_speed40_pid_iq_cfg;
 
-void Foc_Speed40_InitPids(void);
-void Foc_Speed40_SetTargetRPM(float target_rpm);
-void Foc_Speed40_Start(void);
-void Foc_Speed40_Stop(void);
-void Foc_Speed40_Step(const stc_i_data_t *pData);
-int  Foc_Speed40_VofaFill(int32_t *cur);  /* 模式自持 VOFA，见顶部速览卡 */
+void Foc_Speed_InitPids(void);
+void Foc_Speed_SetTargetRPM(float target_rpm);
+void Foc_Speed_Start(void);
+void Foc_Speed_Stop(void);
+void Foc_Speed_Step(const stc_i_data_t *pData);
+int  Foc_Speed_VofaFill(int32_t *cur);  /* 模式自持 VOFA，见顶部速览卡 */
 
 #ifdef __cplusplus
 }

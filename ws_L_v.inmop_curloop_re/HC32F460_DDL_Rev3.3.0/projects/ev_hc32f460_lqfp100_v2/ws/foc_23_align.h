@@ -50,7 +50,7 @@ extern volatile int32_t g_foc_align_evt_v3;
 
 /* Start standstill electrical alignment (comm_mode 23): lock rotor to the
  * d-axis with a small current, record the encoder electrical zero, release. */
-void Foc_StartAlign(void);
+void Foc_Align_Start(void);
 
 /* 模式23 单步运算（20 kHz ISR 中由 Foc_Isr 分发调用） */
 void Foc_Align_Step(const stc_i_data_t *pData);

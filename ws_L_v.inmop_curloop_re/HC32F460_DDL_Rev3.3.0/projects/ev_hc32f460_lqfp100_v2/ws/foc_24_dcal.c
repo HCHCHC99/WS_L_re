@@ -18,10 +18,10 @@
 #include "hc32_ll_tmra.h"
 #include <string.h>
 
-#define DCAL24_ZERO_TOTAL  (DCAL24_ZERO_SKIP_SAMPLES + DCAL24_ZERO_AVG_SAMPLES)
+#define FOC24_ZERO_TOTAL  (FOC24_ZERO_SKIP_SAMPLES + FOC24_ZERO_AVG_SAMPLES)
 
 volatile uint8_t  g_dcal24_running   = 0u;
-volatile uint8_t  g_dcal24_state     = DCAL24_STEP_IDLE;
+volatile uint8_t  g_dcal24_state     = FOC24_STEP_IDLE;
 volatile uint8_t  g_dcal24_evt       = 0u;
 volatile uint16_t g_dcal24_beta_hw   = 0u;
 volatile uint16_t g_dcal24_alpha_hw  = 0u;
@@ -42,7 +42,7 @@ static uint32_t s_phase_tick;
 static void Dcal24_ClearRunState(void)
 {
     g_dcal24_running = 0u;
-    g_dcal24_state   = DCAL24_STEP_IDLE;
+    g_dcal24_state   = FOC24_STEP_IDLE;
     g_dcal24_evt     = 0u;
     g_dcal24_beta_hw  = 0u;
     g_dcal24_alpha_hw = 0u;
@@ -117,7 +117,7 @@ static void Dcal24_StopOutput(void)
     g_foc_align_state = 0u;
 }
 
-void Foc_Dcal24_Start(void)
+void Foc_Dcal_Start(void)
 {
     Foc_Core_ClearFault();
     Dcal24_ClearRunState();
@@ -135,16 +135,16 @@ void Foc_Dcal24_Start(void)
     g_foc_align_state = 1u;
 
     g_dcal24_running = 1u;
-    g_dcal24_state   = DCAL24_STEP_ZERO;
+    g_dcal24_state   = FOC24_STEP_ZERO;
     Dcal24_ZeroVector();
     Foc_Core_PwmStart();
-    DCAL24_LOG("start zero=%ums beta=%ums alpha=%ums volt=%dmV",
-               (unsigned)DCAL24_ZERO_TOTAL * 1000u / (unsigned)FOC_ISR_HZ,
-               (unsigned)DCAL24_BETA_MS, (unsigned)DCAL24_ALPHA_MS,
+    FOC24_LOG("start zero=%ums beta=%ums alpha=%ums volt=%dmV",
+               (unsigned)FOC24_ZERO_TOTAL * 1000u / (unsigned)FOC_ISR_HZ,
+               (unsigned)FOC24_BETA_MS, (unsigned)FOC24_ALPHA_MS,
                (int)(g_dcal24_volt_v * 1000.0f));
 }
 
-void Foc_Dcal24_Stop(void)
+void Foc_Dcal_Stop(void)
 {
     if (!g_dcal24_running) {
         return;
@@ -152,10 +152,10 @@ void Foc_Dcal24_Stop(void)
 
     g_dcal24_running = 0u;
     Dcal24_StopOutput();
-    DCAL24_LOG("stopped");
+    FOC24_LOG("stopped");
 }
 
-uint8_t Foc_Dcal24_GetResult(foc_dcal24_result_t *result)
+uint8_t Foc_Dcal_GetResult(foc_dcal24_result_t *result)
 {
     if ((result == NULL) || (s_result.valid == 0u)) {
         return 0u;
@@ -165,74 +165,74 @@ uint8_t Foc_Dcal24_GetResult(foc_dcal24_result_t *result)
     return 1u;
 }
 
-void Foc_Dcal24_Step(const stc_i_data_t *pData)
+void Foc_Dcal_Step(const stc_i_data_t *pData)
 {
     int32_t encoder_dir;
 
     if (Foc_Core_OverCurrent(pData)) {
-        g_dcal24_state = DCAL24_STEP_FAULT_OC;
-        g_dcal24_evt   = DCAL24_EVT_OC;
+        g_dcal24_state = FOC24_STEP_FAULT_OC;
+        g_dcal24_evt   = FOC24_EVT_OC;
         g_dcal24_running = 0u;
         Foc_Core_FaultStop(1u);
         return;
     }
 
     switch (g_dcal24_state) {
-    case DCAL24_STEP_ZERO:
+    case FOC24_STEP_ZERO:
         Dcal24_ZeroVector();
-        if (s_zero_tick >= DCAL24_ZERO_SKIP_SAMPLES) {
+        if (s_zero_tick >= FOC24_ZERO_SKIP_SAMPLES) {
             s_zero_sum_u += pData->i16IU_mA;
             s_zero_sum_v += pData->i16IV_mA;
             s_zero_sum_w += pData->i16IW_mA;
         }
-        if (++s_zero_tick >= DCAL24_ZERO_TOTAL) {
+        if (++s_zero_tick >= FOC24_ZERO_TOTAL) {
             s_result.valid     = 0u;
             s_result.offset    = 0;
-            s_result.zero_u_ma = (float)s_zero_sum_u / (float)DCAL24_ZERO_AVG_SAMPLES;
-            s_result.zero_v_ma = (float)s_zero_sum_v / (float)DCAL24_ZERO_AVG_SAMPLES;
-            s_result.zero_w_ma = (float)s_zero_sum_w / (float)DCAL24_ZERO_AVG_SAMPLES;
+            s_result.zero_u_ma = (float)s_zero_sum_u / (float)FOC24_ZERO_AVG_SAMPLES;
+            s_result.zero_v_ma = (float)s_zero_sum_v / (float)FOC24_ZERO_AVG_SAMPLES;
+            s_result.zero_w_ma = (float)s_zero_sum_w / (float)FOC24_ZERO_AVG_SAMPLES;
             g_dcal24_zero_u_ma = s_result.zero_u_ma;
             g_dcal24_zero_v_ma = s_result.zero_v_ma;
             g_dcal24_zero_w_ma = s_result.zero_w_ma;
             s_zero_tick = 0u;
             s_phase_tick = 0u;
-            g_dcal24_state = DCAL24_STEP_BETA;
-            g_dcal24_evt   = DCAL24_EVT_ZERO_DONE;
+            g_dcal24_state = FOC24_STEP_BETA;
+            g_dcal24_evt   = FOC24_EVT_ZERO_DONE;
         }
         break;
 
-    case DCAL24_STEP_BETA:
+    case FOC24_STEP_BETA:
         Dcal24_OutputField(pData, FOC_MATH_HALF_PI);
-        if (++s_phase_tick >= ((uint32_t)DCAL24_BETA_MS * FOC_ISR_HZ / 1000u)) {
+        if (++s_phase_tick >= ((uint32_t)FOC24_BETA_MS * FOC_ISR_HZ / 1000u)) {
             g_dcal24_beta_hw = TMRA_GetCountValue(CM_TMRA_1);
             s_phase_tick = 0u;
-            g_dcal24_state = DCAL24_STEP_ALPHA;
-            g_dcal24_evt   = DCAL24_EVT_BETA_DONE;
+            g_dcal24_state = FOC24_STEP_ALPHA;
+            g_dcal24_evt   = FOC24_EVT_BETA_DONE;
         }
         break;
 
-    case DCAL24_STEP_ALPHA:
+    case FOC24_STEP_ALPHA:
         Dcal24_OutputField(pData, 0.0f);
-        if (++s_phase_tick >= ((uint32_t)DCAL24_ALPHA_MS * FOC_ISR_HZ / 1000u)) {
+        if (++s_phase_tick >= ((uint32_t)FOC24_ALPHA_MS * FOC_ISR_HZ / 1000u)) {
             g_dcal24_alpha_hw = TMRA_GetCountValue(CM_TMRA_1);
             g_dcal24_moved = (int16_t)(g_dcal24_alpha_hw - g_dcal24_beta_hw);
             encoder_dir = (int32_t)g_foc_enc_dir;
             g_dcal24_offset = Foc_Core_ModPos((int32_t)g_dcal24_alpha_hw * encoder_dir,
                                               (int32_t)ENCODER_CPR);
-            g_dcal24_evt = DCAL24_EVT_DONE;
+            g_dcal24_evt = FOC24_EVT_DONE;
 
             s_result.valid  = 1u;
             s_result.offset = g_dcal24_offset;
             Foc_Core_SetAlignOffset(g_dcal24_offset);
-            g_dcal24_state = DCAL24_STEP_DONE;
+            g_dcal24_state = FOC24_STEP_DONE;
             g_dcal24_running = 0u;
             Dcal24_StopOutput();
         }
         break;
 
-    case DCAL24_STEP_DONE:
-    case DCAL24_STEP_FAULT_OC:
-    case DCAL24_STEP_IDLE:
+    case FOC24_STEP_DONE:
+    case FOC24_STEP_FAULT_OC:
+    case FOC24_STEP_IDLE:
     default:
         break;
     }

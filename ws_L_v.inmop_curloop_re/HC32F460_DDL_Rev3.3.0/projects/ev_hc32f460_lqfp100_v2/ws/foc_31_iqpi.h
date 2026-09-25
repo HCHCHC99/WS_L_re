@@ -32,12 +32,12 @@
  *        - 这 500ms 转子基本没动     -> step=5，疑似堵转
  *        - 转了，但方向和预期相反    -> 说明角度框架差了 180°（这种错误
  *          在电流读数上看不出来，只有转向能暴露），自动把角度基线翻转
- *          180° 修正，step=7，打印 [IQPI_FLIP]
+ *          180° 修正，step=7，打印 [FOC31_FLIP]
  *        - vq/vd 顶到限幅           -> step=4，电压饱和（电压不够用，
  *          常见于转速太高或目标电流太大）
  *   5. 任何时刻过流 -> step=6，立即停机保护。
  *
- * RTT 怎么看它运行得好不好（每 200ms 一条 [IQPI_MON]，由 foc_obs 打印）：
+ * RTT 怎么看它运行得好不好（每 200ms 一条 [FOC31_MON]，由 foc_obs 打印）：
  *   st    : 当前状态码（含义见下面枚举）
  *   iq/id : 实际电流 mA，正常应 iq≈rr、id≈0
  *   vq/vd : 电压指令 mV，±3500 = 顶满限幅（饱和）
@@ -118,9 +118,9 @@ extern "C" {
 /* 1 = RTT prints on, 0 = off */
 #define FOC_IQPI_DBG   1
 #if FOC_IQPI_DBG
-    #define IQPI_DBG(fmt, ...)     MAIN_D("[IQPI] " fmt, ##__VA_ARGS__)
+    #define FOC31_DBG(fmt, ...)     MAIN_D("[IQPI] " fmt, ##__VA_ARGS__)
 #else
-    #define IQPI_DBG(fmt, ...)     ((void)0)
+    #define FOC31_DBG(fmt, ...)     ((void)0)
 #endif
 
 /*=============================================================================
@@ -130,23 +130,23 @@ extern "C" {
  *   零点对消整定 ki = kp·Rs/Ls ≈ 630
  *   如振荡可 Watch 运行时下调 kp/ki（0.10/240 与 mode22 一致，已验证）
  * ==========================================================================*/
-#define IQPI_PI_KP           0.27f     /* d/q 轴 PI 比例增益 */
-#define IQPI_PI_KI           630.0f    /* d/q 轴 PI 积分增益（零极点对消） */
-#define IQPI_PI_UMAX_V       3.5f      /* PI 输出限幅 (V)，|vd/vq| ≤ UMAX
+#define FOC31_PI_KP           0.27f     /* d/q 轴 PI 比例增益 */
+#define FOC31_PI_KI           630.0f    /* d/q 轴 PI 积分增益（零极点对消） */
+#define FOC31_PI_UMAX_V       3.5f      /* PI 输出限幅 (V)，|vd/vq| ≤ UMAX
                                         (SVPWM 线性区上限 12/√3≈6.9V，留足余量) */
-#define IQPI_INTEGRAL_MAX    3.0f      /* 积分项限幅：必须 > 运行时bemf(否则高速段
+#define FOC31_INTEGRAL_MAX    3.0f      /* 积分项限幅：必须 > 运行时bemf(否则高速段
                                         积分扛不住反电动势，稳态droop回来) */
 
 /* iq 目标初值 (mA) 与软启动斜率 (mA/s)，Watch 运行时可改 g_iqpi_iq_ref_ma */
-#define IQPI_IQ_REF_MA       1500.0f
-#define IQPI_IQ_RAMP_MA_S    1000.0f
+#define FOC31_IQ_REF_MA       1500.0f
+#define FOC31_IQ_RAMP_MA_S    1000.0f
 
-/* 堵转检测参数（g_iqpi_step = IQPI_STEP_RUNNING_STALL 的判定条件）：
- * 斜坡参考和实测 iq 都超过 IQPI_STALL_IQ_MIN_MA 且持续一个窗口期后，
- * 窗口内机械计数位移 < IQPI_STALL_MIN_CNTS 判为疑似堵转 */
-#define IQPI_STALL_WIN_MS      500u            /* 检测窗口 (ms) */
-#define IQPI_STALL_MIN_CNTS    (ENCODER_CPR/20u) /* 窗口内位移低于此值算"没动" */
-#define IQPI_STALL_IQ_MIN_MA   300.0f          /* 电流低于此值不评估(斜坡初期不误报) */
+/* 堵转检测参数（g_iqpi_step = FOC31_STEP_RUNNING_STALL 的判定条件）：
+ * 斜坡参考和实测 iq 都超过 FOC31_STALL_IQ_MIN_MA 且持续一个窗口期后，
+ * 窗口内机械计数位移 < FOC31_STALL_MIN_CNTS 判为疑似堵转 */
+#define FOC31_STALL_WIN_MS      500u            /* 检测窗口 (ms) */
+#define FOC31_STALL_MIN_CNTS    (ENCODER_CPR/20u) /* 窗口内位移低于此值算"没动" */
+#define FOC31_STALL_IQ_MIN_MA   300.0f          /* 电流低于此值不评估(斜坡初期不误报) */
 
 /* ============================================================================
  * mode 31 运行状态机 (g_iqpi_step) — 启动失败/转动异常时看此值定位原因
@@ -154,16 +154,16 @@ extern "C" {
  *   下次成功启动时复位
  * ==========================================================================*/
 typedef enum {
-    IQPI_STEP_IDLE            = 0,  /* 上电初始/未启动 */
-    IQPI_STEP_ERR_NO_OFFSET   = 1,  /* 启动被拒: mode30 偏移未锁定 -> 先跑 mode 30 */
-    IQPI_STEP_PWM_ZERO_VECTOR = 2,  /* 已启动: 零矢量 + 零偏校准窗口(~210ms)，正常必经 */
-    IQPI_STEP_CLOSED_LOOP     = 3,  /* 闭环正常运行 */
-    IQPI_STEP_RUNNING_VQ_SAT  = 4,  /* 闭环但 vq/vd 顶满限幅: 电压饱和
+    FOC31_STEP_IDLE            = 0,  /* 上电初始/未启动 */
+    FOC31_STEP_ERR_NO_OFFSET   = 1,  /* 启动被拒: mode30 偏移未锁定 -> 先跑 mode 30 */
+    FOC31_STEP_PWM_ZERO_VECTOR = 2,  /* 已启动: 零矢量 + 零偏校准窗口(~210ms)，正常必经 */
+    FOC31_STEP_CLOSED_LOOP     = 3,  /* 闭环正常运行 */
+    FOC31_STEP_RUNNING_VQ_SAT  = 4,  /* 闭环但 vq/vd 顶满限幅: 电压饱和
                                        (bemf 过高 / iq_ref 过大 / UMAX 太小) */
-    IQPI_STEP_RUNNING_STALL   = 5,  /* 闭环但窗口内转子几乎未动: 疑似堵转
+    FOC31_STEP_RUNNING_STALL   = 5,  /* 闭环但窗口内转子几乎未动: 疑似堵转
                                        (静摩擦不足 / 框架角度错误 / 电压饱和连带) */
-    IQPI_STEP_FAULT_OC        = 6,  /* 过流保护停机 */
-    IQPI_STEP_DIR_FLIPPED     = 7,  /* 检测到转向与 mode 30 相反(180°框架误差),
+    FOC31_STEP_FAULT_OC        = 6,  /* 过流保护停机 */
+    FOC31_STEP_DIR_FLIPPED     = 7,  /* 检测到转向与 mode 30 相反(180°框架误差),
                                        已自动翻转框架修正, 数秒内应回到 3/4 */
 } iqpi_step_t;
 
@@ -193,10 +193,10 @@ void Foc_IqPi_InitPids(void);
 
 /* 启动模式31：需先跑过 mode 30 锁定 ZIZENG 偏移，否则拒绝启动。
  * 内部：清故障 -> PWM 启动（零矢量）-> foc_calib 校准窗口 -> 闭环。 */
-void Foc_StartIqPi(void);
+void Foc_IqPi_Start(void);
 
 /* 停止模式31 */
-void Foc_StopIqPi(void);
+void Foc_IqPi_Stop(void);
 
 /* 模式31 单步运算（20 kHz ISR 中由 Foc_Isr 分发调用） */
 void Foc_IqPi_Step(const stc_i_data_t *pData);

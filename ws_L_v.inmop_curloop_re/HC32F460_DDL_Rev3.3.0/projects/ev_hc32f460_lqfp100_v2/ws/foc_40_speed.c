@@ -18,12 +18,12 @@
 #include "hc32_ll_tmra.h"
 #include "I.h"            /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
 
-#define SPEED40_ISR_DT_US     (1000000u / FOC_ISR_HZ)
-#define SPEED40_SPD_WIN_TICKS (SPEED40_SPD_WIN_MS * FOC_ISR_HZ / 1000u)
-#define SPEED40_RAD2DEG       57.2958f
+#define FOC40_ISR_DT_US     (1000000u / FOC_ISR_HZ)
+#define FOC40_SPD_WIN_TICKS (FOC40_SPD_WIN_MS * FOC_ISR_HZ / 1000u)
+#define FOC40_RAD2DEG       57.2958f
 
 volatile uint8_t  g_speed40_running           = 0u;
-volatile uint8_t  g_speed40_state             = SPEED40_STEP_IDLE;
+volatile uint8_t  g_speed40_state             = FOC40_STEP_IDLE;
 volatile uint8_t  g_speed40_evt               = 0u;
 volatile float    g_speed40_speed_target_rpm  = 0.0f;
 volatile float    g_speed40_speed_ramp_rpm    = 0.0f;
@@ -39,7 +39,7 @@ volatile float    g_speed40_iq_ref_ma         = 0.0f;
 volatile float    g_speed40_id_ma             = 0.0f;
 volatile float    g_speed40_iq_ma             = 0.0f;
 volatile float    g_speed40_iq_filt_ma        = 0.0f;
-volatile float    g_speed40_iq_filt_alpha     = SPEED40_IQ_FILT_ALPHA;
+volatile float    g_speed40_iq_filt_alpha     = FOC40_IQ_FILT_ALPHA;
 volatile float    g_speed40_vd                = 0.0f;
 volatile float    g_speed40_vq                = 0.0f;
 volatile uint8_t  g_speed40_vsat              = 0u;
@@ -52,13 +52,13 @@ pid_config_t g_speed40_pid_speed_cfg = {
     .p_valid      = true,
     .i_valid      = true,
     .d_valid      = false,
-    .kp           = SPEED40_SPD_KP_MA_PER_RPM,
-    .ki           = SPEED40_SPD_KI_MA_PER_RPM_S,
+    .kp           = FOC40_SPD_KP_MA_PER_RPM,
+    .ki           = FOC40_SPD_KI_MA_PER_RPM_S,
     .kd           = 0.0f,
-    .output_min   = -SPEED40_SPD_IQ_LIMIT_MA,
-    .output_max   =  SPEED40_SPD_IQ_LIMIT_MA,
-    .integral_max =  SPEED40_SPD_IQ_LIMIT_MA,
-    .i_term_max   =  SPEED40_SPD_IQ_LIMIT_MA,
+    .output_min   = -FOC40_SPD_IQ_LIMIT_MA,
+    .output_max   =  FOC40_SPD_IQ_LIMIT_MA,
+    .integral_max =  FOC40_SPD_IQ_LIMIT_MA,
+    .i_term_max   =  FOC40_SPD_IQ_LIMIT_MA,
     .update_ms    = 0u,
 };
 
@@ -67,13 +67,13 @@ pid_config_t g_speed40_pid_id_cfg = {
     .p_valid      = true,
     .i_valid      = true,
     .d_valid      = false,
-    .kp           = SPEED40_PI_KP,
-    .ki           = SPEED40_PI_KI,
+    .kp           = FOC40_PI_KP,
+    .ki           = FOC40_PI_KI,
     .kd           = 0.0f,
-    .output_min   = -SPEED40_PI_UMAX_V,
-    .output_max   =  SPEED40_PI_UMAX_V,
-    .integral_max =  SPEED40_ITERM_MAX_V,
-    .i_term_max   =  SPEED40_ITERM_MAX_V,
+    .output_min   = -FOC40_PI_UMAX_V,
+    .output_max   =  FOC40_PI_UMAX_V,
+    .integral_max =  FOC40_ITERM_MAX_V,
+    .i_term_max   =  FOC40_ITERM_MAX_V,
     .update_ms    = 0u,
 };
 
@@ -82,20 +82,19 @@ pid_config_t g_speed40_pid_iq_cfg = {
     .p_valid      = true,
     .i_valid      = true,
     .d_valid      = false,
-    .kp           = SPEED40_PI_KP,
-    .ki           = SPEED40_PI_KI,
+    .kp           = FOC40_PI_KP,
+    .ki           = FOC40_PI_KI,
     .kd           = 0.0f,
-    .output_min   = -SPEED40_PI_UMAX_V,
-    .output_max   =  SPEED40_PI_UMAX_V,
-    .integral_max =  SPEED40_ITERM_MAX_V,
-    .i_term_max   =  SPEED40_ITERM_MAX_V,
+    .output_min   = -FOC40_PI_UMAX_V,
+    .output_max   =  FOC40_PI_UMAX_V,
+    .integral_max =  FOC40_ITERM_MAX_V,
+    .i_term_max   =  FOC40_ITERM_MAX_V,
     .update_ms    = 0u,
 };
 
 static pid_state_t s_speed_pid;
 static pid_state_t s_pid_id;
 static pid_state_t s_pid_iq;
-static foc_dcal24_result_t s_calibration;
 
 static int32_t  s_rotor_count;
 static uint16_t s_encoder_prev_hw;
@@ -112,7 +111,6 @@ static uint8_t  s_speed_disp_init;
 static float    s_speed_ramp_rpm;
 static float    s_speed_filt_rpm;
 static float    s_speed_disp_rpm;
-static float    s_speed_out_ma;
 
 static void Speed40_ResetLoopState(void)
 {
@@ -130,7 +128,6 @@ static void Speed40_ResetLoopState(void)
     s_speed_filt_rpm = 0.0f;
     s_speed_disp_rpm = 0.0f;
     s_speed_disp_init = 0u;
-    s_speed_out_ma = 0.0f;
 }
 
 static void Speed40_ClearObservables(void)
@@ -183,11 +180,11 @@ static stc_i_data_t Speed40_CorrectedData(const stc_i_data_t *pData)
 
 static float Speed40_LimitSpeedRPM(float rpm)
 {
-    if (rpm > SPEED40_SPEED_REF_LIMIT_RPM) {
-        rpm = SPEED40_SPEED_REF_LIMIT_RPM;
+    if (rpm > FOC40_SPEED_REF_LIMIT_RPM) {
+        rpm = FOC40_SPEED_REF_LIMIT_RPM;
     }
-    if (rpm < -SPEED40_SPEED_REF_LIMIT_RPM) {
-        rpm = -SPEED40_SPEED_REF_LIMIT_RPM;
+    if (rpm < -FOC40_SPEED_REF_LIMIT_RPM) {
+        rpm = -FOC40_SPEED_REF_LIMIT_RPM;
     }
     return rpm;
 }
@@ -197,18 +194,18 @@ static void Speed40_UpdateSpeed(int32_t corrected_delta)
     float raw_rpm;
 
     s_speed_acc_cnt += corrected_delta;
-    if (++s_speed_win_tick < SPEED40_SPD_WIN_TICKS) {
+    if (++s_speed_win_tick < FOC40_SPD_WIN_TICKS) {
         return;
     }
 
     raw_rpm = (float)s_speed_acc_cnt * 60.0f
-            * (1000.0f / (float)SPEED40_SPD_WIN_MS)
+            * (1000.0f / (float)FOC40_SPD_WIN_MS)
             / (float)ENCODER_CPR;
     if (s_speed_filt_init == 0u) {
         s_speed_filt_rpm = raw_rpm;
         s_speed_filt_init = 1u;
     } else {
-        s_speed_filt_rpm += SPEED40_SPD_FILT_ALPHA
+        s_speed_filt_rpm += FOC40_SPD_FILT_ALPHA
                           * (raw_rpm - s_speed_filt_rpm);
     }
     /* 显示专用强滤波（独立于 PI 反馈链，α=0.05 仅平滑曲线） */
@@ -216,7 +213,7 @@ static void Speed40_UpdateSpeed(int32_t corrected_delta)
         s_speed_disp_rpm = raw_rpm;
         s_speed_disp_init = 1u;
     } else {
-        s_speed_disp_rpm += SPEED40_SPD_DISP_ALPHA
+        s_speed_disp_rpm += FOC40_SPD_DISP_ALPHA
                           * (raw_rpm - s_speed_disp_rpm);
     }
 
@@ -235,8 +232,8 @@ static void Speed40_UpdateOuterLoop(void)
     float speed_out;
 
     target_rpm = Speed40_LimitSpeedRPM(g_speed40_speed_target_rpm);
-    ramp_step = SPEED40_ACCEL_LIMIT_RPM_S
-              * ((float)SPEED40_SPD_WIN_MS * 0.001f);
+    ramp_step = FOC40_ACCEL_LIMIT_RPM_S
+              * ((float)FOC40_SPD_WIN_MS * 0.001f);
     if (s_speed_ramp_rpm < target_rpm) {
         s_speed_ramp_rpm += ramp_step;
         if (s_speed_ramp_rpm > target_rpm) s_speed_ramp_rpm = target_rpm;
@@ -247,7 +244,7 @@ static void Speed40_UpdateOuterLoop(void)
 
     speed_error = s_speed_ramp_rpm - s_speed_filt_rpm;
     speed_out = PID_UpdateUs(&s_speed_pid, s_speed_ramp_rpm,
-                             s_speed_filt_rpm, SPEED40_SPD_WIN_US);
+                             s_speed_filt_rpm, FOC40_SPD_WIN_US);
 
     g_speed40_speed_ramp_rpm = s_speed_ramp_rpm;
     g_speed40_speed_err_rpm = speed_error;
@@ -256,35 +253,34 @@ static void Speed40_UpdateOuterLoop(void)
     g_speed40_id_ref_ma = 0.0f;
 }
 
-void Foc_Speed40_InitPids(void)
+void Foc_Speed_InitPids(void)
 {
     PID_Init(&s_speed_pid, &g_speed40_pid_speed_cfg);
     PID_Init(&s_pid_id, &g_speed40_pid_id_cfg);
     PID_Init(&s_pid_iq, &g_speed40_pid_iq_cfg);
 }
 
-void Foc_Speed40_SetTargetRPM(float target_rpm)
+void Foc_Speed_SetTargetRPM(float target_rpm)
 {
     g_speed40_speed_target_rpm = Speed40_LimitSpeedRPM(target_rpm);
 }
 
-void Foc_Speed40_Start(void)
+void Foc_Speed_Start(void)
 {
     foc_dcal24_result_t calibration;
     uint16_t hardware_count;
     int32_t encoder_dir;
 
-    if (Foc_Dcal24_GetResult(&calibration) == 0u) {
+    if (Foc_Dcal_GetResult(&calibration) == 0u) {
         g_speed40_running = 0u;
-        g_speed40_state = SPEED40_STEP_IDLE;
-        SPEED40_LOG("ERROR: no mode 24 calibration; run mode 24 first");
+        g_speed40_state = FOC40_STEP_IDLE;
+        FOC40_LOG("ERROR: no mode 24 calibration; run mode 24 first");
         return;
     }
 
     Foc_Core_ClearFault();
     Speed40_ResetLoopState();
     Speed40_ClearObservables();
-    s_calibration = calibration;
     s_zero_u_ma = calibration.zero_u_ma;
     s_zero_v_ma = calibration.zero_v_ma;
     s_zero_w_ma = calibration.zero_w_ma;
@@ -314,16 +310,16 @@ void Foc_Speed40_Start(void)
 
     g_speed40_speed_target_rpm = 0.0f;
     g_speed40_running = 1u;
-    g_speed40_state = SPEED40_STEP_RUN;
+    g_speed40_state = FOC40_STEP_RUN;
     Foc_Core_PwmStart();
-    SPEED40_LOG("start rot=%d cnt limit=%.0frpm accel=%.0frpm/s iq=%.0fmA",
+    FOC40_LOG("start rot=%d cnt limit=%.0frpm accel=%.0frpm/s iq=%.0fmA",
                 (int)s_rotor_count,
-                (double)SPEED40_SPEED_REF_LIMIT_RPM,
-                (double)SPEED40_ACCEL_LIMIT_RPM_S,
-                (double)SPEED40_SPD_IQ_LIMIT_MA);
+                (double)FOC40_SPEED_REF_LIMIT_RPM,
+                (double)FOC40_ACCEL_LIMIT_RPM_S,
+                (double)FOC40_SPD_IQ_LIMIT_MA);
 }
 
-void Foc_Speed40_Stop(void)
+void Foc_Speed_Stop(void)
 {
     if (g_speed40_running) {
         g_speed40_running = 0u;
@@ -333,12 +329,12 @@ void Foc_Speed40_Stop(void)
             Foc_Core_PwmStop();
             Foc_Core_SetStateMachine(FOC_STATE_IDLE);
         }
-        SPEED40_LOG("stopped");
+        FOC40_LOG("stopped");
     }
     Speed40_ClearCurrentFeedback();
 }
 
-void Foc_Speed40_Step(const stc_i_data_t *pData)
+void Foc_Speed_Step(const stc_i_data_t *pData)
 {
     stc_i_data_t data;
     float id, iq, vd, vq, valpha, vbeta, du, dv, dw;
@@ -347,15 +343,15 @@ void Foc_Speed40_Step(const stc_i_data_t *pData)
     int32_t hardware_delta, corrected_delta, rotor_deg;
 
     if (Foc_Core_OverCurrent(pData)) {
-        g_speed40_state = SPEED40_STEP_FAULT_OC;
-        g_speed40_evt = SPEED40_EVT_OC;
+        g_speed40_state = FOC40_STEP_FAULT_OC;
+        g_speed40_evt = FOC40_EVT_OC;
         g_speed40_running = 0u;
         Foc_Core_FaultStop(1u);
         Speed40_ClearCurrentFeedback();
         return;
     }
 
-    if (g_speed40_state != SPEED40_STEP_RUN) {
+    if (g_speed40_state != FOC40_STEP_RUN) {
         return;
     }
 
@@ -367,11 +363,11 @@ void Foc_Speed40_Step(const stc_i_data_t *pData)
     hardware_delta = (int32_t)(int16_t)((uint16_t)hardware_count
                                         - s_encoder_prev_hw);
     s_encoder_prev_hw = hardware_count;
-    if (hardware_delta > SPEED40_ENC_DELTA_MAX) {
-        hardware_delta = SPEED40_ENC_DELTA_MAX;
+    if (hardware_delta > FOC40_ENC_DELTA_MAX) {
+        hardware_delta = FOC40_ENC_DELTA_MAX;
     }
-    if (hardware_delta < -SPEED40_ENC_DELTA_MAX) {
-        hardware_delta = -SPEED40_ENC_DELTA_MAX;
+    if (hardware_delta < -FOC40_ENC_DELTA_MAX) {
+        hardware_delta = -FOC40_ENC_DELTA_MAX;
     }
     corrected_delta = hardware_delta * (int32_t)g_foc_enc_dir;
     s_rotor_count = Foc_Core_ModPos(s_rotor_count + corrected_delta,
@@ -407,17 +403,17 @@ void Foc_Speed40_Step(const stc_i_data_t *pData)
     g_foc_iq_ma = g_speed40_iq_ma;
 
     vd = PID_UpdateUs(&s_pid_id, g_speed40_id_ref_ma * 0.001f, id,
-                      SPEED40_ISR_DT_US);
+                      FOC40_ISR_DT_US);
     vq = PID_UpdateUs(&s_pid_iq, g_speed40_iq_ref_ma * 0.001f, iq,
-                      SPEED40_ISR_DT_US);
+                      FOC40_ISR_DT_US);
     g_foc_vd = vd;
     g_foc_vq = vq;
     g_speed40_vd = vd;
     g_speed40_vq = vq;
-    g_speed40_vsat = ((vd <= -SPEED40_PI_UMAX_V + 0.01f) ||
-                      (vd >=  SPEED40_PI_UMAX_V - 0.01f) ||
-                      (vq <= -SPEED40_PI_UMAX_V + 0.01f) ||
-                      (vq >=  SPEED40_PI_UMAX_V - 0.01f)) ? 1u : 0u;
+    g_speed40_vsat = ((vd <= -FOC40_PI_UMAX_V + 0.01f) ||
+                      (vd >=  FOC40_PI_UMAX_V - 0.01f) ||
+                      (vq <= -FOC40_PI_UMAX_V + 0.01f) ||
+                      (vq >=  FOC40_PI_UMAX_V - 0.01f)) ? 1u : 0u;
 
     cos_r = Foc_Math_Cos(rotor_rad);
     sin_r = Foc_Math_Sin(rotor_rad);
@@ -436,7 +432,7 @@ void Foc_Speed40_Step(const stc_i_data_t *pData)
     g_speed40_dv = dv;
     g_speed40_dw = dw;
 
-    rotor_deg = (int32_t)(rotor_rad * SPEED40_RAD2DEG);
+    rotor_deg = (int32_t)(rotor_rad * FOC40_RAD2DEG);
     if (rotor_deg >= 360) rotor_deg -= 360;
     g_speed40_rotor_deg = rotor_deg;
 }
@@ -445,7 +441,7 @@ void Foc_Speed40_Step(const stc_i_data_t *pData)
  * 模式自持 VOFA：固定 18ch 布局，通道含义见 foc_40_speed.h 顶部速览卡
  *（唯一事实源）。
  *===========================================================================*/
-int Foc_Speed40_VofaFill(int32_t *cur)
+int Foc_Speed_VofaFill(int32_t *cur)
 {
     cur[0]  = (int32_t)(g_i_iu_ma);              /* ch0 U 相电流 (mA -> A) */
     cur[1]  = (int32_t)(g_i_iv_ma);              /* ch1 V 相电流 (mA -> A) */

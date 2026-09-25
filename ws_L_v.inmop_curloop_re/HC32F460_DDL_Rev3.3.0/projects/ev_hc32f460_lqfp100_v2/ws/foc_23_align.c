@@ -32,9 +32,9 @@ static uint8_t  s_align_phase      = 0u;
 static uint32_t s_align_phase_tick = 0u;
 
 /*******************************************************************************
- * Foc_StartAlign - mode 23: standstill electrical alignment
+ * Foc_Align_Start - mode 23: standstill electrical alignment
  ******************************************************************************/
-void Foc_StartAlign(void)
+void Foc_Align_Start(void)
 {
     Foc_Core_ClearFault();
     g_foc_mode        = FOC_MODE_ALIGN;

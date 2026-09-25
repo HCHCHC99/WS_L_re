@@ -150,34 +150,34 @@ extern "C" {
 /* 1 = RTT prints on, 0 = off */
 #define FOC_OLF_DBG   1
 #if FOC_OLF_DBG
-    #define OLF_DBG(fmt, ...)   MAIN_D("[OLF] " fmt, ##__VA_ARGS__)
+    #define FOC26_DBG(fmt, ...)   MAIN_D("[OLF] " fmt, ##__VA_ARGS__)
 #else
-    #define OLF_DBG(fmt, ...)   ((void)0)
+    #define FOC26_DBG(fmt, ...)   ((void)0)
 #endif
 
 /*=============================================================================
  * 时长（编译期常量，FOC_ISR_HZ tick 换算在 .c 内完成）
  *=============================================================================*/
-#define OLF_BETA_MS     2000u  /* 校准 BETA 吸附时长 */
-#define OLF_ALPHA_MS    2000u  /* 校准 ALPHA 吸附时长 */
-#define OLF_PP_WIN_MS   5000u  /* id/iq 峰峰值统计窗口 */
+#define FOC26_BETA_MS     2000u  /* 校准 BETA 吸附时长 */
+#define FOC26_ALPHA_MS    2000u  /* 校准 ALPHA 吸附时长 */
+#define FOC26_PP_WIN_MS   5000u  /* id/iq 峰峰值统计窗口 */
 
 /*=============================================================================
  * 状态机（g_olf_state）
  *=============================================================================*/
-#define OLF_STEP_IDLE       0u  /* 未运行 */
-#define OLF_STEP_CAL_BETA   1u  /* 校准：磁场 90°，2s */
-#define OLF_STEP_CAL_ALPHA  2u  /* 校准：磁场 0°，2s，结束锁零点 */
-#define OLF_STEP_DRAG       3u  /* 磁场角自增拖动（实验主体） */
-#define OLF_STEP_FAULT_OC   4u  /* 过流停机 */
+#define FOC26_STEP_IDLE       0u  /* 未运行 */
+#define FOC26_STEP_CAL_BETA   1u  /* 校准：磁场 90°，2s */
+#define FOC26_STEP_CAL_ALPHA  2u  /* 校准：磁场 0°，2s，结束锁零点 */
+#define FOC26_STEP_DRAG       3u  /* 磁场角自增拖动（实验主体） */
+#define FOC26_STEP_FAULT_OC   4u  /* 过流停机 */
 
 /*=============================================================================
  * 事件码（g_olf_evt，ISR 置位，Foc_Obs_Task 打印后清零）
  *=============================================================================*/
-#define OLF_EVT_BETA_DONE  1u
-#define OLF_EVT_LOCKED     2u
-#define OLF_EVT_OC         3u
-#define OLF_EVT_RAMP_DONE  4u
+#define FOC26_EVT_BETA_DONE  1u
+#define FOC26_EVT_LOCKED     2u
+#define FOC26_EVT_OC         3u
+#define FOC26_EVT_RAMP_DONE  4u
 
 /*=============================================================================
  * Keil Watch 可调变量 / 观测量（定义见 foc_26_olf.c）
@@ -190,15 +190,15 @@ extern volatile int32_t  g_olf_step_010;   /* 自增步长 (×0.1°/步, 1≈连
 extern volatile int32_t  g_olf_dir;        /* 自增方向 (+1=角度加 / -1=角度减, Start 复位 +1) */
 extern volatile float    g_olf_volt_v;     /* 拖动电压幅值 (V, 默认 0.6 与 mode30 同) */
 extern volatile uint8_t  g_olf_running;    /* 1 = 正在运行 */
-extern volatile uint8_t  g_olf_state;      /* OLF_STEP_xxx */
-extern volatile uint8_t  g_olf_evt;        /* OLF_EVT_xxx */
+extern volatile uint8_t  g_olf_state;      /* FOC26_STEP_xxx */
+extern volatile uint8_t  g_olf_evt;        /* FOC26_EVT_xxx */
 extern volatile int32_t  g_olf_offset;     /* 校准锁定的零点 (counts) */
 extern volatile int32_t  g_olf_field_deg;  /* 磁场电角度 (deg, 0~359) */
 extern volatile int32_t  g_olf_rotor_deg;  /* 转子电角度 (deg, 0~359, 已扣零点) */
 extern volatile int32_t  g_olf_diff_deg;   /* 负载角 delta = field - rotor (deg, -180~180) */
 extern volatile float    g_olf_id_ma;      /* 真实转子系 id (mA, 磁链分量) */
 extern volatile float    g_olf_iq_ma;      /* 真实转子系 iq (mA, 力矩分量) */
-extern volatile float    g_olf_id_pp_ma;   /* id 峰峰值 (mA, OLF_PP_WIN_MS 窗口每 5s 刷新) */
+extern volatile float    g_olf_id_pp_ma;   /* id 峰峰值 (mA, FOC26_PP_WIN_MS 窗口每 5s 刷新) */
 extern volatile float    g_olf_iq_pp_ma;   /* iq 峰峰值 (mA, 同上) */
 extern volatile float    g_olf_theta_rad;  /* 控制系 d 轴角 (rad, 磁场角=theta+90°) */
 extern volatile float    g_olf_du;         /* 三相占空比观测 (%) */

@@ -30,9 +30,9 @@
  *      启动时自动取用。
  *
  * 它的"产物"（mode 31 要用的两样东西）：
- *   - 偏移量 Foc_Zizeng_GetOffsetRad()：编码器读数换算磁铁真实角度
+ *   - 偏移量 Foc_Ramp_GetOffsetRad()：编码器读数换算磁铁真实角度
  *     要扣的修正值
- *   - 拖动方向 Foc_Zizeng_GetDragDir()：这次拖动编码器往哪边走。
+ *   - 拖动方向 Foc_Ramp_GetDragDir()：这次拖动编码器往哪边走。
  *     mode 31 拿它当"你应该往这边转"的参考；转反了说明角度框架差了
  *     180°，mode 31 会自动翻转修正
  *
@@ -69,7 +69,7 @@
  *   g_zizeng_du/dv/dw     三相占空比观测(%)
  *   g_foc_if_diff_rad     编码器角−磁场角（锁定后 ≈0）
  *   g_foc_id_rotor_ma / g_foc_iq_rotor_ma  转子系电流（锁定后有效）
- *   产品接口：Foc_Zizeng_GetOffsetRad() / Foc_Zizeng_GetDragDir()
+ *   产品接口：Foc_Ramp_GetOffsetRad() / Foc_Ramp_GetDragDir()
  *
  * 【VOFA 通道】**自持布局，固定 15ch**（实现见 foc_30_ramp.c
  *   Foc_Ramp_VofaFill，单位换算：传"毫单位"，SendScaled 内部 ×0.001）：
@@ -105,9 +105,9 @@ extern "C" {
 /* 1 = RTT prints on, 0 = off */
 #define FOC_ZIZENG_DBG   1
 #if FOC_ZIZENG_DBG
-    #define ZIZENG_DBG(fmt, ...)   MAIN_D("[ZIZENG] " fmt, ##__VA_ARGS__)
+    #define FOC30_DBG(fmt, ...)   MAIN_D("[ZIZENG] " fmt, ##__VA_ARGS__)
 #else
-    #define ZIZENG_DBG(fmt, ...)   ((void)0)
+    #define FOC30_DBG(fmt, ...)   ((void)0)
 #endif
 
 /* ============================================================================
@@ -117,7 +117,7 @@ extern "C" {
  * 两种方式的电机拖动行为完全相同，仅控制系电流分解的观感不同；
  * 偏移补偿会自动吸收 ±90° 的基线差。
  * ==========================================================================*/
-#define ZIZENG_VOLT_ON_Q_AXIS   1
+#define FOC30_VOLT_ON_Q_AXIS   1
 
 /* ============================================================================
  * Keil Watch 可调变量 / 观测量
@@ -144,25 +144,25 @@ extern volatile float   g_foc_iq_rotor_ma;
  *   foc_core.h（几乎所有 FOC 模块都已包含）。 */
 
 /* 启动/停止自增模式 */
-void Foc_StartZizeng(void);
-void Foc_StopZizeng(void);
+void Foc_Ramp_Start(void);
+void Foc_Ramp_Stop(void);
 
 /* 取 ZIZENG 锁定的偏移基线 (rad)。返回 1 = 已锁定（跨 stop 保留），
  * 供 mode 31 (IQ_PI) 启动时做编码器电角度绝对化 */
-uint8_t Foc_Zizeng_GetOffsetRad(float *out_rad);
+uint8_t Foc_Ramp_GetOffsetRad(float *out_rad);
 
 /* 取偏移采样窗口内实测的拖动方向（编码器计数位移符号 +1/-1，0=未测得）。
  * mode 31 用它比对运行转向，检测 180° 框架误差 */
-int8_t Foc_Zizeng_GetDragDir(void);
+int8_t Foc_Ramp_GetDragDir(void);
 
 /* --- 注入接口（mode 32 自锁偏移用，覆盖锁定值后 mode 31 无感取用） ---
  * SetOffsetRad: 写入偏移基线并置有效标志（等价 mode 30 锁定完成的状态）
  * SetDragDir  : 写入方向基准（mode 32 用本征推导值 FOC_ENC_DIR 注入） */
-void Foc_Zizeng_SetOffsetRad(float rad);
-void Foc_Zizeng_SetDragDir(int8_t dir);
+void Foc_Ramp_SetOffsetRad(float rad);
+void Foc_Ramp_SetDragDir(int8_t dir);
 
 /* 模式30 单步运算（20 kHz ISR 中由 Foc_Isr 分发调用） */
-void Foc_Zizeng_Step(const stc_i_data_t *pData);
+void Foc_Ramp_Step(const stc_i_data_t *pData);
 
 /* 模式自持 VOFA（15ch，通道含义见顶部速览卡） */
 int  Foc_Ramp_VofaFill(int32_t *cur);

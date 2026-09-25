@@ -22,9 +22,9 @@
 /* ============================================================================
  * ZIZENG 自动偏移补偿参数
  * ==========================================================================*/
-#define ZIZENG_OFFSET_WAIT_MS     1000           /* 启动后等待 1000ms 再采样 */
-#define ZIZENG_OFFSET_SAMPLES     2000           /* 采样 2000 次 = 100ms @20kHz（= 2000/FOC_ISR_HZ） */
-#define ZIZENG_DRAGDIR_MIN_CNTS   (ENCODER_CPR/50u) /* 采样窗口内位移低于此值算方向未知
+#define FOC30_OFFSET_WAIT_MS     1000           /* 启动后等待 1000ms 再采样 */
+#define FOC30_OFFSET_SAMPLES     2000           /* 采样 2000 次 = 100ms @20kHz（= 2000/FOC_ISR_HZ） */
+#define FOC30_DRAGDIR_MIN_CNTS   (ENCODER_CPR/50u) /* 采样窗口内位移低于此值算方向未知
                                                        (3Hz电角度下正常应走约123 counts) */
 
 /* Keil Watch 可调变量 */
@@ -62,7 +62,7 @@ static float    s_iq_rotor_f = 0.0f;
 /**
  * @brief 启动 ZIZENG 模式
  */
-void Foc_StartZizeng(void)
+void Foc_Ramp_Start(void)
 {
     g_zizeng_theta_rad = 0.0f;
     g_zizeng_running   = 1;
@@ -93,7 +93,7 @@ void Foc_StartZizeng(void)
     g_foc_mode   = FOC_MODE_NONE;
 
     /* 相电流 DC 零偏自校准（温漂残余）：本函数返回后的前 ~210ms 内
-     * Foc_Zizeng_Step 会强制零矢量（零电流），校准锁定后才开始拖动 */
+     * Foc_Ramp_Step 会强制零矢量（零电流），校准锁定后才开始拖动 */
     Foc_Calib_Start();
 
     /* 转子系电流观测复位 */
@@ -102,7 +102,7 @@ void Foc_StartZizeng(void)
     g_foc_id_rotor_ma = 0.0f;
     g_foc_iq_rotor_ma = 0.0f;
 
-    ZIZENG_DBG("Started: freq=%d mHz, volt=%d mV",
+    FOC30_DBG("Started: freq=%d mHz, volt=%d mV",
                (int)(g_zizeng_freq_hz * 1000.0f + 0.5f),
                (int)(g_zizeng_volt_v * 1000.0f + 0.5f));
 }
@@ -110,7 +110,7 @@ void Foc_StartZizeng(void)
 /**
  * @brief 停止 ZIZENG 模式
  */
-void Foc_StopZizeng(void)
+void Foc_Ramp_Stop(void)
 {
     g_zizeng_running = 0;
     g_foc_active     = 0u;
@@ -121,7 +121,7 @@ void Foc_StopZizeng(void)
 
     /* 重置偏移补偿状态 */
     s_zizeng_offset_state = 0;
-    ZIZENG_DBG("Stopped");
+    FOC30_DBG("Stopped");
 }
 
 /**
@@ -129,7 +129,7 @@ void Foc_StopZizeng(void)
  *
  * 关键修复：直接读取 TIMERA_1 硬件计数器，不依赖主循环的 Encoder_Update()
  */
-void Foc_Zizeng_Step(const stc_i_data_t *pData)
+void Foc_Ramp_Step(const stc_i_data_t *pData)
 {
     float theta, valpha, vbeta, du, dv, dw;
     float enc_elec, diff;
@@ -268,12 +268,12 @@ void Foc_Zizeng_Step(const stc_i_data_t *pData)
     if (s_zizeng_offset_state == 0) {
         /* IDLE: 等待电机启动并稳定运行 */
         s_zizeng_start_cnt++;
-        if (s_zizeng_start_cnt >= (ZIZENG_OFFSET_WAIT_MS * FOC_ISR_HZ / 1000)) {
+        if (s_zizeng_start_cnt >= (FOC30_OFFSET_WAIT_MS * FOC_ISR_HZ / 1000)) {
             s_zizeng_offset_state = 1;
             s_zizeng_offset_sum = 0.0f;
             s_zizeng_offset_cnt = 0;
             s_zizeng_start_cnt = 0;
-            ZIZENG_DBG("Offset sampling started...");
+            FOC30_DBG("Offset sampling started...");
         }
     }
     else if (s_zizeng_offset_state == 1) {
@@ -284,7 +284,7 @@ void Foc_Zizeng_Step(const stc_i_data_t *pData)
         s_zizeng_offset_sum += diff;
         s_zizeng_offset_cnt++;
 
-        if (s_zizeng_offset_cnt >= ZIZENG_OFFSET_SAMPLES) {
+        if (s_zizeng_offset_cnt >= FOC30_OFFSET_SAMPLES) {
             float avg_diff = s_zizeng_offset_sum / (float)s_zizeng_offset_cnt;
             int32_t drag_moved = s_enc_pos - s_drag_enc_ref;
 
@@ -293,15 +293,15 @@ void Foc_Zizeng_Step(const stc_i_data_t *pData)
             s_zizeng_offset_valid = 1;
 
             /* 拖动方向 = 采样窗口内编码器计数位移符号（mode 31 比对转向用） */
-            if (drag_moved >= (int32_t)ZIZENG_DRAGDIR_MIN_CNTS) {
+            if (drag_moved >= (int32_t)FOC30_DRAGDIR_MIN_CNTS) {
                 g_zizeng_drag_dir = 1;
-            } else if (drag_moved <= -(int32_t)ZIZENG_DRAGDIR_MIN_CNTS) {
+            } else if (drag_moved <= -(int32_t)FOC30_DRAGDIR_MIN_CNTS) {
                 g_zizeng_drag_dir = -1;
             } else {
                 g_zizeng_drag_dir = 0;      /* 转子基本没动(拖动异常/失步) */
             }
 
-            ZIZENG_DBG("Offset LOCKED: %d deg, samples=%lu, drag_dir=%d",
+            FOC30_DBG("Offset LOCKED: %d deg, samples=%lu, drag_dir=%d",
                        (int)(s_zizeng_offset_locked * 57.2958f),
                        (unsigned long)s_zizeng_offset_cnt,
                        (int)g_zizeng_drag_dir);
@@ -310,11 +310,11 @@ void Foc_Zizeng_Step(const stc_i_data_t *pData)
     /* else state == 2: LOCKED, 偏移已直接作用于转子角度（见第 3 步） */
 
     /* ===== 5. SVPWM 输出 =====
-     * 加压轴由 ZIZENG_VOLT_ON_Q_AXIS（foc_30_ramp.h）编译期选择：
+     * 加压轴由 FOC30_VOLT_ON_Q_AXIS（foc_30_ramp.h）编译期选择：
      *   q 轴加压: Vd=0, Vq=V -> valpha=-V·sinθ, vbeta=V·cosθ
      *   d 轴加压: Vd=V, Vq=0 -> valpha= V·cosθ, vbeta=V·sinθ
      */
-#if ZIZENG_VOLT_ON_Q_AXIS
+#if FOC30_VOLT_ON_Q_AXIS
     valpha = -g_zizeng_volt_v * Foc_Math_Sin(theta);
     vbeta  =  g_zizeng_volt_v * Foc_Math_Cos(theta);
 #else
@@ -337,7 +337,7 @@ void Foc_Zizeng_Step(const stc_i_data_t *pData)
  * @param  out_rad  输出锁定的偏移值（可为 NULL）
  * @return 1 = 偏移已锁定（跨 stop 保留，掉电前一直有效）；0 = 未锁定
  */
-uint8_t Foc_Zizeng_GetOffsetRad(float *out_rad)
+uint8_t Foc_Ramp_GetOffsetRad(float *out_rad)
 {
     if (out_rad != NULL) {
         *out_rad = s_zizeng_offset_locked;
@@ -349,16 +349,16 @@ uint8_t Foc_Zizeng_GetOffsetRad(float *out_rad)
  * @brief 取偏移采样窗口内实测的拖动方向
  * @return +1/-1 = 编码器计数位移符号；0 = 未测得（转子没动/未跑过 mode 30）
  */
-int8_t Foc_Zizeng_GetDragDir(void)
+int8_t Foc_Ramp_GetDragDir(void)
 {
     return g_zizeng_drag_dir;
 }
 
 /**
  * @brief 注入偏移基线并置有效标志（mode 32 自锁偏移后调用，
- *        mode 31 经 Foc_Zizeng_GetOffsetRad 无感取用）
+ *        mode 31 经 Foc_Ramp_GetOffsetRad 无感取用）
  */
-void Foc_Zizeng_SetOffsetRad(float rad)
+void Foc_Ramp_SetOffsetRad(float rad)
 {
     s_zizeng_offset_locked = rad;
     s_zizeng_offset_valid  = 1u;
@@ -367,7 +367,7 @@ void Foc_Zizeng_SetOffsetRad(float rad)
 /**
  * @brief 注入方向基准（mode 32 用本征推导值 FOC_ENC_DIR 注入）
  */
-void Foc_Zizeng_SetDragDir(int8_t dir)
+void Foc_Ramp_SetDragDir(int8_t dir)
 {
     g_zizeng_drag_dir = dir;
 }

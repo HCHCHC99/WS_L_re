@@ -26,15 +26,15 @@
  *           ISR 里发生了大事（过流/翻转/锁定成功/失败）时，把现场数据
  *           打包存进 evt_xxx 变量并竖起 flag；主循环里调用一次
  *           Foc_Obs_Task()，它负责：
- *             - 每隔 200ms 打一条运行监视（[ZIZENG_DBG] / [IQPI_MON]）
- *             - 事件发生时打一条快照（[IQPI_FLIP] / [LOCKIQ] / [FOC] /
+ *             - 每隔 200ms 打一条运行监视（[FOC30_DBG] / [FOC31_MON]）
+ *             - 事件发生时打一条快照（[FOC31_FLIP] / [LOCKIQ] / [FOC] /
  *               [ALIGN]），并把 flag 清掉
  *             - 处理 mode 32 锁定成功后的自动交接（启动 mode 31）
  *           ISR 内绝不打印（太慢），打印只发生在主循环，这是本模块存在
  *           的核心原因之一。
  *
  *        【打印标签约定】每条打印自带来源标签（[FOC]/[ALIGN]/
- *        [ZIZENG_DBG]/[IQPI_MON]/[IQPI_FLIP]/[LOCKIQ]，与迁移前完全一致），
+ *        [FOC30_DBG]/[FOC31_MON]/[FOC31_FLIP]/[LOCKIQ]，与迁移前完全一致），
  *        因此 OBS_DBG 宏不再额外加前缀。
  *******************************************************************************
  */
@@ -60,12 +60,12 @@ extern "C" {
 #endif
 
 /* mode 31 状态历史容量（随状态机迁移至此，foc_31_iqpi.h 不再定义） */
-#define IQPI_HISTORY_LEN  10u
+#define FOC31_HISTORY_LEN  10u
 
 /*=============================================================================
  * mode 31 观察量（定义在 foc_obs.c；傻瓜式含义讲解见 foc_31_iqpi.h 顶部）
  * ==========================================================================*/
-extern volatile iqpi_step_t g_iqpi_step_hist[IQPI_HISTORY_LEN]; /* 状态历史, [0]最旧 */
+extern volatile iqpi_step_t g_iqpi_step_hist[FOC31_HISTORY_LEN]; /* 状态历史, [0]最旧 */
 extern volatile uint8_t g_iqpi_step_hist_cnt;  /* 历史有效条数 0..10 */
 extern volatile uint8_t g_iqpi_flip_cnt;       /* 本次运行 180° 框架自动翻转次数 */
 extern volatile int32_t  g_iqpi_enc_pos;       /* ISR 累积编码器计数镜像（看转向/速率） */
@@ -92,7 +92,7 @@ extern volatile int32_t g_lockiq_track_err_cnts; /* VERIFY 跟踪误差 (counts)
 
 /* --- 锁定/失败事件快照（ISR 置 g_lockiq_evt_flag，Foc_Obs_Task 处理后清零） --- */
 extern volatile uint8_t  g_lockiq_evt_flag;
-extern volatile uint8_t  g_lockiq_evt_code;     /* LOCKIQ_EVT_xxx（定义见 foc_32_lockiq.h） */
+extern volatile uint8_t  g_lockiq_evt_code;     /* FOC32_EVT_xxx（定义见 foc_32_lockiq.h） */
 extern volatile int32_t  g_lockiq_evt_off_deg; /* 锁定的注入偏移 (deg) */
 
 /*******************************************************************************

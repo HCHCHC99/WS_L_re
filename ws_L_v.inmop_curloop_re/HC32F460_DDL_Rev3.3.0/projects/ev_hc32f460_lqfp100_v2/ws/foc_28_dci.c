@@ -11,7 +11,7 @@
  *                 RAMP_DONE 一次；电流参考 id_ref = I_ref·cosδ,
  *                 iq_ref = I_ref·sinδ（δ = 参考电流矢量方向，δ=90° 即
  *                 id_ref=0 经典 FOC）；vd/vq = PID_UpdateUs 输出
- *                 （i_valid=false 仅 P，限幅 ±DCI_PI_UMAX_V），反 Park 在
+ *                 （i_valid=false 仅 P，限幅 ±FOC28_PI_UMAX_V），反 Park 在
  *                 转子角 -> SVPWM。转速 = 力矩平衡结果（参考力矩 > 摩擦时
  *                 加速至 PI 电压饱和后电流 droop、力矩回落平衡）。
  *
@@ -28,7 +28,7 @@
  *          g_dci_id/iq_ma 同源（= 环反馈）。
  *
  *        角度框架（增量累积式，与 mode 27 相同）：
- *          每拍 wrap-safe 差分 -> ±DCI_ENC_DELTA_MAX(32) counts 限幅
+ *          每拍 wrap-safe 差分 -> ±FOC28_ENC_DELTA_MAX(32) counts 限幅
  *          -> s_enc_pos 累加 -> 转子电角 =
  *             mod((s_enc_pos - s_off_rel) × 编码器方向, CPR) × 360°×极对数/CPR
  *          s_off_rel = ALPHA 锁零点瞬间的 s_enc_pos（锁相瞬间转子角=0）。
@@ -50,16 +50,16 @@
 #define FOC_ISR_DT_US  (1000000u / FOC_ISR_HZ)   /* PI 积分离散步长 (us) */
 
 /* 阶段时长/窗口 -> ISR tick 数 */
-#define DCI_BETA_TICKS    ((uint32_t)DCI_BETA_MS    * (uint32_t)FOC_ISR_HZ / 1000u)
-#define DCI_ALPHA_TICKS   ((uint32_t)DCI_ALPHA_MS   * (uint32_t)FOC_ISR_HZ / 1000u)
-#define DCI_SPEED_WIN_TICKS ((uint32_t)DCI_SPEED_WIN_MS * (uint32_t)FOC_ISR_HZ / 1000u)
-#define DCI_PP_WIN_TICKS  ((uint32_t)DCI_PP_WIN_MS  * (uint32_t)FOC_ISR_HZ / 1000u)
-#define DCI_MEAN_WIN_TICKS ((uint32_t)DCI_MEAN_WIN_MS * (uint32_t)FOC_ISR_HZ / 1000u)
-#define DCI_ERR_WIN_TICKS ((uint32_t)DCI_ERR_WIN_MS  * (uint32_t)FOC_ISR_HZ / 1000u)
+#define FOC28_BETA_TICKS    ((uint32_t)FOC28_BETA_MS    * (uint32_t)FOC_ISR_HZ / 1000u)
+#define FOC28_ALPHA_TICKS   ((uint32_t)FOC28_ALPHA_MS   * (uint32_t)FOC_ISR_HZ / 1000u)
+#define FOC28_SPEED_WIN_TICKS ((uint32_t)FOC28_SPEED_WIN_MS * (uint32_t)FOC_ISR_HZ / 1000u)
+#define FOC28_PP_WIN_TICKS  ((uint32_t)FOC28_PP_WIN_MS  * (uint32_t)FOC_ISR_HZ / 1000u)
+#define FOC28_MEAN_WIN_TICKS ((uint32_t)FOC28_MEAN_WIN_MS * (uint32_t)FOC_ISR_HZ / 1000u)
+#define FOC28_ERR_WIN_TICKS ((uint32_t)FOC28_ERR_WIN_MS  * (uint32_t)FOC_ISR_HZ / 1000u)
 
 /* 角度换算（观测/控制用） */
-#define DCI_RAD2DEG   57.2958f
-#define DCI_DEG2RAD   0.0174533f
+#define FOC28_RAD2DEG   57.2958f
+#define FOC28_DEG2RAD   0.0174533f
 
 /*******************************************************************************
  * Watch 观测量 / 可调变量
@@ -69,7 +69,7 @@ volatile float    g_dci_dlt_targ_deg = 90.0f;  /* 功角爬坡终点 */
 volatile uint32_t g_dci_dlt_tr_ms   = 0u;   /* 功角爬坡过渡时间 */
 volatile float    g_dci_volt_v      = 0.8f;    /* 电压（=调速旋钮），Start 复位 */
 volatile uint8_t  g_dci_running     = 0u;
-volatile uint8_t  g_dci_state       = DCI_STEP_IDLE;
+volatile uint8_t  g_dci_state       = FOC28_STEP_IDLE;
 volatile uint8_t  g_dci_evt         = 0u;
 volatile int32_t  g_dci_offset      = 0;
 volatile float    g_dci_dlt_now_deg = 0.0f;
@@ -79,17 +79,17 @@ volatile int32_t  g_dci_rotor_deg   = 0;
 volatile int32_t  g_dci_diff_deg    = 0;
 volatile float    g_dci_id_ma       = 0.0f;
 volatile float    g_dci_iq_ma       = 0.0f;
-volatile float    g_dci_id_pp_ma    = 0.0f;  /* id 峰峰值 (mA, 每 DCI_PP_WIN_MS 刷新) */
+volatile float    g_dci_id_pp_ma    = 0.0f;  /* id 峰峰值 (mA, 每 FOC28_PP_WIN_MS 刷新) */
 volatile float    g_dci_iq_pp_ma    = 0.0f;  /* iq 峰峰值 (mA, 同上) */
-volatile float    g_dci_id_mean_ma  = 0.0f;  /* id 均值 (mA, 每 DCI_MEAN_WIN_MS 刷新) */
+volatile float    g_dci_id_mean_ma  = 0.0f;  /* id 均值 (mA, 每 FOC28_MEAN_WIN_MS 刷新) */
 volatile float    g_dci_iq_mean_ma  = 0.0f;  /* iq 均值 (mA, 同上) */
-volatile float    g_dci_i_ref_ma    = DCI_I_REF_MA;  /* 电流矢量幅值参考 (Start 不复位) */
+volatile float    g_dci_i_ref_ma    = FOC28_I_REF_MA;  /* 电流矢量幅值参考 (Start 不复位) */
 volatile float    g_dci_id_ref_ma   = 0.0f;  /* d 轴电流参考 (mA, 实时) */
 volatile float    g_dci_iq_ref_ma   = 0.0f;  /* q 轴电流参考 (mA, 实时) */
-volatile float    g_dci_i_ramp_ma_s = (float)DCI_I_RAMP_MA_S;  /* I_ref 软启动斜率 (mA/s)，<=0 直通 */
+volatile float    g_dci_i_ramp_ma_s = (float)FOC28_I_RAMP_MA_S;  /* I_ref 软启动斜率 (mA/s)，<=0 直通 */
 static float      s_i_ref_ramp      = 0.0f;   /* 斜坡后的幅值实际值 (mA)，Start 复位 0 */
 volatile uint8_t  g_dci_vsat        = 0u;    /* 电压饱和标志 (1 = 任一轴顶到 UMAX) */
-volatile float    g_dci_ed_mean_ma  = 0.0f;  /* d 轴误差均值 (mA, 每 DCI_ERR_WIN_MS 刷新) */
+volatile float    g_dci_ed_mean_ma  = 0.0f;  /* d 轴误差均值 (mA, 每 FOC28_ERR_WIN_MS 刷新) */
 volatile float    g_dci_eq_mean_ma  = 0.0f;  /* q 轴误差均值 (mA, 同上) */
 volatile float    g_dci_ed_pp_ma    = 0.0f;  /* d 轴误差峰峰值 (mA, 同上) */
 volatile float    g_dci_eq_pp_ma    = 0.0f;  /* q 轴误差峰峰值 (mA, 同上) */
@@ -137,20 +137,20 @@ static float    s_eq_max     = 0.0f;
 /*******************************************************************************
  * d/q 轴 PI 配置（P 重调阶段：i_valid=false 纯 P，ki=0。
  * 转子捏死工况下调 P：快速接近目标且不振铃即为合格。
- * P 合格后 Watch 置 i_valid=1 + ki=DCI_PI_KI；字段 volatile 实时生效）
+ * P 合格后 Watch 置 i_valid=1 + ki=FOC28_PI_KI；字段 volatile 实时生效）
  ******************************************************************************/
 pid_config_t g_dci_pid_id_cfg = {
     .enabled      = true,
     .p_valid      = true,
     .i_valid      = false,          /* P 重调阶段；P 合格后 Watch 置 1 开 I */
     .d_valid      = false,
-    .kp           = DCI_PI_KP,
-    .ki           = 0.0f,           /* 开 I 时 Watch 改为 DCI_PI_KI（≈kp×R/L） */
+    .kp           = FOC28_PI_KP,
+    .ki           = 0.0f,           /* 开 I 时 Watch 改为 FOC28_PI_KI（≈kp×R/L） */
     .kd           = 0.0f,
-    .output_min   = -DCI_PI_UMAX_V,
-    .output_max   =  DCI_PI_UMAX_V,
-    .integral_max =  DCI_ITERM_MAX_V,
-    .i_term_max   =  DCI_ITERM_MAX_V,
+    .output_min   = -FOC28_PI_UMAX_V,
+    .output_max   =  FOC28_PI_UMAX_V,
+    .integral_max =  FOC28_ITERM_MAX_V,
+    .i_term_max   =  FOC28_ITERM_MAX_V,
     .update_ms    = 0,
 };
 
@@ -159,13 +159,13 @@ pid_config_t g_dci_pid_iq_cfg = {
     .p_valid      = true,
     .i_valid      = false,          /* P 重调阶段；P 合格后 Watch 置 1 开 I */
     .d_valid      = false,
-    .kp           = DCI_PI_KP,
+    .kp           = FOC28_PI_KP,
     .ki           = 0.0f,
     .kd           = 0.0f,
-    .output_min   = -DCI_PI_UMAX_V,
-    .output_max   =  DCI_PI_UMAX_V,
-    .integral_max =  DCI_ITERM_MAX_V,
-    .i_term_max   =  DCI_ITERM_MAX_V,
+    .output_min   = -FOC28_PI_UMAX_V,
+    .output_max   =  FOC28_PI_UMAX_V,
+    .integral_max =  FOC28_ITERM_MAX_V,
+    .i_term_max   =  FOC28_ITERM_MAX_V,
     .update_ms    = 0,
 };
 
@@ -175,7 +175,7 @@ static pid_state_t s_pid_iq;
 
 /*******************************************************************************
  * 内部助手：峰峰值喂数（ISR 内调用）
- *   每拍更新窗口内 min/max，满 DCI_PP_WIN_TICKS 时锁存峰峰值并以下一拍
+ *   每拍更新窗口内 min/max，满 FOC28_PP_WIN_TICKS 时锁存峰峰值并以下一拍
  *   样本为新窗口起点（窗口无缝衔接，无重叠无遗漏）。入参单位 A。
  ******************************************************************************/
 static void Dci_PpFeed(float id, float iq)
@@ -190,7 +190,7 @@ static void Dci_PpFeed(float id, float iq)
         if (iq < s_iq_min) { s_iq_min = iq; }
         if (iq > s_iq_max) { s_iq_max = iq; }
     }
-    if (++s_pp_tick >= DCI_PP_WIN_TICKS) {
+    if (++s_pp_tick >= FOC28_PP_WIN_TICKS) {
         s_pp_tick = 0u;
         g_dci_id_pp_ma = (s_id_max - s_id_min) * 1000.0f;
         g_dci_iq_pp_ma = (s_iq_max - s_iq_min) * 1000.0f;
@@ -269,7 +269,7 @@ void Foc_Dci_Start(void)
     g_foc_align_state = 1u;
 
     g_dci_running     = 1u;
-    g_dci_state       = DCI_STEP_CALIB;
+    g_dci_state       = FOC28_STEP_CALIB;
     g_dci_evt         = 0u;
     s_phase_tick      = 0u;
     s_run_tick        = 0u;
@@ -317,7 +317,7 @@ void Foc_Dci_Start(void)
     Foc_Calib_Start();     /* 零偏校准状态机复位，CALIB 态逐拍喂样 */
     Foc_Core_PwmStart();   /* 零矢量起 PWM（g_foc_active=1），下一拍开始校准 */
 
-    DCI_DBG("start calib zero-offset -> run dlt %d->%d deg tr=%d ms Iref=%d mA kp=%d m iValid=%d",
+    FOC28_DBG("start calib zero-offset -> run dlt %d->%d deg tr=%d ms Iref=%d mA kp=%d m iValid=%d",
             (int)g_dci_dlt_init_deg, (int)g_dci_dlt_targ_deg,
             (int)g_dci_dlt_tr_ms, (int)g_dci_i_ref_ma,
             (int)(g_dci_pid_iq_cfg.kp * 1000.0f),
@@ -338,8 +338,8 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
 
     /* ===== OC 保护（原始 pData，去抖在 Foc_Core_OverCurrent 内） ===== */
     if (Foc_Core_OverCurrent(pData)) {
-        g_dci_state   = DCI_STEP_FAULT_OC;
-        g_dci_evt     = DCI_EVT_OC;
+        g_dci_state   = FOC28_STEP_FAULT_OC;
+        g_dci_evt     = FOC28_EVT_OC;
         g_dci_running = 0u;
         Foc_Core_FaultStop(1u);   /* 置故障 + 关 PWM + active=0 + IDLE */
         return;
@@ -357,7 +357,7 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
 
     switch (g_dci_state) {
     /* ===== 零矢量零偏校准：三相 50/50/50（零电流），~210ms ===== */
-    case DCI_STEP_CALIB:
+    case FOC28_STEP_CALIB:
         (void)Foc_Calib_Feed(pData);
         TMR4_PWM_SetDuty3Phase(50.0f, 50.0f, 50.0f);
         g_foc_du = 50.0f;
@@ -372,25 +372,25 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
         g_foc_vq = 0.0f;
         if (Foc_Calib_IsLocked()) {
             s_phase_tick = 0u;
-            g_dci_state  = DCI_STEP_CAL_BETA;
-            g_dci_evt    = DCI_EVT_CALIB_DONE;
+            g_dci_state  = FOC28_STEP_CAL_BETA;
+            g_dci_evt    = FOC28_EVT_CALIB_DONE;
         }
         break;
 
     /* ===== 校准 BETA：磁场定 90°，2s ===== */
-    case DCI_STEP_CAL_BETA:
+    case FOC28_STEP_CAL_BETA:
         Dci_OutputField(&dataCal, FOC_MATH_HALF_PI);
-        if (++s_phase_tick >= DCI_BETA_TICKS) {
+        if (++s_phase_tick >= FOC28_BETA_TICKS) {
             s_phase_tick = 0u;
-            g_dci_state  = DCI_STEP_CAL_ALPHA;
-            g_dci_evt    = DCI_EVT_BETA_DONE;
+            g_dci_state  = FOC28_STEP_CAL_ALPHA;
+            g_dci_evt    = FOC28_EVT_BETA_DONE;
         }
         break;
 
     /* ===== 校准 ALPHA：磁场定 0°，2s，结束锁零点 -> 功角闭环 ===== */
-    case DCI_STEP_CAL_ALPHA:
+    case FOC28_STEP_CAL_ALPHA:
         Dci_OutputField(&dataCal, 0.0f);
-        if (++s_phase_tick >= DCI_ALPHA_TICKS) {
+        if (++s_phase_tick >= FOC28_ALPHA_TICKS) {
             /* 锁零点（双帧）：
              *  - 控制帧：s_off_rel = 此刻相对计数，RUN 态转子电角 =
              *    mod((s_enc_pos - s_off_rel) × dir, CPR)，锁相瞬间 = 0
@@ -408,13 +408,13 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
             s_phase_tick = 0u;
             s_run_tick   = 0u;
             s_ramp_done  = 0u;
-            g_dci_state  = DCI_STEP_RUN;
-            g_dci_evt    = DCI_EVT_LOCKED;
+            g_dci_state  = FOC28_STEP_RUN;
+            g_dci_evt    = FOC28_EVT_LOCKED;
         }
         break;
 
     /* ===== RUN：磁场 = 转子 + delta（功角闭环核心），与 mode 27 逐拍等价 ===== */
-    case DCI_STEP_RUN:
+    case FOC28_STEP_RUN:
         /* 1. delta 爬坡：value = init + (targ-init)×w，w = elapsed/tr 线性，
          *    init/targ/tr 每拍实时读 Watch（运行中改 = 按新值重算轨迹）。
          *    tr=0 立即到目标；到点置 RAMP_DONE 一次。 */
@@ -432,11 +432,11 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
         g_dci_dlt_now_deg = dlt;
         if ((s_ramp_done == 0u) && (s_run_tick >= tr_ticks)) {
             s_ramp_done = 1u;
-            g_dci_evt   = DCI_EVT_RAMP_DONE;
+            g_dci_evt   = FOC28_EVT_RAMP_DONE;
         }
         s_run_tick++;
 
-        /* 2. 编码器增量读取：wrap-safe 差分 + ±DCI_ENC_DELTA_MAX 限幅
+        /* 2. 编码器增量读取：wrap-safe 差分 + ±FOC28_ENC_DELTA_MAX 限幅
          *    （毛刺单拍污染封顶 ±32 counts ≈ ±2.8° 电角） */
         hw = TMRA_GetCountValue(CM_TMRA_1);
         if (!s_enc_init) {
@@ -445,11 +445,11 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
         }
         delta = (int32_t)(int16_t)((uint16_t)hw - s_enc_prev_hw);
         s_enc_prev_hw = hw;
-        if (delta > DCI_ENC_DELTA_MAX) {
-            delta = DCI_ENC_DELTA_MAX;
+        if (delta > FOC28_ENC_DELTA_MAX) {
+            delta = FOC28_ENC_DELTA_MAX;
         }
-        if (delta < -DCI_ENC_DELTA_MAX) {
-            delta = -DCI_ENC_DELTA_MAX;
+        if (delta < -FOC28_ENC_DELTA_MAX) {
+            delta = -FOC28_ENC_DELTA_MAX;
         }
         s_enc_pos += delta;
         g_dci_enc_pos = s_enc_pos;
@@ -475,10 +475,10 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
         /* 5. 均值统计（3s 窗口刷新，mA 整数累加无浮点误差） */
         s_id_sum_ma += (int32_t)(id * 1000.0f);
         s_iq_sum_ma += (int32_t)(iq * 1000.0f);
-        if (++s_mean_tick >= DCI_MEAN_WIN_TICKS) {
+        if (++s_mean_tick >= FOC28_MEAN_WIN_TICKS) {
             s_mean_tick = 0u;
-            g_dci_id_mean_ma = (float)s_id_sum_ma / (float)DCI_MEAN_WIN_TICKS;
-            g_dci_iq_mean_ma = (float)s_iq_sum_ma / (float)DCI_MEAN_WIN_TICKS;
+            g_dci_id_mean_ma = (float)s_id_sum_ma / (float)FOC28_MEAN_WIN_TICKS;
+            g_dci_iq_mean_ma = (float)s_iq_sum_ma / (float)FOC28_MEAN_WIN_TICKS;
             s_id_sum_ma = 0;
             s_iq_sum_ma = 0;
         }
@@ -504,20 +504,20 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
         } else {
             s_i_ref_ramp = g_dci_i_ref_ma;
         }
-        dlt_rad = dlt * DCI_DEG2RAD;
+        dlt_rad = dlt * FOC28_DEG2RAD;
         id_ref = (s_i_ref_ramp * 0.001f) * Foc_Math_Cos(dlt_rad);
         iq_ref = (s_i_ref_ramp * 0.001f) * Foc_Math_Sin(dlt_rad);
         g_dci_id_ref_ma = id_ref * 1000.0f;
         g_dci_iq_ref_ma = iq_ref * 1000.0f;
 
-        /* 7. PI 电流环（I 已启用）：vd/vq = PID(ref, fb)，限幅 ±DCI_PI_UMAX_V。
+        /* 7. PI 电流环（I 已启用）：vd/vq = PID(ref, fb)，限幅 ±FOC28_PI_UMAX_V。
          *    ki≈kp×R/L 零极点对消；调 P 时 Watch 置 g_dci_pid_*_cfg.i_valid=0 */
         vd = PID_UpdateUs(&s_pid_id, id_ref, id, FOC_ISR_DT_US);
         vq = PID_UpdateUs(&s_pid_iq, iq_ref, iq, FOC_ISR_DT_US);
         g_foc_vd = vd;
         g_foc_vq = vq;
-        g_dci_vsat = ((vd <= -DCI_PI_UMAX_V + 0.01f) || (vd >= DCI_PI_UMAX_V - 0.01f) ||
-                      (vq <= -DCI_PI_UMAX_V + 0.01f) || (vq >= DCI_PI_UMAX_V - 0.01f)) ? 1u : 0u;
+        g_dci_vsat = ((vd <= -FOC28_PI_UMAX_V + 0.01f) || (vd >= FOC28_PI_UMAX_V - 0.01f) ||
+                      (vq <= -FOC28_PI_UMAX_V + 0.01f) || (vq >= FOC28_PI_UMAX_V - 0.01f)) ? 1u : 0u;
 
         /* 8. 反 Park（转子角）-> SVPWM 输出 */
         cos_r = Foc_Math_Cos(rot_rad);
@@ -555,10 +555,10 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
             }
             s_ed_sum_ma += e_d_ma;
             s_eq_sum_ma += e_q_ma;
-            if (++s_err_tick >= DCI_ERR_WIN_TICKS) {
+            if (++s_err_tick >= FOC28_ERR_WIN_TICKS) {
                 s_err_tick = 0u;
-                g_dci_ed_mean_ma = (float)s_ed_sum_ma / (float)DCI_ERR_WIN_TICKS;
-                g_dci_eq_mean_ma = (float)s_eq_sum_ma / (float)DCI_ERR_WIN_TICKS;
+                g_dci_ed_mean_ma = (float)s_ed_sum_ma / (float)FOC28_ERR_WIN_TICKS;
+                g_dci_eq_mean_ma = (float)s_eq_sum_ma / (float)FOC28_ERR_WIN_TICKS;
                 g_dci_ed_pp_ma = s_ed_max - s_ed_min;
                 g_dci_eq_pp_ma = s_eq_max - s_eq_min;
                 s_ed_sum_ma = 0;
@@ -570,9 +570,9 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
 
         /* 10. 转速测量（200ms 窗口，带符号）：Hz = counts×极对数×窗口率/CPR */
         s_speed_acc += delta;
-        if (++s_speed_tick >= DCI_SPEED_WIN_TICKS) {
+        if (++s_speed_tick >= FOC28_SPEED_WIN_TICKS) {
             g_dci_speed_hz = (float)s_speed_acc * (float)FOC_POLE_PAIRS
-                             * (1000.0f / (float)DCI_SPEED_WIN_MS)
+                             * (1000.0f / (float)FOC28_SPEED_WIN_MS)
                              / (float)ENCODER_CPR;
             s_speed_tick = 0u;
             s_speed_acc  = 0;
@@ -580,11 +580,11 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
 
         /* 11. 角度观测（整型电角度 deg）：fld = 参考电流矢量角 = rot + δ，
          *     diff = δ（参考；实际电流矢量跟踪误差看 e_d/e_q 统计） */
-        fld_deg = (int32_t)((rot_rad + dlt_rad) * DCI_RAD2DEG);
+        fld_deg = (int32_t)((rot_rad + dlt_rad) * FOC28_RAD2DEG);
         if (fld_deg >= 360) {
             fld_deg -= 360;
         }
-        rot_deg = (int32_t)(rot_rad * DCI_RAD2DEG);
+        rot_deg = (int32_t)(rot_rad * FOC28_RAD2DEG);
         dfd     = fld_deg - rot_deg;
         dfd     = 180 - Foc_Core_ModPos(180 - dfd, 360);
 
@@ -593,7 +593,7 @@ void Foc_Dci_Step(const stc_i_data_t *pData)
         g_dci_diff_deg  = dfd;
         break;
 
-    case DCI_STEP_FAULT_OC:
+    case FOC28_STEP_FAULT_OC:
     default:
         /* 故障/未知状态：不发波，等待主循环切模式 */
         break;
@@ -614,7 +614,7 @@ void Foc_Dci_Stop(void)
             Foc_Core_PwmStop();
             Foc_Core_SetStateMachine(FOC_STATE_IDLE);
         }
-        DCI_DBG("stopped");
+        FOC28_DBG("stopped");
     }
 }
 
