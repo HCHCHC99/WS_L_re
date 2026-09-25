@@ -10,8 +10,24 @@
 
 /* ============================================================================
  * 电机控制频率主配置
+ *
+ * ⚠ 这个宏不只决定 PWM 载波——它是整条时序链的源头（I.h:98-105）：
+ *     I_ACTIVE_SAMPLE_RATE_HZ = MOTOR_PWM_FREQ_HZ   （VALLEY/PEAK 单边沿采样）
+ *     FOC_ISR_HZ              = I_ACTIVE_SAMPLE_RATE_HZ
+ *   所以改它 = 同时改 载波频率 + 电流采样率 + FOC/电流环频率。
+ *
+ * 2026-09-23：10 kHz → 20 kHz（治静止噪声，方案见
+ *   md_record/pwm频率改为20khz施工方案.md）。两条收益：
+ *     ① 纹波减半：ΔI_pp = V·D·(1−D)/(L·f_sw) ∝ 1/f_sw
+ *     ② 移出可听频段：10 kHz 在人耳最敏感区，20 kHz 超出听觉上限
+ *
+ * ⚠⚠ 改此宏后必须复核（清单见上述施工方案）：
+ *   - ISR 执行时间必须 < 25 µs（谷点→峰值）否则延迟跳变致环路失稳
+ *   - 按 ISR 周期标定的滤波 α 需减半：foc_smo.c / foc_pll.c / I.c 的 BIQUAD
+ *   - 每拍编码器增量限幅需减半：SPEED40_ENC_DELTA_MAX
+ *   - 速度环的 α（SPEED40_SPD_FILT_ALPHA）**不要动**（它按 5ms 周期标定）
  * ==========================================================================*/
-#define MOTOR_PWM_FREQ_HZ   10000u
+#define MOTOR_PWM_FREQ_HZ   20000u
 
 /* 霍尔使能：0 = 关闭霍尔（PA8/9/10 释放给编码器 ABZ 用） */
 #define MOTOR_HALL_ENABLE   0

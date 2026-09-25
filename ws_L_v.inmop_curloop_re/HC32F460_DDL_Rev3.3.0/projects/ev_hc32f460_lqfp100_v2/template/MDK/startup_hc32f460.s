@@ -225,7 +225,7 @@ Reset_Handler   PROC
                 IMPORT  SystemInit
                 IMPORT  __main
 ;ClrSramSR
-                LDR     R0, =0x40050810
+                 LDR     R0, =0x40050810
                 LDR     R1, =0x1F
                 STR     R1, [R0]
 ;SetSRAM3Wait

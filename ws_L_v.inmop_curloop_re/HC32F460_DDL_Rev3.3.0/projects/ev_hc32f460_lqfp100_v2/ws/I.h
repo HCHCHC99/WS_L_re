@@ -44,12 +44,15 @@ extern "C" {
 
 /* ============================================================================
  * Current sampling source
+ *   ⚠ "Effective rate" 取决于 MOTOR_PWM_FREQ_HZ（当前 20 kHz，2026-09-23 由 10k 提升）
  *   ADC2_CONT_DMA       : legacy INMOP-style, free-running ADC2 + DMA.
  *                         The sample instant is async to PWM.
+ *                         ⚠ 已废弃，未启用
  *   ADC2_PWM_PEAK       : Timer4_3 SCMP0 at triangle peak triggers ADC2.
  *                         Effective current-loop rate = PWM frequency.
+ *                         ⚠ 已知不可用（2026-09-16：进 mode 29 即报过流）
  *   ADC2_PWM_VALLEY     : Timer4_3 SCMP2 at triangle valley triggers ADC2.
- *                         Effective current-loop rate = PWM frequency.
+ *                         Effective current-loop rate = PWM frequency.  ← 当前使用
  *   ADC2_PWM_PEAK_VALLEY: both peak and valley trigger ADC2.
  *                         Effective current-loop rate = 2 x PWM frequency.
  * ==========================================================================*/

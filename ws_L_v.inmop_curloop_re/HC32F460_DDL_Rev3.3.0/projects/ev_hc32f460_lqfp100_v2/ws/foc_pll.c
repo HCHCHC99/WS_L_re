@@ -23,8 +23,11 @@ volatile float g_pll_mag_min_v = 0.10f;    /* 弱信号冻结门限（<1300rpm �
 /* 补偿角 + 无感输出参数 */
 volatile uint8_t g_pll_comp_en       = 0u;     /* 补偿角开关（Watch 置 1 开启） */
 volatile float g_pll_comp_bias_deg   = 0.0f;   /* 补偿偏置：锁点偏置残留微调 */
-volatile float g_pll_wout_lpf_alpha  = 0.0125f; /* ω̂ 输出低通：fc≈20Hz@10kHz，
-                                                 * 喂速度环前压掉 25Hz 频段 PLL 超前 */
+volatile float g_pll_wout_lpf_alpha  = 0.00625f; /* ω̂ 输出低通：fc≈20Hz，
+                                                 * 喂速度环前压掉 25Hz 频段 PLL 超前。
+                                                 * 2026-09-23 随 MOTOR_PWM_FREQ_HZ 10k→20k
+                                                 * 由 0.0125 减半（保持同一 fc）。
+                                                 * ⚠ 改 PWM 频率后此值须按 1/fs 缩放 */
 
 /* ISR 输出 */
 volatile float g_pll_theta_rotor_deg = 0.0f;
@@ -43,7 +46,10 @@ volatile float g_pll_comp_deg_out    = 0.0f;
 volatile float g_pll_diag_theta_err_deg      = 0.0f;
 volatile float g_pll_diag_theta_err_filt_deg = 0.0f;
 volatile float g_pll_diag_err_filt_deg       = 0.0f;
-volatile float g_pll_diag_filt_alpha         = 0.1f;
+volatile float g_pll_diag_filt_alpha         = 0.05f;  /* 诊断量滤波强度（非控制路径）。
+                                                        * 2026-09-23 随 PWM 10k→20k 由 0.1
+                                                        * 减半，保持同样的平滑效果。
+                                                        * ⚠ 改 PWM 频率后按 1/fs 缩放 */
 volatile float g_pll_diag_smo_err_deg        = 0.0f;  /* ISR 同拍 SMO atan2 角差 */
 
 /* 内部状态 */

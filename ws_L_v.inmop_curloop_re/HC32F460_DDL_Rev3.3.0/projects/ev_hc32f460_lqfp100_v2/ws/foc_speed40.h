@@ -124,9 +124,15 @@ extern "C" {
 #define SPEED40_SPD_FILT_ALPHA          0.25f
 /* 显示专用滤波（VOFA 曲线平滑用；α 越小越平滑越滞后，不进 PI 反馈） */
 #define SPEED40_SPD_DISP_ALPHA          0.05f
-/* 编码器每拍增量限幅：与 mode 45 同步 32→72（7800rpm 需 53 counts，×1.35 裕度）。
- * ⚠ 原 32 只支持 4687rpm：超限测速削顶 + 角度积分丢拍（高速 Park 角落后） */
-#define SPEED40_ENC_DELTA_MAX           72
+/* 编码器每拍增量限幅 = 单拍物理极限 × 1.35 裕度。
+ * 物理极限 = 7800rpm 折算到"每个 ISR 拍"的 counts 数。
+ *   10 kHz（100µs/拍）：53 counts → 限幅 72
+ *   20 kHz（ 50µs/拍）：26.5 counts → 限幅 36   ← 2026-09-23 随 PWM 频率提升同步改
+ * 历史教训：原值 32 只支持 4687rpm（10kHz 时），超限导致测速削顶 +
+ *   角度积分丢拍（高速下 Park 角落后）。限幅必须始终 ≥ 物理极限，
+ *   否则高速时会削顶；但也不能过大，否则编码器毛刺被当真转速放行。
+ * ⚠ 若再改 MOTOR_PWM_FREQ_HZ，此值须按 1/f 同步缩放 */
+#define SPEED40_ENC_DELTA_MAX           36
 
 #define SPEED40_STEP_IDLE               0u
 #define SPEED40_STEP_RUN                1u

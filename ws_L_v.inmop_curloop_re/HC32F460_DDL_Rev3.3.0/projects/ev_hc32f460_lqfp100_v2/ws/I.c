@@ -45,14 +45,21 @@ volatile uint16_t g_i_iu_disp = 10000;
 volatile uint16_t g_i_iv_disp = 10000;
 volatile uint16_t g_i_iw_disp = 10000;
 
-/* 2nd-order Butterworth IIR (fc=200Hz @ fs=50kHz design; actual sampling = PWM freq (MOTOR_PWM_FREQ_HZ); real fc = 200Hz x PWM/50k, display only)
- * Designed in MATLAB: [b,a] = butter(2, 200/25000)
- * y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2] */
-#define BIQUAD_B0  0.0001551484f
-#define BIQUAD_B1  0.0003102968f
-#define BIQUAD_B2  0.0001551484f
-#define BIQUAD_A1  (-1.9644605802f)   /* -a1 in diff eq = +1.96446*y[n-1] */
-#define BIQUAD_A2  0.9650811739f       /* -a2 in diff eq = -0.96508*y[n-2] */
+/* 2nd-order Butterworth IIR —— **仅供显示/观测，不进控制环**
+ * （控制路径用的是未滤波的 s_stcIData.i16*_mA，见 I.c:557-564 与 Foc_Core_GetDq）
+ *
+ * 2026-09-23：随 MOTOR_PWM_FREQ_HZ 10k→20k 重新设计，以保持原有的显示平滑度。
+ *   fs 历史：设计值 50 kHz → 实际运行 10 kHz（等效 fc 仅 40Hz）→ 现在 20 kHz
+ *   本次按"fs=20kHz、fc=40Hz"重算，恢复与 10 kHz 时期相同的显示带宽
+ *   （若沿用旧系数，20 kHz 下 fc 会变成 80 Hz，显示曲线更毛躁）
+ *
+ * y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
+ * ⚠ 系数与采样率绑定：改 MOTOR_PWM_FREQ_HZ 后需按 fs 重算 */
+#define BIQUAD_B0  0.0000391302f
+#define BIQUAD_B1  0.0000782604f
+#define BIQUAD_B2  0.0000391302f
+#define BIQUAD_A1  (-1.9822289298f)   /* -a1 in diff eq = +1.98223*y[n-1] */
+#define BIQUAD_A2  0.9823854506f       /* -a2 in diff eq = -0.98239*y[n-2] */
 
 /* Biquad state: x[n-1], x[n-2], y[n-1], y[n-2] per phase */
 static float s_fX1U = 0.0f, s_fX2U = 0.0f, s_fY1U = 0.0f, s_fY2U = 0.0f;
@@ -522,7 +529,9 @@ static void I_IrqCallback(void)
     /* KCL two-sensor mode: derive the selected phase from the other two */
     I_ApplyKclDerive(&i16IU_mA, &i16IV_mA, &i16IW_mA);
 
-    /* 2nd-order Butterworth IIR (fc=200Hz @ fs=50kHz design; actual sampling = PWM freq (MOTOR_PWM_FREQ_HZ); real fc = 200Hz x PWM/50k, display only) */
+    /* 2nd-order Butterworth IIR —— display only，不进控制环（控制路径用上面的原始
+     * i16*_mA）。系数按 fs=20kHz / fc=40Hz 设计，随 PWM 频率提升同步重算，
+     * 详见文件顶部 BIQUAD_* 处说明。 */
     float fIU, fIV, fIW;
     if (!s_bBiquadInit) {
         /* Seed states with first sample (fast settling, no ramp-up) */

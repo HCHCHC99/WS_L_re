@@ -32,7 +32,12 @@ volatile float g_smo_model_psi_wb = 0.00084f;
 volatile float g_smo_k_v          = 4.6f;   /* 2× e_peak@2600rpm (2.29V) */
 volatile float g_smo_obs_gain     = 1.45f;  /* k/φ：半隐式无稳定上限；越大跌落越小
                                               （幅值跌落 ≈ R/(k/φ) ≈ 6.9%） */
-volatile float g_smo_lpf_alpha    = 0.39f;  /* fc ≈ 1kHz @10kHz ISR（20kHz 时用 0.24） */
+volatile float g_smo_lpf_alpha    = 0.21f;  /* fc ≈ 1kHz：α = 1 − e^(−2π·fc/fs)
+                                              *   10 kHz ISR → 0.39（旧值）
+                                              *   20 kHz ISR → 0.21  ← 2026-09-23 随
+                                              *     MOTOR_PWM_FREQ_HZ 提升同步改
+                                              *   （近似式 2π·fc/fs 给 0.24，精确式给 0.21）
+                                              * ⚠ 改 PWM 频率后此值须按 1/fs 缩放 */
 
 /* ISR 输出 */
 volatile float g_smo_e_alpha_hat_v = 0.0f;
