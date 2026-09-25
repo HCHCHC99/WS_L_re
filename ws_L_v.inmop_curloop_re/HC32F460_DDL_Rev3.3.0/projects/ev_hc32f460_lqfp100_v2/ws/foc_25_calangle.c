@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_cal_angle.c
+ * @file  foc_25_calangle.c
  * @brief FOC 模式25 — 手动角度吸附实现（SVPWM 教学）。
  *
  *        流程：自动校准 BETA(2s, 90°) -> ALPHA(2s, 0°, 锁零点 offset)
@@ -36,7 +36,7 @@
  *******************************************************************************
  */
 
-#include "foc_cal_angle.h"
+#include "foc_25_calangle.h"
 #include "foc_math.h"
 #include "tmr4_pwm.h"
 #include "encoder.h"

@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_cal.h
+ * @file  foc_20_cal.h
  * @brief FOC 模式20 — 编码器零点校准 (comm_mode 20)。
  *
  * ============================================================================
@@ -15,7 +15,7 @@
  *   FOC 必须知道 N 极位置才能正确发力。mode 20 把磁铁吸到已知的 0°，
  *   记下此刻编码器读数当零点，以后角度计算都扣掉它。
  *
- * 和 mode 23（foc_align）的区别：
+ * 和 mode 23（foc_23_align）的区别：
  *   mode 23 是老版校准，"稳定判据"依赖 g_enc_count，但 ISR 里没人更新
  *   它，判据形同虚设，锁出的 offset 不可靠。mode 20 改为纯定时
  *   （BETA 2s + ALPHA 2s，全程自动），并且 offset 直接用 TMRA_1 原始
@@ -40,22 +40,37 @@
  *     g_foc_elec_deg     : 电角度     [0, 360*极对数)（deg，Watch/显示）
  *   四者共用同一个 offset，随手转轴都能实时看到角度变化。
  *
- * Watch 常用变量：
- *   g_cal_running : 1 = 正在运行
- *   g_cal_phase   : 0=BETA 1=ALPHA 2=DONE 3=FAULT_OC
- *   g_cal_beta_hw / g_cal_alpha_hw : 两阶段结束时的编码器原始计数
- *   g_cal_moved   : BETA->ALPHA 编码器位移（带符号 counts，期望
- *                   ±CPR/(4×极对数) = ±102 counts 左右）
- *   g_cal_offset  : 锁定的零点（counts）
- *   g_cal_evt     : 1=BETA完成 2=锁定完成 3=过流（ISR 置，obs 清）
- *
  * ISR 约束：短小、无阻塞、无打印、无 malloc。打印全部由 foc_obs 在
  * 主循环完成（事件快照模式，与 mode 23/31/32 一致）。
- *******************************************************************************
+ *
+ * ============================ 模式速览卡（唯一事实源）========================
+ * 模式：20 = 编码器零点校准（BETA 2s 吸 90° → ALPHA 2s 吸 0° → 锁 offset）
+ * 入口：comm_mode = 20
+ * 前置：无
+ * 结束：**自动关 PWM 回 mode 0**（offset 已写入共享对齐零点）
+ *
+ * 【Watch 可调变量】（名称 = 默认值 单位）
+ *   g_lockiq_align_volt_v  V   对齐吸附电压（复用 mode 32 的变量）
+ *
+ * 【关键观察变量】
+ *   g_cal_running      1=运行中
+ *   g_cal_phase        0=BETA 1=ALPHA 2=DONE 3=FAULT_OC
+ *   g_cal_beta_hw       BETA 结束时刻的编码器原始计数
+ *   g_cal_alpha_hw      ALPHA 结束时刻的编码器原始计数
+ *   g_cal_moved         BETA→ALPHA 位移（counts，期望 ±CPR/(4·pp) ≈ ±102）
+ *   g_cal_offset        锁定的零点（counts）→ Foc_Core_SetAlignOffset
+ *   g_cal_evt           1=BETA_DONE 2=LOCKED 3=OC（ISR 置位，obs 打印后清）
+ *   g_foc_elec_deg      校准后 mode 0 下实时电角度（deg，捏转子可见跟随）
+ *
+ * 【VOFA 通道】mode 20 走通用 17ch 布局（见 main.c 顶部说明）：
+ *   ch0~2 三相电流(A)，校准期间可见 BETA/ALPHA 吸附的电流包络
+ *   ch3~16 通用布局其余通道 —— **本模式无专属语义，参考价值有限**
+ *   判读建议：用 RTT 的 [CAL] 事件 + Watch 变量，不要依赖 VOFA。
+ * ===========================================================================
  */
 
-#ifndef __FOC_CAL_H__
-#define __FOC_CAL_H__
+#ifndef __FOC_20_CAL_H__
+#define __FOC_20_CAL_H__
 
 #include <stdint.h>
 #include "foc_core.h"
@@ -97,7 +112,7 @@ extern "C" {
 #define CAL_EVT_OC          3u
 
 /*=============================================================================
- * Keil Watch 可调变量 / 观测量（定义见 foc_cal.c）
+ * Keil Watch 可调变量 / 观测量（定义见 foc_20_cal.c）
  *=============================================================================*/
 extern volatile uint8_t  g_cal_running;   /* 1 = 正在运行 */
 extern volatile uint8_t  g_cal_phase;     /* CAL_PHASE_xxx */
@@ -127,4 +142,4 @@ void Foc_Cal_Stop(void);
 }
 #endif
 
-#endif /* __FOC_CAL_H__ */
+#endif /* __FOC_20_CAL_H__ */

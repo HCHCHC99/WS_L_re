@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_smo45.h
+ * @file  foc_45_smo.h
  * @brief FOC mode 45 - SMO+PLL 无感速度/电流双闭环（分步开发中）。
  *
  * 第 1 步（已完成）：完全复刻 mode 40（编码器 FOC 速度/电流双闭环）
@@ -14,9 +14,15 @@
  * 结构（与 mode 40 相同）：
  *   速度 PI（5ms 节拍）输出 q 轴电流参考 (mA)，id 参考 = 0；
  *   独立 id/iq 电流 PI 在每个电流采样 ISR（= FOC_ISR_HZ，当前 20kHz）执行。
- *   启动前置：有效的 mode 24 校准（foc_dcal24 快照）。
+ *   启动前置：有效的 mode 24 校准（foc_24_dcal 快照）。
  *
  * ============================ 模式速览卡（唯一事实源）========================
+ * 模式：45 = SMO + PLL 无感 FOC（滑模观测器 + 锁相环，速度/电流双闭环）
+ *        第 1 步 = 复刻 mode 40 + 自动转速 profile；编码器角保留作裁判
+ *        无感切换后转子角由 SMO/PLL 估计给出（g_smo45_sensorless=1 申请）
+ * 入口：comm_mode = 45
+ * 前置：**必须先跑 mode 24**（读 foc_24_dcal 快照）
+ * 结束：持续运行；OC 自动停
  * 流程：mode 24 校准 → mode 45 → 自动爬坡到 1000rpm → Watch 接管调目标
  *
  * 【Watch 可调变量】（名称 = 默认值 单位）
@@ -64,8 +70,8 @@
  * ===========================================================================
  */
 
-#ifndef __FOC_SMO45_H__
-#define __FOC_SMO45_H__
+#ifndef __FOC_45_SMO_H__
+#define __FOC_45_SMO_H__
 
 #include <stdint.h>
 #include "foc_core.h"
@@ -182,4 +188,4 @@ int  Foc_Smo45_VofaFill(int32_t *cur);   /* 模式自持 VOFA，见顶部速览�
 }
 #endif
 
-#endif /* __FOC_SMO45_H__ */
+#endif /* __FOC_45_SMO_H__ */

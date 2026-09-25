@@ -6,7 +6,7 @@
  *        【这个模块是干什么的】（傻瓜式说明）
  *
  *        mode 30 / 31 / 32 运行时会产生一大堆"给人看"的数据，以前散在
- *        foc_iq_pi.c / foc_lock_iq_pi.c / main.c 三个地方，现在全部搬到
+ *        foc_31_iqpi.c / foc_32_lockiq.c / main.c 三个地方，现在全部搬到
  *        这里集中管理。变量名一个都没改，Keil Watch 照旧添加使用。
  *
  *        它管三件事：
@@ -43,7 +43,7 @@
 #define __FOC_OBS_H__
 
 #include <stdint.h>
-#include "foc_iq_pi.h"     /* iqpi_step_t（状态历史数组元素类型） */
+#include "foc_31_iqpi.h"     /* iqpi_step_t（状态历史数组元素类型） */
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,11 +59,11 @@ extern "C" {
     #define OBS_DBG(fmt, ...)      ((void)0)
 #endif
 
-/* mode 31 状态历史容量（随状态机迁移至此，foc_iq_pi.h 不再定义） */
+/* mode 31 状态历史容量（随状态机迁移至此，foc_31_iqpi.h 不再定义） */
 #define IQPI_HISTORY_LEN  10u
 
 /*=============================================================================
- * mode 31 观察量（定义在 foc_obs.c；傻瓜式含义讲解见 foc_iq_pi.h 顶部）
+ * mode 31 观察量（定义在 foc_obs.c；傻瓜式含义讲解见 foc_31_iqpi.h 顶部）
  * ==========================================================================*/
 extern volatile iqpi_step_t g_iqpi_step_hist[IQPI_HISTORY_LEN]; /* 状态历史, [0]最旧 */
 extern volatile uint8_t g_iqpi_step_hist_cnt;  /* 历史有效条数 0..10 */
@@ -84,7 +84,7 @@ extern volatile int32_t  g_iqpi_evt_vq_mv;     /* 翻转时 vq (mV) */
 extern volatile int32_t  g_iqpi_evt_off_deg;   /* 翻转后偏移基线 (deg) */
 
 /*=============================================================================
- * mode 32 观察量（定义在 foc_obs.c；傻瓜式含义讲解见 foc_lock_iq_pi.h 顶部）
+ * mode 32 观察量（定义在 foc_obs.c；傻瓜式含义讲解见 foc_32_lockiq.h 顶部）
  * ==========================================================================*/
 extern volatile int32_t g_lockiq_win_moved;     /* 最近完成窗口的平均位置位移 (counts) */
 extern volatile uint32_t g_lockiq_win_evals;    /* 已完成窗口评估次数 */
@@ -92,14 +92,14 @@ extern volatile int32_t g_lockiq_track_err_cnts; /* VERIFY 跟踪误差 (counts)
 
 /* --- 锁定/失败事件快照（ISR 置 g_lockiq_evt_flag，Foc_Obs_Task 处理后清零） --- */
 extern volatile uint8_t  g_lockiq_evt_flag;
-extern volatile uint8_t  g_lockiq_evt_code;     /* LOCKIQ_EVT_xxx（定义见 foc_lock_iq_pi.h） */
+extern volatile uint8_t  g_lockiq_evt_code;     /* LOCKIQ_EVT_xxx（定义见 foc_32_lockiq.h） */
 extern volatile int32_t  g_lockiq_evt_off_deg; /* 锁定的注入偏移 (deg) */
 
 /*******************************************************************************
  * API
  ******************************************************************************/
 
-/* 清空 mode 31 状态历史（每次成功启动 mode 31 时由 foc_iq_pi 调用，
+/* 清空 mode 31 状态历史（每次成功启动 mode 31 时由 foc_31_iqpi 调用，
  * 重新开始记录） */
 void Foc_Obs_IqpiHistClear(void);
 

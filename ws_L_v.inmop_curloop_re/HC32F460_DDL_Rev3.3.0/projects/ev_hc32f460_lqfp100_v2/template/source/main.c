@@ -114,6 +114,66 @@ static volatile uint8_t s_noisy_foc_obs_enabled = 1U;
 static void Noisy_Apply(int requested, int *prev_comm_mode);
 
 /*=============================================================================
+ * Foc_Common_VofaFill — 通用 / mode 0 专属 VOFA 布局（20 通道）
+ *
+ * 【通道表】（单位换算：传"毫单位"，SendScaled 内部 ×0.001）
+ *   ch0~2  三相电流 (mA → A)                     g_i_iu/iv/iw_ma
+ *   ch3~5  三相零偏，已校准值 (kcounts)           g_i_calib_zero_u/v/w ÷1000
+ *          ⚠ 原始量是 ADC counts(0~4095)，不 ÷1000 会被 0.001 缩放显示成
+ *            0.002 量级而丢精度；此处折算为 kcounts（约 2.0）
+ *   ch6    静止系 ialpha (mA → A)                 g_foc_ialpha×1000
+ *   ch7    静止系 ibeta  (mA → A)                 g_foc_ibeta×1000
+ *   ch8    控制系 id 反馈 (mA → A)                g_foc_id_ma
+ *   ch9    控制系 iq 反馈 (mA → A)                g_foc_iq_ma
+ *   ch10   控制系 vd 输出 (mV → V)                g_foc_vd×1000
+ *   ch11   控制系 vq 输出 (mV → V)                g_foc_vq×1000
+ *   ch12   静止系电流幅值 (mA → A)                g_foc_iab_mag×1000
+ *   ch13   转子电角度 (deg，0~360×极对数)         g_foc_elec_deg
+ *   ch14   转子机械角度 (deg，0~360)              g_foc_mech_deg
+ *   ch15   对齐零点 (counts)                      g_foc_align_offset
+ *   ch16   故障标志 (0/1)                         g_foc_fault
+ *   ch17   **ZIZENG 自增电压幅值 (mV → V)**        g_zizeng_volt_v×1000
+ *          ⚠ 本通道为 mode 30 服务的兼容保留项（30/31 迁出通用布局前需要它）
+ *   ch18   **ZIZENG 磁场角 (mrad → rad)**         g_zizeng_theta_rad×1000
+ *          ⚠ 同上，兼容保留
+ *   ch19   OC 阈值 (mA → A)                       g_foc_oc_limit_a×1000
+ *
+ * 【本布局的设计意图】mode 0 是"静止观测态"，主要用来查**电流测量质量**：
+ *   - ch0~2 + ch12：看零漂/温漂/噪声（幅值 ch12 是总噪声的单一指标）
+ *   - ch3~5：直接给出零偏基准，与 ch0~2 对比可判断零偏是否漂了
+ *   - ch13/14：捏转子可实时看角度跟随（验证 mode 24 校准是否仍有效）
+ *   - ch17/18：为尚未迁出本布局的 mode 30/31 保留；迁移完成后可换成
+ *              其它诊断量（如 vmax/vramp）
+ *
+ * ⚠ 修改通道数：只改末尾 return 值即可（当前 20）。
+ *   硬上限 USART3_VOFA_MAX_CHANNELS(24)，见 Adp/Usart3_Vofa.h。
+ * =============================================================================*/
+static int Foc_Common_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                   /* ch0 U 相电流 */
+    cur[1]  = (int32_t)(g_i_iv_ma);                   /* ch1 V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                   /* ch2 W 相电流 */
+    cur[3]  = (int32_t)(g_i_calib_zero_u / 1000u);    /* ch3 U 相零偏 (kcounts) */
+    cur[4]  = (int32_t)(g_i_calib_zero_v / 1000u);    /* ch4 V 相零偏 */
+    cur[5]  = (int32_t)(g_i_calib_zero_w / 1000u);    /* ch5 W 相零偏 */
+    cur[6]  = (int32_t)(g_foc_ialpha  * 1000.0f);     /* ch6 静止系 ialpha */
+    cur[7]  = (int32_t)(g_foc_ibeta   * 1000.0f);     /* ch7 静止系 ibeta */
+    cur[8]  = (int32_t)(g_foc_id_ma);                 /* ch8 id 反馈 */
+    cur[9]  = (int32_t)(g_foc_iq_ma);                 /* ch9 iq 反馈 */
+    cur[10] = (int32_t)(g_foc_vd * 1000.0f);          /* ch10 vd 输出 */
+    cur[11] = (int32_t)(g_foc_vq * 1000.0f);          /* ch11 vq 输出 */
+    cur[12] = (int32_t)(g_foc_iab_mag * 1000.0f);     /* ch12 静止系电流幅值 */
+    cur[13] = (int32_t)(g_foc_elec_deg);              /* ch13 电角度 */
+    cur[14] = (int32_t)(g_foc_mech_deg);              /* ch14 机械角度 */
+    cur[15] = (int32_t)(g_foc_align_offset);          /* ch15 对齐零点 */
+    cur[16] = (int32_t)(g_foc_fault);                 /* ch16 故障标志 */
+    cur[17] = (int32_t)(g_zizeng_volt_v * 1000.0f);   /* ch17 ZIZENG 电压幅值（兼容保留） */
+    cur[18] = (int32_t)(g_zizeng_theta_rad * 1000.0f);/* ch18 ZIZENG 磁场角（兼容保留） */
+    cur[19] = (int32_t)(g_foc_oc_limit_a * 1000.0f);  /* ch19 OC 阈值 */
+    return 20;
+}
+
+/*=============================================================================
  * main
  *=============================================================================*/
 int main(void)
@@ -250,109 +310,55 @@ int main(void)
 #endif /* MOTOR_FOC_ENABLE */
 #endif /* !APP_MINIMAL_CURRENT_TEST — 最小系统模式下主循环只跑 VOFA */
 
-        /* ---- VOFA+ USART3 数据发送（模式自持 + 通用布局） ----
+        /* ---- VOFA+ USART3 数据发送（每模式自持布局） ----
          * 接口约定：SendScaled 内部 ×0.001，即"传毫单位、显示基本单位"。
-         * 电流通道传整数 mA -> 显示 A（1mA 分辨率，µA 精度已舍弃）；
-         * 电压通道传 mV -> 显示 V；角度通道传 mrad/mdeg -> 显示 rad/deg。
-         * 模式自持：mode45 / mode40 各自实现 Foc_Xxx_VofaFill 填充自己的
-         * 通道布局，通道含义速览卡 = 各模式 .h 顶部注释（唯一事实源）：
-         *   mode45（g_smo45_wave_mode=0/1/2 三种布局）见 foc_smo45.h
-         *   mode40（固定 18ch，ch17 = PI 反馈真实转速）见 foc_speed40.h
-         * 其余模式走下方通用 17ch 布局。
-         * 【通用布局（mode 0/26/28/29/30/31/41，17 通道）】
-         * CH0~2  : 三相原始电流（含上电校准残余零偏，mode 0 下用于观察温漂/噪声）
-         * CH3    : 静止系 ialpha（瞬时值，无 EMA）
-         * CH4    : 静止系 ibeta；mode28 时 = id 反馈 (A)
-         * CH5    : 控制系 iq（mode28 = iq 反馈）
-         * CH6    : 控制系 id；mode28/29/41 时 = id 参考 (A)
-         * CH7    : 自增电压幅值 g_zizeng_volt_v；mode28/29/41 时 = iq 参考 (A)
-         * CH8    : 控制系总电流幅值 = sqrt(iq^2+id^2)；mode28/29/41 时 = PI 输出 vd (V)
-         * CH9    : 控制系角度（ZIZENG 磁场角）；mode28/29/41 时 = PI 输出 vq (V)
-         * CH10   : 静止系电流幅值 sqrt(ialpha^2+ibeta^2)；mode29/41/28 时 = iq 3s均值 (A)
-         * CH11   : 母线直流电流估算 = 1.5*(vd*id+vq*iq)/Vbus（功率守恒估算）；
-         *          mode29/41/28 时 = id 3s均值 (A)
-         * CH12   : mode31 iq 参考（斜坡后）
-         * CH13   : mode26 负载角 delta（deg，其他模式下恒 0）
-         * CH14~15: 预留 0（mode40 目标/显示转速已迁至自持布局，见 foc_speed40.h）
-         * CH16   : mode29/41 显示用滤波 iq（EMA；PI 仍使用 CH5 的原始 iq） */
+         *   电流传 mA → 显示 A；电压传 mV → 显示 V；
+         *   角度传 mdeg → 显示 deg；占空比传 m% → 显示 %。
+         *
+         * 【架构】每个模式实现自己的 Foc_Xxx_VofaFill(cur)，返回**通道数**；
+         *   返回 0 表示该模式无专属布局（回落到本文件的通用布局）。
+         *   **通道含义的唯一事实源 = 各模式 .h 顶部的【模式速览卡】**：
+         *     mode 20/23/24/25 → 无专属布局（用通用）
+         *     mode 26/27/28/29/30/31/32/41 → 暂用通用（阶段 2 逐步迁移）
+         *     mode 40 → foc_40_speed.h（18ch）
+         *     mode 45 → foc_45_smo.h（16ch，g_smo45_wave_mode 三种布局）
+         *     通用/mode 0 → 本文件下方 Foc_Common_VofaFill（20ch，见其注释）
+         *
+         * ⚠ 各模式通道数**可以不同**（A 方案）：切模式时 VOFA+ 需同步改通道数。
+         * ⚠ 通道数硬上限 = USART3_VOFA_MAX_CHANNELS(24)，见 Adp/Usart3_Vofa.h。
+         *   本函数内缓冲区按 32 开，留余量；每个 Fill 的返回值都必须 ≤ 32。
+         */
 #if 1
         if (!Usart3_Vofa_IsTxBusy()) {
-            /* 缓冲按上层通道上限开（Usart3_Vofa_SendScaled 拒收
-             * count > USART3_VOFA_MAX_CHANNELS=24）。模式自持布局会随调试
-             * 需求加通道，此数组若按旧值写死，Fill 函数就会越界写栈
-             * （mode 40 已 17ch -> 18ch）。 */
-            int32_t cur[USART3_VOFA_MAX_CHANNELS];
-            int     n;
+            int32_t cur[32];
+            int     n = 0;
 
-            /* 模式自持 VOFA：先问各模式要不要自己的布局 */
-            if (g_smo45_running) {
-                n = Foc_Smo45_VofaFill(cur);    /* foc_smo45.h 速览卡 */
-            } else if (g_speed40_running) {
-                n = Foc_Speed40_VofaFill(cur);  /* foc_speed40.h 速览卡 */
-            } else {
-                n = 0;
-            }
+            /* ---- 模式自持 VOFA：每个模式一行，语义彻底独立 ----
+             * ⚠ 顺序有意义：g_dci_running 同时标记 mode 24/28/29 系，
+             *   必须先把已拆出的独立模块（24/29/41）判掉，最后才轮到 28。 */
+            if      (g_smo45_running)     { n = Foc_Smo45_VofaFill(cur); }
+            else if (g_speed40_running)   { n = Foc_Speed40_VofaFill(cur); }
+            else if (g_dcal24_running)    { n = 0; }   /* mode24 待迁移 */
+            else if (g_drun29_running)    { n = Foc_Drun29_VofaFill(cur); }  /* 19ch */
+            else if (g_drun41_running)    { n = Foc_Drun41_VofaFill(cur); }  /* 21ch */
+            else if (g_dci_running)       { n = 0; }   /* mode28 待迁移 */
+            else if (g_dcl_running)       { n = 0; }   /* mode27 待迁移 */
+            else if (g_olf_running)       { n = 0; }   /* mode26 待迁移 */
+            else if (g_calang_running)    { n = 0; }   /* mode25 待迁移 */
+            else if (g_cal_running)       { n = 0; }   /* mode20 待迁移 */
+            else if (g_zizeng_running)    { n = 0; }   /* mode30 待迁移 */
+            else if (g_lockiq_running)    { n = 0; }   /* mode32 待迁移 */
+            else if (g_iqpi_running)      { n = 0; }   /* mode31 待迁移 */
+            else                          { n = 0; }   /* mode 0 及空闲态 */
 
             if (n <= 0) {
-            /*===== 通用布局（mode 0/26/28/29/30/31/41，17 通道）=====*/
-            cur[0] = (int32_t)(g_i_iu_ma);            /* U 相电流 (mA -> A) */
-            cur[1] = (int32_t)(g_i_iv_ma);            /* V 相电流 (mA -> A) */
-            cur[2] = (int32_t)(g_i_iw_ma);            /* W 相电流 (mA -> A) */
-            cur[3] = (int32_t)(g_foc_ialpha * 1000.0f); /* 静止系 ialpha (mA -> A) */
-            cur[4] = (g_drun29_running || g_drun41_running || g_dci_running)
-                                   ? (int32_t)(g_foc_id_ma)            /* mode28/29/41: id 反馈 (mA -> A) */
-                                   : (int32_t)(g_foc_ibeta * 1000.0f); /* 静止系 ibeta (mA -> A) */
-            cur[5] = (int32_t)(g_foc_iq_ma);           /* 控制系 iq / mode28: iq 反馈 (mA -> A) */
-            cur[6] = g_drun29_running ? (int32_t)(g_drun29_id_ref_ma)  /* mode29: id 参考 (mA -> A) */
-                    : g_drun41_running ? (int32_t)(g_drun41_id_ref_ma)  /* mode41: id 参考 (mA -> A) */
-                    : g_dci_running    ? (int32_t)(g_dci_id_ref_ma)    /* mode28: id 参考 (mA -> A) */
-                                       : (int32_t)(g_foc_id_ma);       /* 控制系 id (mA -> A) */
-
-            cur[7] = g_drun29_running ? (int32_t)(g_drun29_iq_ref_ma)  /* mode29: iq 参考 (mA -> A) */
-                    : g_drun41_running ? (int32_t)(g_drun41_iq_ref_ma)  /* mode41: iq 参考 (mA -> A) */
-                    : g_dci_running    ? (int32_t)(g_dci_iq_ref_ma)    /* mode28: iq 参考 (mA -> A) */
-                                       : (int32_t)(g_zizeng_volt_v * 1000.0f); /* mode30: 电压幅值 (mV -> V) */
-            cur[8] = (g_drun29_running || g_drun41_running || g_dci_running)
-                                   ? (int32_t)(g_foc_vd * 1000.0f)     /* mode28/29/41: 输出 vd (V) */
-                                   : (int32_t)sqrtf(g_foc_iq_ma * g_foc_iq_ma
-                                      + g_foc_id_ma * g_foc_id_ma);    /* 控制系合成 (mA -> A) */
-            cur[9] = (g_drun29_running || g_drun41_running || g_dci_running)
-                                   ? (int32_t)(g_foc_vq * 1000.0f)     /* mode28/29/41: 输出 vq (V) */
-                                   : (int32_t)(g_zizeng_theta_rad * 1000.0f); /* mode30: 控制系角度 (mrad -> rad) */
-
-            cur[10] = g_drun29_running ? (int32_t)(g_drun29_iq_mean_ma) /* mode29: iq 3s均值 (mA -> A) */
-                     : g_drun41_running ? (int32_t)(g_drun41_iq_mean_ma) /* mode41: iq 3s均值 (mA -> A) */
-                     : g_dci_running    ? (int32_t)(g_dci_iq_mean_ma)   /* mode28: iq 3s均值 (mA -> A) */
-                                        : (int32_t)(g_foc_iab_mag * 1000.0f); /* 静止系幅值 (mA -> A) */
-#if ZIZENG_VOLT_ON_Q_AXIS
-            /* P = 1.5*vq*iq，iq_ma 已是 mA，结果直接为 mA -> 显示 A */
-            cur[11] = (int32_t)(1.5f * g_zizeng_volt_v
-                                * (float)g_foc_iq_ma / FOC_VBUS_V);
-#else
-            /* P = 1.5*vd*id */
-            cur[11] = (int32_t)(1.5f * g_zizeng_volt_v
-                                * (float)g_foc_id_ma / FOC_VBUS_V);
-#endif
-            if (g_drun29_running) {
-                cur[11] = (int32_t)(g_drun29_id_mean_ma); /* mode29: id 3s均值 (mA -> A) */
-            } else if (g_drun41_running) {
-                cur[11] = (int32_t)(g_drun41_id_mean_ma); /* mode41: id 3s均值 (mA -> A) */
-            } else if (g_dci_running) {
-                cur[11] = (int32_t)(g_dci_id_mean_ma); /* mode28: id 3s均值 (mA -> A) */
-            }
-            cur[12] = (int32_t)(g_iqpi_iq_ref_ramp_ma); /* mode31 iq 参考(斜坡后), mA -> A */
-            cur[13] = g_olf_diff_deg * 1000;          /* mode26 负载角 delta (mdeg -> deg) */
-            cur[14] = 0;  /* 预留（mode40 目标转速已迁自持布局，见 foc_speed40.h） */
-            cur[15] = 0;  /* 预留（mode40 实际转速已迁自持布局） */
-            cur[16] = g_drun41_running
-                            ? (int32_t)(g_drun41_iq_filt_ma)           /* mode41: filtered iq (mA -> A) */
-                            : g_drun29_running
-                            ? (int32_t)(g_drun29_iq_filt_ma)           /* mode29: filtered iq (mA -> A) */
-                            : 0;
-            n = 17;
+                n = Foc_Common_VofaFill(cur);    /* 通用/mode 0 布局，20ch */
             }
 
-            Usart3_Vofa_SendScaled(cur, n, USART3_VOFA_SCALE_MILLI);
+            /* 越界护栏：Fill 返回值必须能装进 cur[] 且不超上层上限 */
+            if (n > 0 && n <= 32 && n <= (int)USART3_VOFA_MAX_CHANNELS) {
+                Usart3_Vofa_SendScaled(cur, (uint8_t)n, USART3_VOFA_SCALE_MILLI);
+            }
         }
 #endif
     }

@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_olf.c
+ * @file  foc_26_olf.c
  * @brief FOC 模式26 — 开环 VF 负载角实验实现。
  *
  *        流程：自动校准 BETA(2s, 90°) -> ALPHA(2s, 0°, 锁零点 offset)
@@ -33,7 +33,7 @@
  *******************************************************************************
  */
 
-#include "foc_olf.h"
+#include "foc_26_olf.h"
 #include "foc_math.h"
 #include "tmr4_pwm.h"
 #include "encoder.h"

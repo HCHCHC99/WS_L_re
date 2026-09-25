@@ -14,13 +14,13 @@
  *          foc_core.c     共享状态/观测量、过流保护、PWM 启停、公共助手
  *          foc_openloop.c 模式21 开环 V/f
  *          foc_curloop.c  模式22 电流环（I-F 启动 + 同步交接 + RUN）
- *          foc_align.c    模式23 对齐校准
- *          foc_cal.c      模式20 编码器零点校准（BETA 2s + ALPHA 2s -> 锁 offset）
- *          foc_dcl.c      模式27 功角闭环拖动（磁场 = 转子 + delta，delta 爬坡）
- *          foc_dci.c      模式28 功角参考电流闭环（复刻27 + foc_calib 零偏窗）
- *          foc_zizeng.c   模式30 ZIZENG 自增拖动
- *          foc_iq_pi.c    模式31 PI 电流环（ZIZENG 偏移 + 编码器角度）
- *          foc_lock_iq_pi.c 模式32 自锁偏移 + 自动交接 mode 31
+ *          foc_23_align.c    模式23 对齐校准
+ *          foc_20_cal.c      模式20 编码器零点校准（BETA 2s + ALPHA 2s -> 锁 offset）
+ *          foc_27_dcl.c      模式27 功角闭环拖动（磁场 = 转子 + delta，delta 爬坡）
+ *          foc_28_dci.c      模式28 功角参考电流闭环（复刻27 + foc_calib 零偏窗）
+ *          foc_30_ramp.c   模式30 ZIZENG 自增拖动
+ *          foc_31_iqpi.c    模式31 PI 电流环（ZIZENG 偏移 + 编码器角度）
+ *          foc_32_lockiq.c 模式32 自锁偏移 + 自动交接 mode 31
  *          foc_scope.c    MotorScope RTT 遥测
  *
  *        ISR constraint: short, no blocking, no prints, no malloc.

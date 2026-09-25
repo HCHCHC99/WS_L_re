@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_speed40.c
+ * @file  foc_40_speed.c
  * @brief FOC mode 40 - cascade speed/current control.
  *
  * The speed PI is decimated to 5 ms.  Its signed mA output is the q-axis
@@ -9,15 +9,15 @@
  *******************************************************************************
  */
 
-#include "foc_speed40.h"
-#include "foc_dcal24.h"
+#include "foc_40_speed.h"
+#include "foc_24_dcal.h"
 #include "foc_math.h"
 #include "tmr4_pwm.h"
 #include "encoder.h"
 #include "motor_config.h"
 #include "hc32_ll_tmra.h"
 #include "I.h"            /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
-#include "foc_zizeng.h"   /* g_foc_ialpha/ibeta/iab_mag（VOFA 静止系通道） */
+#include "foc_30_ramp.h"   /* g_foc_ialpha/ibeta/iab_mag（VOFA 静止系通道） */
 
 #define SPEED40_ISR_DT_US     (1000000u / FOC_ISR_HZ)
 #define SPEED40_SPD_WIN_TICKS (SPEED40_SPD_WIN_MS * FOC_ISR_HZ / 1000u)
@@ -443,7 +443,7 @@ void Foc_Speed40_Step(const stc_i_data_t *pData)
 }
 
 /*===========================================================================
- * 模式自持 VOFA：固定 18ch 布局，通道含义见 foc_speed40.h 顶部速览卡
+ * 模式自持 VOFA：固定 18ch 布局，通道含义见 foc_40_speed.h 顶部速览卡
  *（唯一事实源）。
  *===========================================================================*/
 int Foc_Speed40_VofaFill(int32_t *cur)

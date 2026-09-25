@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_drun41.c
+ * @file  foc_41_drun.c
  * @brief FOC mode 41 - current loop with runtime-switchable dq feed-forward.
  *
  * The mode takes only a value copy of the mode 24 calibration snapshot.  At
@@ -9,14 +9,18 @@
  *******************************************************************************
  */
 
-#include "foc_drun41.h"
-#include "foc_dcal24.h"
+#include "foc_41_drun.h"
+#include "foc_24_dcal.h"
 #include "foc_math.h"
 #include "tmr4_pwm.h"
 #include "encoder.h"
 #include "motor_config.h"
 #include "timer6_timebase.h"
 #include "hc32_ll_tmra.h"
+#include "I.h"   /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
+#include "foc_30_ramp.h"  /* g_foc_ialpha/ibeta（静止系观测，VOFA 用）
+                           * ⚠ 这三个量定义在 mode 30 模块里却被多模式共用，
+                           *   属架构不洁点；后续宜迁至 foc_core（阶段 3 待办） */
 #include <math.h>
 
 #define DRUN41_ISR_DT_US  (1000000u / FOC_ISR_HZ)
@@ -698,4 +702,38 @@ void Foc_Drun41_Step(const stc_i_data_t *pData)
     g_drun41_field_deg = field_deg;
     g_drun41_rotor_deg = rotor_deg;
     g_drun41_diff_deg = angle_diff;
+}
+
+/*===========================================================================
+ * mode 41 自持 VOFA：固定 21ch 布局
+ * 通道含义速览卡 = foc_41_drun.h 顶部【模式速览卡】（唯一事实源）
+ *
+ * ch0~18 与 mode 29 完全一致（便于 A/B 对比），ch19/20 是本模式特有的
+ * **前馈电压分量** —— 前馈实验的核心观测量，必须能直接看到。
+ * 单位换算：传"毫单位"，SendScaled 内部 ×0.001（电流 mA→A，电压 mV→V）
+ *===========================================================================*/
+int Foc_Drun41_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                  /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                  /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                  /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_foc_ialpha * 1000.0f);     /* ch3  静止系 ialpha */
+    cur[4]  = (int32_t)(g_foc_ibeta  * 1000.0f);     /* ch4  静止系 ibeta */
+    cur[5]  = (int32_t)(g_foc_iq_ma);                /* ch5  iq 反馈 ← 环反馈 */
+    cur[6]  = (int32_t)(g_foc_id_ma);                /* ch6  id 反馈 ← 环反馈 */
+    cur[7]  = (int32_t)(g_drun41_iq_ref_ma);         /* ch7  iq 参考 */
+    cur[8]  = (int32_t)(g_drun41_id_ref_ma);         /* ch8  id 参考（不恒为 0！） */
+    cur[9]  = (int32_t)(g_foc_vq * 1000.0f);         /* ch9  vq 总输出（含前馈） */
+    cur[10] = (int32_t)(g_foc_vd * 1000.0f);         /* ch10 vd 总输出（含前馈） */
+    cur[11] = (int32_t)(g_drun41_eq_mean_ma);        /* ch11 q 轴误差均值 ← 主判据 */
+    cur[12] = (int32_t)(g_drun41_ed_mean_ma);        /* ch12 d 轴误差均值 */
+    cur[13] = (int32_t)(g_drun41_iq_mean_ma);        /* ch13 iq 3s 均值 */
+    cur[14] = (int32_t)(g_drun41_id_mean_ma);        /* ch14 id 3s 均值 */
+    cur[15] = (int32_t)(g_drun41_eq_pp_ma);          /* ch15 q 轴误差峰峰值（振铃判据） */
+    cur[16] = (int32_t)(g_drun41_iq_filt_ma);        /* ch16 显示用滤波 iq（PI 不用） */
+    cur[17] = (int32_t)(g_drun41_diff_deg * 1000);   /* ch17 功角 delta (mdeg -> deg) */
+    cur[18] = (int32_t)(g_drun41_speed_hz * 1000.0f);/* ch18 实测电频率 (mHz -> Hz) */
+    cur[19] = (int32_t)(g_drun41_vd_ff_v * 1000.0f); /* ch19 **d 轴前馈电压** ← 本模式专属 */
+    cur[20] = (int32_t)(g_drun41_vq_ff_v * 1000.0f); /* ch20 **q 轴前馈电压** ← 本模式专属 */
+    return 21;
 }

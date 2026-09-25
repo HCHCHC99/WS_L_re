@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_cal_angle.h
+ * @file  foc_25_calangle.h
  * @brief FOC 模式25 — 手动角度吸附 (comm_mode 25)。
  *
  * ============================================================================
@@ -67,11 +67,47 @@
  *
  * ISR 约束：短小、无阻塞、无打印、无 malloc。打印全部由 foc_obs 在
  * 主循环完成（事件快照模式，与 mode 20/23/31/32 一致）。
- *******************************************************************************
+ *
+ * ============================ 模式速览卡（唯一事实源）========================
+ * 模式：25 = 手动角度吸附（自动校准 → 刹车等输入 → 吸附 2s + 校验 500ms）
+ *        用固定电流把转子吸到**指定电角度**，验证零点/角度框架精度
+ * 入口：comm_mode = 25
+ * 前置：自带校准（BETA 2s → ALPHA 2s 锁零点）
+ * 结束：无论成败回刹车态；仅 OC 时自动回 mode 0
+ *
+ * 【Watch 可调变量】（名称 = 默认值 单位）
+ *   g_foc_angle_input  ×0.1°  目标电角度（0~3599，写 900 = 90.0°；**改值即触发**）
+ *   g_calang_volt_v    V      吸附电压（默认 FOC_ALIGN_VOLT_V；上限 ~0.55V）
+ *   g_calang_stable_cnts counts 校验窗静止判据（默认 8）
+ *
+ * 【关键观察变量】
+ *   g_calang_running    1 = 运行中
+ *   g_calang_state      0 IDLE / 1 校准BETA / 2 校准ALPHA / 3 刹车等待
+ *                       / 4 吸附 / 5 校验 / 6 过流
+ *   g_calang_target_deg 快照：锁存目标角 ×0.1°
+ *   g_calang_meas_deg   快照：校验结束实测电角度 ×0.1°
+ *   g_calang_err_deg    快照：meas−target（折叠 (−1800,1800]）×0.1° ← **精度判据**
+ *   g_calang_win_moved  快照：校验窗位移 counts（max−min）
+ *   g_calang_offset     快照：校准锁定的零点 counts
+ *   g_calang_du/dv/dw   三相占空比观测(%)
+ *   g_calang_evt        事件（[CALANG] RTT：LOCKED / HOLD ok / HOLD FAIL / FAULT_OC）
+ *   ⚠ 变量名带 deg 但单位是 **0.1°**（历史命名，见上方说明）
+ *
+ * 【VOFA 通道】通用 17ch 布局（见 main.c 顶部说明），mode 25 下语义：
+ *   ch0~2 三相电流(A)   ch3 静止系 ialpha(A)   ch4 静止系 ibeta(A)
+ *   ch5 控制系 iq(A)    ch6 控制系 id(A)
+ *   ch7 自增电压幅值(V) ← 非本模式量，恒 0
+ *   ch8 控制系合成幅值 sqrt(iq²+id²)(A)
+ *   ch9 控制系角度(rad) ← 非本模式量，恒 0
+ *   ch10 静止系电流幅值(A)   ch11 母线直流电流估算(A)
+ *   ch12~16 预留 0
+ *   ⚠ mode 25 无专属 VOFA 布局。**精度判读用 g_calang_err_deg（Watch）+ [CALANG] RTT**；
+ *     VOFA 只能看电流/占空比包络。
+ * ===========================================================================
  */
 
-#ifndef __FOC_CAL_ANGLE_H__
-#define __FOC_CAL_ANGLE_H__
+#ifndef __FOC_25_CALANGLE_H__
+#define __FOC_25_CALANGLE_H__
 
 #include <stdint.h>
 #include "foc_core.h"
@@ -120,7 +156,7 @@ extern "C" {
 #define CALANG_EVT_OC         5u
 
 /*=============================================================================
- * Keil Watch 可调变量 / 观测量（定义见 foc_cal_angle.c）
+ * Keil Watch 可调变量 / 观测量（定义见 foc_25_calangle.c）
  *=============================================================================*/
 extern volatile int32_t  g_foc_angle_input;  /* 用户输入目标电角度 ×0.1° (0~3599, 改值即触发) */
 extern volatile float    g_calang_volt_v;    /* 吸附电压 (V, 默认 FOC_ALIGN_VOLT_V) */
@@ -157,4 +193,4 @@ void Foc_CalAngle_Stop(void);
 }
 #endif
 
-#endif /* __FOC_CAL_ANGLE_H__ */
+#endif /* __FOC_25_CALANGLE_H__ */

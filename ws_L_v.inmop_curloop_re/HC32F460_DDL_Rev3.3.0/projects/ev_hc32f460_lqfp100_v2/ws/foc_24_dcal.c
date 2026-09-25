@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_dcal24.c
+ * @file  foc_24_dcal.c
  * @brief FOC mode 24 - independent calibration-only state machine.
  *
  * ZERO measures private phase-current offsets at 50/50/50.  BETA aligns the
@@ -10,7 +10,7 @@
  *******************************************************************************
  */
 
-#include "foc_dcal24.h"
+#include "foc_24_dcal.h"
 #include "foc_math.h"
 #include "tmr4_pwm.h"
 #include "encoder.h"

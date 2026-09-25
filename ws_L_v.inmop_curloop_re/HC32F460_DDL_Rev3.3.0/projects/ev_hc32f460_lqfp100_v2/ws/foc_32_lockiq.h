@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_lock_iq_pi.h
+ * @file  foc_32_lockiq.h
  * @brief FOC 模式32 — 自锁偏移 + 自动进入 mode 31 (comm_mode 32)。
  *
  * ============================================================================
@@ -54,11 +54,42 @@
  *
  * ISR 约束：短小、无阻塞、无打印、无 malloc；锁定/失败事件经
  * g_lockiq_evt_flag 由 foc_obs 模块在主循环上下文打印并交接。
- *******************************************************************************
+ *
+ * ============================ 模式速览卡（唯一事实源）========================
+ * 模式：32 = 自锁偏移 + 自动交接 mode 31
+ *        用**静止吸附法**锁编码器偏移（不受打滑影响），锁定后自动启动 mode 31
+ * 入口：comm_mode = 32 ← **闭环启动的推荐入口**（Watch 写 32 即可，不依赖 mode 30）
+ * 前置：无（自带对齐 + 复测）
+ * 结束：锁定成功后自动交接给 mode 31（转子须仍停在对齐位）
+ * ⚠ 交接后若转子被人手拧动过，再单独进 mode 31 无效，需重跑 mode 32
+ *
+ * 【Watch 可调变量】（名称 = 单位）
+ *   g_lockiq_align_volt_v   V   对齐电压幅值（Watch 可调）
+ *
+ * 【关键观察变量】
+ *   g_lockiq_running   1 = 运行中
+ *   g_lockiq_step      状态枚举（**Watch 直接显示枚举名**）：
+ *        0 IDLE / 1 ALIGN_BETA（磁场90°吸附）/ 2 ALIGN_ALPHA（磁场0°等静止）
+ *        3 ALIGN_VERIFY（回90°复测跟踪，位移≈90°电）/ 4 LOCKED_WAIT_HANDOFF（已锁定等交接）
+ *        5 LOCK_FAIL（超时/跟踪失败，拒绝启动）/ 6 FAULT_OC
+ *   g_lockiq_off_deg   已注入 mode 31 的偏移 (deg)
+ *   事件码 LOCKIQ_EVT_*：1 LOCKED / 2 FAIL_TIMEOUT / 3 FAIL_TRACK
+ *   （事件经 foc_obs 在主循环打印并执行交接）
+ *
+ * 【VOFA 通道】与 mode 31 完全一致（交接后就是 mode 31 在跑）：
+ *   ch0~2 三相电流(A)   ch3 静止系 ialpha(A)   ch4 静止系 ibeta(A)
+ *   ch5 控制系 iq(A)    ch6 控制系 id(A)
+ *   ch7 自增电压幅值(V) ← 恒 0      ch8 合成幅值 sqrt(iq²+id²)(A)
+ *   ch9 控制系角度(rad) ← 恒 0
+ *   ch10 静止系电流幅值(A)   ch11 母线直流电流估算(A)
+ *   ch12 **mode31 iq 参考（斜坡后）(A)**  ← 交接后有效
+ *   ch13~15 预留 0   ch16 预留 0
+ *   ⚠ 锁定阶段（step 1~4）看 Watch 的 g_lockiq_step，VOFA 无专属语义。
+ * ===========================================================================
  */
 
-#ifndef __FOC_LOCK_IQ_PI_H__
-#define __FOC_LOCK_IQ_PI_H__
+#ifndef __FOC_32_LOCKIQ_H__
+#define __FOC_32_LOCKIQ_H__
 
 #include <stdint.h>
 #include "foc_core.h"
@@ -116,7 +147,7 @@ typedef enum {
 #define LOCKIQ_EVT_FAIL_TRACK    3u   /* 跟踪复测失败，应 Stop */
 
 /* ============================================================================
- * Keil Watch 可调变量 / 观测量（定义见 foc_lock_iq_pi.c）
+ * Keil Watch 可调变量 / 观测量（定义见 foc_32_lockiq.c）
  *   窗口诊断量 g_lockiq_win_moved/win_evals/track_err_cnts 与锁定/失败
  *   事件快照 g_lockiq_evt_* 已集中迁移到观察模块 foc_obs.h（定义在
  *   foc_obs.c），变量名未变，Keil Watch 用法不变。
@@ -145,4 +176,4 @@ void Foc_LockIqPi_Step(const stc_i_data_t *pData);
 }
 #endif
 
-#endif /* __FOC_LOCK_IQ_PI_H__ */
+#endif /* __FOC_32_LOCKIQ_H__ */

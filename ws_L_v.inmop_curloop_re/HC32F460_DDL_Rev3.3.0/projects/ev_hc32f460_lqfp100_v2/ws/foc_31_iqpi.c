@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_iq_pi.c
+ * @file  foc_31_iqpi.c
  * @brief FOC 模式31 — 编码器转子角度 PI 电流环实现。
  *
  *        转子电角度：直接读取 TIMERA_1 硬件计数（不依赖主循环
@@ -12,11 +12,11 @@
  *******************************************************************************
  */
 
-#include "foc_iq_pi.h"
+#include "foc_31_iqpi.h"
 #include "foc_obs.h"
 #include "foc_math.h"
 #include "foc_calib.h"
-#include "foc_zizeng.h"
+#include "foc_30_ramp.h"
 #include "tmr4_pwm.h"
 #include "encoder.h"
 #include "motor_config.h"
@@ -41,7 +41,7 @@ volatile float   g_iqpi_theta_rad      = 0.0f;
  * 变量名未变，Keil Watch 用法不变。 */
 
 /*******************************************************************************
- * d/q 轴 PI 配置（初值来自 foc_iq_pi.h 宏，字段 volatile 可 Watch 实时修改）
+ * d/q 轴 PI 配置（初值来自 foc_31_iqpi.h 宏，字段 volatile 可 Watch 实时修改）
  ******************************************************************************/
 pid_config_t g_iqpi_pid_id_cfg = {
     .enabled      = true,
@@ -77,7 +77,7 @@ pid_config_t g_iqpi_pid_iq_cfg = {
 static pid_state_t s_pid_id;
 static pid_state_t s_pid_iq;
 
-/* 编码器硬件计数跟踪（与 foc_zizeng 相同的回绕处理，独立状态） */
+/* 编码器硬件计数跟踪（与 foc_30_ramp 相同的回绕处理，独立状态） */
 static int32_t s_prev_hw_cnt = 0;
 static int32_t s_enc_pos = 0;
 static uint8_t s_enc_initialized = 0;

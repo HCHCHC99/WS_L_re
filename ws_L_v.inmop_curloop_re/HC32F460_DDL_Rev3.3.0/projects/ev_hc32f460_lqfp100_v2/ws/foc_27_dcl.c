@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_dcl.c
+ * @file  foc_27_dcl.c
  * @brief FOC 模式27 — 功角闭环拖动实现。
  *
  *        流程：自动校准 BETA(2s, 90°) -> ALPHA(2s, 0°, 锁零点 offset)
@@ -31,7 +31,7 @@
  *******************************************************************************
  */
 
-#include "foc_dcl.h"
+#include "foc_27_dcl.h"
 #include "foc_math.h"
 #include "tmr4_pwm.h"
 #include "encoder.h"

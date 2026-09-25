@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_olf.h
+ * @file  foc_26_olf.h
  * @brief FOC 模式26 — 开环 VF 负载角实验 (comm_mode 26, Open Loop Field-angle)。
  *
  * ============================================================================
@@ -82,11 +82,55 @@
  *
  * ISR 约束：短小、无阻塞、无打印、无 malloc。打印全部由 foc_obs 在
  * 主循环完成（事件快照 + 200ms 周期）。
- *******************************************************************************
+ *
+ * ============================ 模式速览卡（唯一事实源）========================
+ * 模式：26 = 开环 VF 负载角实验（校准 → 磁场角匀速自增拖动，测功角特性）
+ *        磁场按时间自转（**时间开环**）→ 功角 delta 是"漂"出来的，会猎振/失步
+ * 入口：comm_mode = 26（**SW1 短按在本模式下 +0.5Hz 调频**）
+ * 前置：自带校准（BETA 2s → ALPHA 2s 锁零点）
+ * 结束：持续拖动直到停机；仅 OC 自动回 mode 0
+ * 对比：mode 27 是"转子锁相"版（磁场 = 转子+δ，**理论不可能失步**）
+ *
+ * 【Watch 可调变量】（名称 = 默认值 单位）
+ *   g_olf_freq_hz      = 0.5  Hz   当前磁场自增频率（斜坡实时输出，Start 复位为 init）
+ *   g_olf_freq_init_hz = 0.5  Hz   斜坡起点频率（**Start 不复位**）
+ *   g_olf_freq_targ_hz = 0.5  Hz   斜坡目标频率（**Start 不复位**，SW1 每按 +0.5）
+ *   g_olf_freq_tr_ms          ms   斜坡过渡时间（0=立即；50000 = 50s 扫频）
+ *   g_olf_step_010            ×0.1°/步  自增步长（1 ≈ 连续旋转，建议 1~3600）
+ *   g_olf_dir                 ±1   自增方向（Start 复位 +1）
+ *   g_olf_volt_v       = 0.6  V    拖动电压幅值（与 mode 30 同）
+ *
+ * 【关键观察变量】
+ *   g_olf_running        1 = 运行中
+ *   g_olf_state          0 IDLE / 1 校准BETA / 2 校准ALPHA / 3 DRAG拖动 / 4 过流
+ *   g_olf_evt            1 BETA_DONE / 2 LOCKED / 3 OC / 4 RAMP_DONE
+ *   g_olf_offset         校准锁定的零点 counts
+ *   g_olf_field_deg      磁场电角度 (deg, 0~359)
+ *   g_olf_rotor_deg      转子电角度 (deg, 已扣零点)
+ *   **g_olf_diff_deg     负载角 delta = field − rotor (deg, −180~180) ← 实验核心观测量**
+ *   g_olf_id_ma / g_olf_iq_ma        真实转子系电流（id 磁链分量 / iq 力矩分量）
+ *   g_olf_id_pp_ma / g_olf_iq_pp_ma  峰峰值（5s 窗口刷新）
+ *   g_olf_theta_rad      控制系 d 轴角 (rad，磁场角 = theta + 90°)
+ *   g_olf_du/dv/dw       三相占空比观测(%)
+ *
+ * 【实验预期】delta 低频稳在 5~15°（摩擦锥，不是 0）→ 频率升高缓升（BEMF 偷电压）
+ *   → 逼近 90°（牵出边界）→ 越过即锯齿崩塌振荡（失步）。id 低频≈0，高频转负。
+ *
+ * 【VOFA 通道】通用 17ch 布局（见 main.c 顶部说明），mode 26 下语义：
+ *   ch0~2 三相电流(A)   ch3 静止系 ialpha(A)   ch4 静止系 ibeta(A)
+ *   ch5 控制系 iq(A)    ch6 控制系 id(A)
+ *   ch7 自增电压幅值(V) ← 非本模式量，恒 0
+ *   ch8 控制系合成幅值 sqrt(iq²+id²)(A)
+ *   ch9 控制系角度(rad) ← 非本模式量，恒 0
+ *   ch10 静止系电流幅值(A)   ch11 母线直流电流估算(A)
+ *   ch12 mode31 iq 参考（本模式恒 0）
+ *   ch13 **负载角 delta g_olf_diff_deg (mdeg → deg) ← mode26 专属，实验主曲线**
+ *   ch14~16 预留 0
+ * ===========================================================================
  */
 
-#ifndef __FOC_OLF_H__
-#define __FOC_OLF_H__
+#ifndef __FOC_26_OLF_H__
+#define __FOC_26_OLF_H__
 
 #include <stdint.h>
 #include "foc_core.h"
@@ -131,7 +175,7 @@ extern "C" {
 #define OLF_EVT_RAMP_DONE  4u
 
 /*=============================================================================
- * Keil Watch 可调变量 / 观测量（定义见 foc_olf.c）
+ * Keil Watch 可调变量 / 观测量（定义见 foc_26_olf.c）
  *=============================================================================*/
 extern volatile float    g_olf_freq_hz;      /* 当前磁场自增频率 (Hz, 斜坡实时输出, Start 复位为 init) */
 extern volatile float    g_olf_freq_init_hz; /* 斜坡起点频率 (Hz, 默认 0.5, Start 不复位) */
@@ -176,4 +220,4 @@ void Foc_Olf_Stop(void);
 }
 #endif
 
-#endif /* __FOC_OLF_H__ */
+#endif /* __FOC_26_OLF_H__ */

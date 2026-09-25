@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_zizeng.c
+ * @file  foc_30_ramp.c
  * @brief FOC 模式30 — 磁场角度自增拖动实现（自 foc.c 原样迁移）。
  *
  *        关键点：直接读取 TIMERA_1 硬件编码器计数，不依赖主循环的
@@ -8,7 +8,7 @@
  *******************************************************************************
  */
 
-#include "foc_zizeng.h"
+#include "foc_30_ramp.h"
 #include "foc_math.h"
 #include "foc_calib.h"
 #include "tmr4_pwm.h"
@@ -314,7 +314,7 @@ void Foc_Zizeng_Step(const stc_i_data_t *pData)
     /* else state == 2: LOCKED, 偏移已直接作用于转子角度（见第 3 步） */
 
     /* ===== 5. SVPWM 输出 =====
-     * 加压轴由 ZIZENG_VOLT_ON_Q_AXIS（foc_zizeng.h）编译期选择：
+     * 加压轴由 ZIZENG_VOLT_ON_Q_AXIS（foc_30_ramp.h）编译期选择：
      *   q 轴加压: Vd=0, Vq=V -> valpha=-V·sinθ, vbeta=V·cosθ
      *   d 轴加压: Vd=V, Vq=0 -> valpha= V·cosθ, vbeta=V·sinθ
      */

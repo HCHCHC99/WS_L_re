@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_iq_pi.h
+ * @file  foc_31_iqpi.h
  * @brief FOC 模式31 — 编码器转子角度 PI 电流环 (comm_mode 31)。
  *
  * ============================================================================
@@ -59,11 +59,46 @@
  *   记录最近 10 次状态变化，出问题回放即可知道它在哪一步出的错。
  *
  * ISR 约束：短小、无阻塞、无打印、无 malloc。
- *******************************************************************************
+ *
+ * ============================ 模式速览卡（唯一事实源）========================
+ * 模式：31 = 编码器 PI 电流环（用 mode 30 锁定的偏移做角度框架）
+ * 入口：comm_mode = 31（**注意 main.c 的 SW3 按键有 bug，恒回 0，请用 Watch**）
+ * 前置：需 mode 30 已锁定偏移；未锁定时启动被拒（g_iqpi_step = 1 ERR_NO_OFFSET）
+ *       ⚠ 手动链（30→31）仅在转子恰停在锚定位时可靠；**推荐走 mode 32 自动交接链**
+ * 结构：只有电流环（id 参考恒 0、iq 参考手动给）；无速度外环
+ *
+ * 【Watch 可调变量】（名称 = 默认值 单位）
+ *   g_iqpi_iq_ref_ma     mA     iq 目标（Watch 实时可改）
+ *   g_iqpi_iq_ramp_ma_s  mA/s   iq 斜坡斜率（软启动；0=直通）
+ *   g_iqpi_pid_iq_cfg / g_iqpi_pid_id_cfg 的 .kp/.ki
+ *        默认 kp=0.27 V/A、ki=630 V/(A·s)（按 kp·R/L 零极点对消整定）
+ *        ⚠ 带宽 fc≈kp/(2πL)；设计上限 fc ≤ PWM/10，**不要随意加大**
+ *
+ * 【关键观察变量】
+ *   g_iqpi_running         1 = 运行中
+ *   g_iqpi_step            状态枚举（**Watch 里直接显示枚举名**）：
+ *        0 IDLE / 1 ERR_NO_OFFSET（启动被拒）/ 2 PWM_ZERO_VECTOR（零偏窗 ~210ms）
+ *        3 CLOSED_LOOP（正常）/ 4 RUNNING_VQ_SAT（电压饱和）/ 5 RUNNING_STALL（堵转）
+ *        6 FAULT_OC（过流停机）/ 7 DIR_FLIPPED（检出 180° 框架误差，已自动翻转）
+ *   g_iqpi_iq_ref_ma       iq 目标
+ *   g_iqpi_iq_ref_ramp_ma  **斜坡后的实际 iq 参考**（闭环真正吃的给定）
+ *   g_iqpi_theta_rad       当前使用的转子电角度(rad)
+ *   状态历史 g_iqpi_step_hist[] 与转向诊断量在 **foc_obs.h**（不在本文件）
+ *
+ * 【VOFA 通道】通用 17ch 布局（见 main.c 顶部说明），mode 31 下语义：
+ *   ch0~2 三相电流(A)   ch3 静止系 ialpha(A)   ch4 静止系 ibeta(A)
+ *   ch5 控制系 iq(A)    ch6 控制系 id(A)
+ *   ch7 自增电压幅值(V) ← 非本模式量，恒 0
+ *   ch8 控制系合成幅值 sqrt(iq²+id²)(A)
+ *   ch9 控制系角度(rad) ← 非本模式量，恒 0
+ *   ch10 静止系电流幅值(A)   ch11 母线直流电流估算(A)
+ *   ch12 **mode31 iq 参考（斜坡后）(A)**  ← mode31 专属语义
+ *   ch13 mode26 负载角（本模式恒 0）   ch14~15 预留 0   ch16 预留 0
+ * ===========================================================================
  */
 
-#ifndef __FOC_IQ_PI_H__
-#define __FOC_IQ_PI_H__
+#ifndef __FOC_31_IQPI_H__
+#define __FOC_31_IQPI_H__
 
 #include <stdint.h>
 #include "foc_core.h"
@@ -129,7 +164,7 @@ typedef enum {
 } iqpi_step_t;
 
 /* ============================================================================
- * Keil Watch 可调变量 / 观测量（定义见 foc_iq_pi.c）
+ * Keil Watch 可调变量 / 观测量（定义见 foc_31_iqpi.c）
  *   状态历史 g_iqpi_step_hist、转向诊断量 g_iqpi_win_*、g_iqpi_cur_dir 等、
  *   翻转事件快照 g_iqpi_evt_* 已集中迁移到观察模块 foc_obs.h（定义在
  *   foc_obs.c），变量名未变，Keil Watch 用法不变。
@@ -166,4 +201,4 @@ void Foc_IqPi_Step(const stc_i_data_t *pData);
 }
 #endif
 
-#endif /* __FOC_IQ_PI_H__ */
+#endif /* __FOC_31_IQPI_H__ */

@@ -1,11 +1,11 @@
 /**
  *******************************************************************************
- * @file  foc_align.c
+ * @file  foc_23_align.c
  * @brief FOC 模式23 — 静止电角度对齐校准实现（自 foc.c 原样迁移）。
  *******************************************************************************
  */
 
-#include "foc_align.h"
+#include "foc_23_align.h"
 #include "foc_math.h"
 #include "tmr4_pwm.h"
 #include "encoder.h"

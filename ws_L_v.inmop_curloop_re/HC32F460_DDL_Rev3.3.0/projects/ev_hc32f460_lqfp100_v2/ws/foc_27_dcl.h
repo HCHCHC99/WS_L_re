@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_dcl.h
+ * @file  foc_27_dcl.h
  * @brief FOC 模式27 — 功角闭环拖动 (comm_mode 27, Delta Closed-Loop)。
  *
  * ============================================================================
@@ -66,11 +66,55 @@
  *
  * ISR 约束：短小、无阻塞、无打印、无 malloc。打印全部由 foc_obs 在
  * 主循环完成（事件快照 + 200ms 周期）。
- *******************************************************************************
+ *
+ * ============================ 模式速览卡（唯一事实源）========================
+ * 模式：27 = 功角闭环拖动（delta closed-loop：磁场角 = 转子实测角 + δ）
+ *        δ 被钉死 → **理论不可能失步**；转速由电压决定（BEMF 平衡，无 freq 变量）
+ *        是 mode 26（时间开环）的闭环对照版
+ * 入口：comm_mode = 27
+ * 前置：自带校准（BETA 2s → ALPHA 2s 锁零点；双帧：控制帧 s_off_rel + 显示帧 g_dcl_offset）
+ * 结束：持续运行直到停机；仅 OC 自动回 mode 0
+ *
+ * 【Watch 可调变量】（名称 = 默认值 单位）
+ *   g_dcl_dlt_init_deg = 5   deg  δ 爬坡起点（**Start 不复位**）
+ *   g_dcl_dlt_targ_deg = 45  deg  δ 爬坡终点（**Start 不复位**）
+ *   g_dcl_dlt_tr_ms    = 0   ms   爬坡过渡时间（0=立即；**Start 不复位**）
+ *   g_dcl_volt_v       = 0.6 V    电压幅值（Start 复位）← **本模式的"调速旋钮"**
+ *     三参数运行中改 = 按新值重算轨迹（会跳变）；tr=0 立即到目标
+ *
+ * 【关键观察变量】
+ *   g_dcl_running / g_dcl_state   0 IDLE / 1 CAL_BETA / 2 CAL_ALPHA / 3 RUN / 4 FAULT_OC
+ *   g_dcl_evt      1 BETA_DONE / 2 LOCKED / 3 RAMP_DONE / 4 OC
+ *   g_dcl_offset        校准锁零点（hw 绝对帧 counts，显示/跨模式对比用）
+ *   g_dcl_dlt_now_deg   当前 δ 指令（爬坡中实时）  ← 调速/扫 δ 用
+ *   **g_dcl_speed_hz    实测电频率 (Hz, 200ms 窗口, 带符号) ← 扫 δ 看这个**
+ *   g_dcl_field_deg / g_dcl_rotor_deg   磁场角 / 转子电角 (deg, 0~359)
+ *   **g_dcl_diff_deg    功角实测 = field − rotor (deg, −180~180)**
+ *   g_dcl_id_ma / g_dcl_iq_ma  真实转子系电流（锁相稳态：id≈0, iq≈I）
+ *   g_dcl_id_pp_ma / g_dcl_iq_pp_ma  峰峰值（5s 窗口刷新）
+ *   g_dcl_enc_pos       编码器相对计数镜像（毛刺排查用）
+ *   g_dcl_du/dv/dw      三相占空比观测(%)
+ *
+ * 【实验价值】扫 g_dcl_dlt_targ_deg（5→45→89）看 g_dcl_speed_hz：
+ *   **90° 附近转速最高**（MTPA 的闭环验证）。δ 小时 id 大（铜损 ~2W），注意温升。
+ *
+ * 【VOFA 通道】通用 17ch 布局（见 main.c 顶部说明），mode 27 下语义：
+ *   ch0~2 三相电流(A)   ch3 静止系 ialpha(A)   ch4 静止系 ibeta(A)
+ *   ch5 控制系 iq(A)    ch6 控制系 id(A)
+ *   ch7 自增电压幅值(V) ← 非本模式量，恒 0
+ *   ch8 控制系合成幅值 sqrt(iq²+id²)(A)
+ *   ch9 控制系角度(rad) ← 非本模式量，恒 0
+ *   ch10 静止系电流幅值(A)   ch11 母线直流电流估算(A)
+ *   ch12 mode31 iq 参考（本模式恒 0）
+ *   ch13 mode26 负载角 g_olf_diff_deg ← **本模式恒 0**（勿误读为 δ）
+ *   ch14~16 预留 0
+ *   ⚠ mode 27 无专属 VOFA 布局。**看 δ / 转速请用 Watch 的
+ *     g_dcl_dlt_now_deg 与 g_dcl_speed_hz**，VOFA 只有电流信息。
+ * ===========================================================================
  */
 
-#ifndef __FOC_DCL_H__
-#define __FOC_DCL_H__
+#ifndef __FOC_27_DCL_H__
+#define __FOC_27_DCL_H__
 
 #include <stdint.h>
 #include "foc_core.h"
@@ -122,7 +166,7 @@ extern "C" {
 #define DCL_EVT_OC         4u
 
 /*=============================================================================
- * Keil Watch 可调变量 / 观测量（定义见 foc_dcl.c）
+ * Keil Watch 可调变量 / 观测量（定义见 foc_27_dcl.c）
  *=============================================================================*/
 extern volatile float    g_dcl_dlt_init_deg;  /* 功角爬坡起点 (deg, 默认5, Start不复位) */
 extern volatile float    g_dcl_dlt_targ_deg;  /* 功角爬坡终点 (deg, 默认45, Start不复位) */
@@ -167,4 +211,4 @@ void Foc_Dcl_Stop(void);
 }
 #endif
 
-#endif /* __FOC_DCL_H__ */
+#endif /* __FOC_27_DCL_H__ */

@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_smo45.c
+ * @file  foc_45_smo.c
  * @brief FOC mode 45 - SMO+PLL 无感速度/电流双闭环（分步开发中）。
  *
  * 第 1 步（当前，已完成）：完全复刻 mode 40 串级结构 —— 速度 PI 抽稀到 5ms，
@@ -18,10 +18,10 @@
  *******************************************************************************
  */
 
-#include "foc_smo45.h"
+#include "foc_45_smo.h"
 #include "foc_smo.h"
 #include "foc_pll.h"
-#include "foc_dcal24.h"
+#include "foc_24_dcal.h"
 #include "foc_math.h"
 #include "tmr4_pwm.h"
 #include "encoder.h"
@@ -562,7 +562,7 @@ void Foc_Smo45_Step(const stc_i_data_t *pData)
 
 /*===========================================================================
  * 模式自持 VOFA：三种布局由 g_smo45_wave_mode 选择，
- * 通道含义见 foc_smo45.h 顶部速览卡（唯一事实源）。
+ * 通道含义见 foc_45_smo.h 顶部速览卡（唯一事实源）。
  *===========================================================================*/
 int Foc_Smo45_VofaFill(int32_t *cur)
 {

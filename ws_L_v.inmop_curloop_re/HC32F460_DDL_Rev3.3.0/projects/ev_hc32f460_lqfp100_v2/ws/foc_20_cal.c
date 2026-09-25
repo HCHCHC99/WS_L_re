@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_cal.c
+ * @file  foc_20_cal.c
  * @brief FOC 模式20 — 编码器零点校准实现。
  *
  *        流程：BETA(2s, θ=90°) -> ALPHA(2s, θ=0°) -> 锁 offset -> 关 PWM
@@ -17,9 +17,9 @@
  *******************************************************************************
  */
 
-#include "foc_cal.h"
+#include "foc_20_cal.h"
 #include "foc_math.h"
-#include "foc_lock_iq_pi.h"     /* g_lockiq_align_volt_v（复用 mode 32 电压） */
+#include "foc_32_lockiq.h"     /* g_lockiq_align_volt_v（复用 mode 32 电压） */
 #include "tmr4_pwm.h"
 #include "encoder.h"
 #include "motor_config.h"

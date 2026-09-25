@@ -3,10 +3,10 @@
  * @file  foc_obs.c
  * @brief FOC 观察模块实现 — 观察变量定义 + 状态历史 + 主循环打印/事件处理。
  *
- *        本文件代码全部从 foc_iq_pi.c / foc_lock_iq_pi.c / main.c 原样
+ *        本文件代码全部从 foc_31_iqpi.c / foc_32_lockiq.c / main.c 原样
  *        迁移而来（变量名、打印格式、处理逻辑均未改动）：
- *          - g_iqpi_*  观察量与状态历史   <- foc_iq_pi.c
- *          - g_lockiq_* 观察量与事件快照  <- foc_lock_iq_pi.c
+ *          - g_iqpi_*  观察量与状态历史   <- foc_31_iqpi.c
+ *          - g_lockiq_* 观察量与事件快照  <- foc_32_lockiq.c
  *          - Foc_Obs_Task() 六段打印/事件 <- main.c 主循环
  *
  *        模块说明见 foc_obs.h 文件头。
@@ -15,18 +15,18 @@
 
 #include "foc_obs.h"
 #include "foc_core.h"
-#include "foc_zizeng.h"
-#include "foc_lock_iq_pi.h"
-#include "foc_align.h"
-#include "foc_cal.h"
-#include "foc_cal_angle.h"
-#include "foc_olf.h"
-#include "foc_dcl.h"
-#include "foc_dci.h"
-#include "foc_dcal24.h"
-#include "foc_drun29.h"
-#include "foc_drun41.h"
-#include "foc_smo45.h"
+#include "foc_30_ramp.h"
+#include "foc_32_lockiq.h"
+#include "foc_23_align.h"
+#include "foc_20_cal.h"
+#include "foc_25_calangle.h"
+#include "foc_26_olf.h"
+#include "foc_27_dcl.h"
+#include "foc_28_dci.h"
+#include "foc_24_dcal.h"
+#include "foc_29_drun.h"
+#include "foc_41_drun.h"
+#include "foc_45_smo.h"
 #include "foc_smo.h"
 #include "foc_pll.h"
 #include "foc_calib.h"
@@ -38,7 +38,7 @@
 #include "TickTimer.h"
 
 /*******************************************************************************
- * mode 31 观察量定义（原 foc_iq_pi.c）
+ * mode 31 观察量定义（原 foc_31_iqpi.c）
  ******************************************************************************/
 volatile iqpi_step_t g_iqpi_step_hist[IQPI_HISTORY_LEN];   /* 状态历史, [0]最旧 */
 volatile uint8_t g_iqpi_step_hist_cnt  = 0;                /* 历史有效条数 0..10 */
@@ -61,7 +61,7 @@ volatile int32_t g_iqpi_evt_vq_mv      = 0;   /* 翻转时 vq (mV) */
 volatile int32_t g_iqpi_evt_off_deg    = 0;   /* 翻转后偏移基线 (deg) */
 
 /*******************************************************************************
- * mode 32 观察量定义（原 foc_lock_iq_pi.c）
+ * mode 32 观察量定义（原 foc_32_lockiq.c）
  ******************************************************************************/
 volatile int32_t g_lockiq_win_moved      = 0; /* 最近完成窗口的平均位置位移 (counts) */
 volatile uint32_t g_lockiq_win_evals     = 0; /* 已完成窗口评估次数 */
@@ -304,7 +304,7 @@ void Foc_Obs_Task(void)
         }
     }
 
-    /* ---- mode 26 峰峰值记录（foc_olf 内部 5s 窗口刷新，此处检测变化打印） ---- */
+    /* ---- mode 26 峰峰值记录（foc_26_olf 内部 5s 窗口刷新，此处检测变化打印） ---- */
     if (g_olf_running && (g_olf_state == OLF_STEP_DRAG)) {
         static float s_last_olf_id_pp = -1.0f;
         static float s_last_olf_iq_pp = -1.0f;
@@ -362,7 +362,7 @@ void Foc_Obs_Task(void)
         }
     }
 
-    /* ---- mode 27 峰峰值记录（foc_dcl 内部 5s 窗口刷新，此处检测变化打印） ---- */
+    /* ---- mode 27 峰峰值记录（foc_27_dcl 内部 5s 窗口刷新，此处检测变化打印） ---- */
     if (g_dcl_running && (g_dcl_state == DCL_STEP_RUN)) {
         static float s_last_dcl_id_pp = -1.0f;
         static float s_last_dcl_iq_pp = -1.0f;
@@ -457,7 +457,7 @@ void Foc_Obs_Task(void)
         }
     }
 
-    /* ---- mode 28 峰峰值记录（foc_dci 内部 5s 窗口刷新，此处检测变化打印） ---- */
+    /* ---- mode 28 峰峰值记录（foc_28_dci 内部 5s 窗口刷新，此处检测变化打印） ---- */
     if (g_dci_running && (g_dci_state == DCI_STEP_RUN)) {
         static float s_last_dci_id_pp = -1.0f;
         static float s_last_dci_iq_pp = -1.0f;
@@ -471,7 +471,7 @@ void Foc_Obs_Task(void)
         }
     }
 
-    /* ---- mode 28 均值记录（foc_dci 内部 3s 窗口刷新，此处检测变化打印） ---- */
+    /* ---- mode 28 均值记录（foc_28_dci 内部 3s 窗口刷新，此处检测变化打印） ---- */
     if (g_dci_running && (g_dci_state == DCI_STEP_RUN)) {
         static float s_last_dci_id_mean = 1e9f;
         static float s_last_dci_iq_mean = 1e9f;
@@ -485,7 +485,7 @@ void Foc_Obs_Task(void)
         }
     }
 
-    /* ---- mode 28 误差统计（foc_dci 内部 5s 窗口刷新，P 调参主判据） ---- */
+    /* ---- mode 28 误差统计（foc_28_dci 内部 5s 窗口刷新，P 调参主判据） ---- */
     if (g_dci_running && (g_dci_state == DCI_STEP_RUN)) {
         static float s_last_dci_ed = 1e9f;
         static float s_last_dci_eq = 1e9f;

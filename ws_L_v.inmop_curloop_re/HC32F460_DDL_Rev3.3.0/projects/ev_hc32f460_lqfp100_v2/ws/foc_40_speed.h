@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_speed40.h
+ * @file  foc_40_speed.h
  * @brief FOC mode 40 - encoder FOC with cascade speed/current loops.
  *
  * The speed PI runs on a fixed 5 ms tick and generates the q-axis current
@@ -48,8 +48,8 @@
  * ===========================================================================
  */
 
-#ifndef __FOC_SPEED40_H__
-#define __FOC_SPEED40_H__
+#ifndef __FOC_40_SPEED_H__
+#define __FOC_40_SPEED_H__
 
 #include <stdint.h>
 #include "foc_core.h"
@@ -191,4 +191,4 @@ int  Foc_Speed40_VofaFill(int32_t *cur);  /* 模式自持 VOFA，见顶部速览
 }
 #endif
 
-#endif /* __FOC_SPEED40_H__ */
+#endif /* __FOC_40_SPEED_H__ */

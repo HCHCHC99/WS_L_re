@@ -964,11 +964,6 @@
               <FilePath>..\..\ws\foc_math.c</FilePath>
             </File>
             <File>
-              <FileName>foc_align.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_align.c</FilePath>
-            </File>
-            <File>
               <FileName>foc_core.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_core.c</FilePath>
@@ -989,79 +984,14 @@
               <FilePath>..\..\ws\foc_scope.c</FilePath>
             </File>
             <File>
-              <FileName>foc_zizeng.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_zizeng.c</FilePath>
-            </File>
-            <File>
               <FileName>foc_calib.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_calib.c</FilePath>
             </File>
             <File>
-              <FileName>foc_iq_pi.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_iq_pi.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_lock_iq_pi.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_lock_iq_pi.c</FilePath>
-            </File>
-            <File>
               <FileName>foc_obs.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_obs.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_olf.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_olf.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_cal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_cal.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_cal_angle.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_cal_angle.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_dcl.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_dcl.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_dci.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_dci.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_dcal24.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_dcal24.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_drun29.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_drun29.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_drun41.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_drun41.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_speed40.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_speed40.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_smo45.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_smo45.c</FilePath>
             </File>
             <File>
               <FileName>foc_smo.c</FileName>
@@ -1072,6 +1002,76 @@
               <FileName>foc_pll.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_pll.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_20_cal.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_20_cal.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_23_align.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_23_align.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_24_dcal.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_24_dcal.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_25_calangle.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_25_calangle.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_26_olf.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_26_olf.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_27_dcl.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_27_dcl.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_28_dci.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_28_dci.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_29_drun.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_29_drun.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_30_ramp.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_30_ramp.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_31_iqpi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_31_iqpi.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_32_lockiq.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_32_lockiq.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_40_speed.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_40_speed.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_41_drun.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_41_drun.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_45_smo.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_45_smo.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -2035,11 +2035,6 @@
               <FilePath>..\..\ws\foc_math.c</FilePath>
             </File>
             <File>
-              <FileName>foc_align.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_align.c</FilePath>
-            </File>
-            <File>
               <FileName>foc_core.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_core.c</FilePath>
@@ -2060,79 +2055,14 @@
               <FilePath>..\..\ws\foc_scope.c</FilePath>
             </File>
             <File>
-              <FileName>foc_zizeng.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_zizeng.c</FilePath>
-            </File>
-            <File>
               <FileName>foc_calib.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_calib.c</FilePath>
             </File>
             <File>
-              <FileName>foc_iq_pi.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_iq_pi.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_lock_iq_pi.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_lock_iq_pi.c</FilePath>
-            </File>
-            <File>
               <FileName>foc_obs.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_obs.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_olf.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_olf.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_cal.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_cal.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_cal_angle.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_cal_angle.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_dcl.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_dcl.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_dci.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_dci.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_dcal24.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_dcal24.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_drun29.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_drun29.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_drun41.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_drun41.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_speed40.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_speed40.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_smo45.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_smo45.c</FilePath>
             </File>
             <File>
               <FileName>foc_smo.c</FileName>
@@ -2143,6 +2073,76 @@
               <FileName>foc_pll.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_pll.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_20_cal.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_20_cal.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_23_align.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_23_align.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_24_dcal.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_24_dcal.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_25_calangle.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_25_calangle.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_26_olf.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_26_olf.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_27_dcl.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_27_dcl.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_28_dci.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_28_dci.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_29_drun.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_29_drun.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_30_ramp.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_30_ramp.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_31_iqpi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_31_iqpi.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_32_lockiq.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_32_lockiq.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_40_speed.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_40_speed.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_41_drun.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_41_drun.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_45_smo.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_45_smo.c</FilePath>
             </File>
           </Files>
         </Group>

@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_zizeng.h
+ * @file  foc_30_ramp.h
  * @brief FOC 模式30 — 磁场角度自增拖动 (ZIZENG, comm_mode 30)。
  *
  * ============================================================================
@@ -46,14 +46,45 @@
  * 限制（为什么又做了 mode 32）：
  *   锁定发生在"拖动中"，若转子打滑、没跟上磁场，锁出的偏移就是错的，
  *   mode 31 启动方向就会随机。mode 32 用静止吸附法锁偏移，不受打滑
- *   影响，详见 foc_lock_iq_pi.h。
+ *   影响，详见 foc_32_lockiq.h。
  *
  * ISR 约束：短小、无阻塞、无打印、无 malloc。
- *******************************************************************************
+ *
+ * ============================ 模式速览卡（唯一事实源）========================
+ * 模式：30 = 磁场角度自增拖动（ZIZENG，拼音名；英文义 = open-loop angle ramp）
+ *        磁场匀速自转拖动转子，测量并锁定"编码器角 − 磁场角"偏移量
+ * 入口：comm_mode = 30（**也可 SW1 短按进入**）
+ * 前置：无（自带 foc_calib 零矢量零偏窗 ~210ms）
+ * 结束：持续拖动直到停机；偏移量跨停机保留，供 mode 31 取用
+ * ⚠ 已知缺陷：拖动着锁偏移，转子打滑即锁错 → **建议改用 mode 32**
+ *
+ * 【Watch 可调变量】（名称 = 默认值 单位）
+ *   g_zizeng_freq_hz  = 3.0   Hz   拖动电频率（**SW1 短按 +0.5Hz**）
+ *   g_zizeng_volt_v   = 0.6   V    拖动电压幅值（= 力道/转速）
+ *
+ * 【关键观察变量】
+ *   g_zizeng_theta_rad    当前磁场电角度(rad)
+ *   g_zizeng_running      1 = 正在运行
+ *   g_zizeng_drag_dir     拖动方向 +1/−1，**0 = 没测到**（锁定失败信号）
+ *   g_zizeng_du/dv/dw     三相占空比观测(%)
+ *   g_foc_if_diff_rad     编码器角−磁场角（锁定后 ≈0）
+ *   g_foc_id_rotor_ma / g_foc_iq_rotor_ma  转子系电流（锁定后有效）
+ *   产品接口：Foc_Zizeng_GetOffsetRad() / Foc_Zizeng_GetDragDir()
+ *
+ * 【VOFA 通道】通用 17ch 布局（见 main.c 顶部说明），mode 30 下语义：
+ *   ch0~2 三相电流(A)          ch3 静止系 ialpha(A)
+ *   ch4 静止系 ibeta(A)        ch5 控制系 iq(A)     ch6 控制系 id(A)
+ *   ch7 **自增电压幅值 g_zizeng_volt_v(V)**  ← mode30 专属语义
+ *   ch8 控制系合成幅值 sqrt(iq²+id²)(A)
+ *   ch9 **控制系角度 g_zizeng_theta_rad(rad)**  ← mode30 专属语义
+ *   ch10 静止系电流幅值(A)     ch11 母线直流电流估算(A)
+ *   ch12~16 预留 0
+ *   ⚠ mode 30 无专属布局函数，以上为通用布局的 mode30 分支语义。
+ * ===========================================================================
  */
 
-#ifndef __FOC_ZIZENG_H__
-#define __FOC_ZIZENG_H__
+#ifndef __FOC_30_RAMP_H__
+#define __FOC_30_RAMP_H__
 
 #include <stdint.h>
 #include "foc_core.h"
@@ -133,4 +164,4 @@ void Foc_Zizeng_Step(const stc_i_data_t *pData);
 }
 #endif
 
-#endif /* __FOC_ZIZENG_H__ */
+#endif /* __FOC_30_RAMP_H__ */

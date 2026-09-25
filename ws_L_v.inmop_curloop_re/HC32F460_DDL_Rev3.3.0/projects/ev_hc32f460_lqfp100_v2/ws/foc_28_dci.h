@@ -1,8 +1,8 @@
 /**
  *******************************************************************************
- * @file  foc_dci.h
+ * @file  foc_28_dci.h
  * @brief FOC 模式28 — 校准 + 功角参考电流闭环 (Delta Current loop)。
- *        mode 24 和 mode 29 已分别拆入 foc_dcal24 与 foc_drun29。
+ *        mode 24 和 mode 29 已分别拆入 foc_24_dcal 与 foc_29_drun。
  *        当前阶段：P 重调（i_valid=false）——转子捏死（BEMF=0）下调 P，
  *        判据 = 快速接近目标电流且不超过（不振铃）；合格后再开 I。
  *
@@ -71,11 +71,59 @@
  *
  * ISR 约束：短小、无阻塞、无打印、无 malloc。打印全部由 foc_obs 在
  * 主循环完成（事件快照 + 200ms 周期 + 5s 峰峰值）。
- *******************************************************************************
+ *
+ * ============================ 模式速览卡（唯一事实源）========================
+ * 模式：28 = 校准 + 功角参考电流闭环（一体化；mode 24/29 已拆出）
+ *        电流矢量被 PI 主动钉在 δ 方向（幅值 I_ref），转矩 T = 1.5·p·ψf·I_ref·sinδ
+ * 入口：comm_mode = 28
+ * 前置：无（自带零偏窗 + BETA 2s + ALPHA 2s）
+ * 结束：持续运行；仅 OC 自动回 mode 0
+ * ⚠ 拆分后推荐流程：**mode 24 校准 → mode 29 跑电流环**（可捏转子时机更好掌握）
+ *
+ * 【Watch 可调变量】（名称 = 默认值 单位）
+ *   g_dci_i_ref_ma      mA     电流矢量**幅值**参考（Start 不复位）← 力矩旋钮
+ *   g_dci_i_ramp_ma_s   mA/s   软启动斜率；**<=0 = 直通(阶跃)**
+ *   g_dci_dlt_init_deg / _targ_deg / _tr_ms   δ 爬坡三参数（Start 不复位）
+ *   g_dci_volt_v        = 0.6 V  校准吸附电压（RUN 不再用）
+ *   g_dci_pid_id_cfg / iq_cfg 的 .kp/.ki/.i_valid
+ *        **i_valid=0 → P-only**（P 重调阶段用；稳态落差 = kp/(kp+R)）
+ *
+ * 【电流参考生成】id_ref = I_ref·cosδ ； iq_ref = I_ref·sinδ
+ *   ⚠ 所以 id 参考**不恒为 0**（δ=90° 时才是经典 id=0 FOC）
+ *
+ * 【关键观察变量】
+ *   g_dci_running / g_dci_state  0 IDLE / 1 零偏校准 / 2 CAL_BETA / 3 CAL_ALPHA / 4 RUN / 5 OC
+ *   g_dci_evt    1 CALIB_DONE / 2 BETA_DONE / 3 LOCKED / 4 RAMP_DONE / 5 OC
+ *   g_dci_offset        校准锁零点（hw 绝对帧 counts）
+ *   g_dci_dlt_now_deg   当前 δ 指令 (deg)
+ *   g_dci_speed_hz      实测电频率 (Hz, 200ms 窗, 带符号)
+ *   g_dci_field_deg / g_dci_rotor_deg / g_dci_diff_deg  磁场/转子/功角(deg)
+ *   g_dci_id_ma / g_dci_iq_ma         真实转子系电流（零偏校正后 = 环反馈）
+ *   g_dci_id_ref_ma / g_dci_iq_ref_ma 电流参考实时值
+ *   **g_dci_eq_mean_ma / g_dci_eq_pp_ma  q 轴误差均值/峰峰值 ← P 调参主判据**
+ *   g_dci_ed_mean_ma / g_dci_ed_pp_ma  d 轴误差同上
+ *   g_dci_id_mean_ma / g_dci_iq_mean_ma  3s 均值
+ *   g_dci_vsat          电压饱和标志（1 = 贴 UMAX，调参数据作废）
+ *   g_dci_enc_pos       编码器相对计数镜像（毛刺排查用）
+ *   g_dci_du/dv/dw      三相占空比观测(%)
+ *   g_calib_iu/iv/iw_off_ma  foc_calib 锁定的三相零偏 (mA)
+ *
+ * 【P 重调判据】kp 扫参 0.5→1.0→2.0：**快速接近目标电流且不超过（不振铃）**。
+ *   注意 P-only 稳态落差 = R·i_ref/(kp+R) 属理论必然（kp=0.5 → 77%），不是故障。
+ *
+ * 【VOFA 通道】通用 17ch 布局（见 main.c 顶部说明），mode 28 下语义：
+ *   ch0~2 三相电流(A)   ch3 静止系 ialpha(A)
+ *   ch4 **id 反馈(A)**   ch5 iq 反馈(A)
+ *   ch6 **id 参考(A)** ← 不恒为 0    ch7 **iq 参考(A)**
+ *   ch8 **vd 输出(V)**   ch9 **vq 输出(V)**
+ *   ch10 **iq 3s 均值(A)**   ch11 **id 3s 均值(A)**
+ *   ch12 mode31 iq 参考（恒 0）   ch13 mode26 负载角（恒 0）
+ *   ch14~15 预留 0   ch16 预留 0
+ * ===========================================================================
  */
 
-#ifndef __FOC_DCI_H__
-#define __FOC_DCI_H__
+#ifndef __FOC_28_DCI_H__
+#define __FOC_28_DCI_H__
 
 #include <stdint.h>
 #include "foc_core.h"
@@ -152,7 +200,7 @@ extern "C" {
 #define DCI_EVT_OC          5u
 
 /*=============================================================================
- * Keil Watch 可调变量 / 观测量（定义见 foc_dci.c）
+ * Keil Watch 可调变量 / 观测量（定义见 foc_28_dci.c）
  *=============================================================================*/
 extern volatile float    g_dci_dlt_init_deg;  /* 功角爬坡起点 (deg, 默认5, Start不复位) */
 extern volatile float    g_dci_dlt_targ_deg;  /* 功角爬坡终点 (deg, 默认45, Start不复位) */
@@ -214,4 +262,4 @@ void Foc_Dci_Stop(void);
 }
 #endif
 
-#endif /* __FOC_DCI_H__ */
+#endif /* __FOC_28_DCI_H__ */

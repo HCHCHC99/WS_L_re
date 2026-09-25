@@ -1,6 +1,6 @@
 /**
  *******************************************************************************
- * @file  foc_lock_iq_pi.c
+ * @file  foc_32_lockiq.c
  * @brief FOC 模式32 — 自锁偏移 + 自动进入 mode 31 实现。
  *
  *        偏移注入值推导（关键）：
@@ -43,15 +43,15 @@
  *          -> VERIFY(磁场 90°, 等静止, 校验位移 ≈ +90°电角度)
  *          -> 锁定注入 -> 零矢量等 foc_obs 交接。
  *
- *        注入通道：foc_zizeng 的 SetOffsetRad/SetDragDir（刻意复用
- *        mode 31 现有取值路径，foc_iq_pi.c 保持零改动）。
+ *        注入通道：foc_30_ramp 的 SetOffsetRad/SetDragDir（刻意复用
+ *        mode 31 现有取值路径，foc_31_iqpi.c 保持零改动）。
  *******************************************************************************
  */
 
-#include "foc_lock_iq_pi.h"
+#include "foc_32_lockiq.h"
 #include "foc_obs.h"
 #include "foc_math.h"
-#include "foc_zizeng.h"
+#include "foc_30_ramp.h"
 #include "tmr4_pwm.h"
 #include "encoder.h"
 #include "motor_config.h"
@@ -75,7 +75,7 @@ volatile int32_t g_lockiq_off_deg     = 0;
  ******************************************************************************/
 static uint32_t s_phase_tick = 0u;    /* 当前相位已运行 ISR tick（超时用） */
 
-/* 编码器硬件计数跟踪（与 foc_zizeng/foc_iq_pi 相同的回绕处理，独立状态） */
+/* 编码器硬件计数跟踪（与 foc_30_ramp/foc_31_iqpi 相同的回绕处理，独立状态） */
 static int32_t s_prev_hw_cnt = 0;
 static int32_t s_enc_pos = 0;
 static uint8_t s_enc_initialized = 0;
@@ -143,7 +143,7 @@ static void LockIqPi_LockAndSignal(void)
      * 编码器噪声与 180° 翻转后发展为过流。 */
     float off_inject = 0.0f;
 
-    /* 注入 mode 31 取值路径（foc_iq_pi.c 零改动） */
+    /* 注入 mode 31 取值路径（foc_31_iqpi.c 零改动） */
     Foc_Zizeng_SetOffsetRad(off_inject);
     /* 本征方向基准：iq>0 => 计数增量符号 = sign(ENC_DIR)（见文件头推导） */
     Foc_Zizeng_SetDragDir((int8_t)FOC_ENC_DIR);
