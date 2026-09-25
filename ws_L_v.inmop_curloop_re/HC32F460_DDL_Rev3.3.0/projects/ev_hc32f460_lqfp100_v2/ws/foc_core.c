@@ -65,6 +65,21 @@ volatile float   g_foc_mech_rad         = 0.0f;   /* 机械角度 [0,2PI)，mode
 volatile int32_t g_foc_mech_deg         = 0;      /* 机械角度 [0,360)，mode 0 观测更新 */
 volatile int32_t g_foc_elec_deg         = 0;      /* 电角度 [0,360*极对数)，mode 0 观测更新 */
 
+/* 共享静止系电流观测量（2026-09-23 由 foc_30_ramp 迁入本模块）
+ * ★ 迁移动机：这三个量原先"定义在 mode 30 模块里"，却被 mode 0/29/31/32/40/41
+ *   共用 —— 共享核心状态放在具体模式模块里是归属错误，且迫使每个使用者
+ *   都去 include foc_30_ramp.h（本次会话因此漏 include 两次）。
+ * ★ 顺带修掉一个实质缺陷：原先**只有 mode 30 在写**它们，所以 mode 40 的
+ *   VOFA 静止系通道（ch3/ch4/ch10）显示的一直是 mode 30 的残留值或 0。
+ *   现在改为：
+ *     - 任何调用 Foc_Core_GetDq() 的模式（29/40/41/45）都会顺带刷新（零开销，
+ *       Clarke 本来就在算，只是把中间量写出来）
+ *     - mode 0 空闲态由 Foc_Core_UpdateCurrentObs() 刷新（与角度观测量同套路）
+ * 单位：mA（VOFA 静止系通道传 g_foc_*×1000） */
+volatile float   g_foc_ialpha           = 0.0f;
+volatile float   g_foc_ibeta            = 0.0f;
+volatile float   g_foc_iab_mag          = 0.0f;
+
 /* 对齐电零点 */
 volatile int32_t g_foc_align_offset     = 0;
 
@@ -151,6 +166,33 @@ void Foc_Core_UpdateAngleObs(void)
         elec += FOC_MATH_2PI;   /* 浮点截断误差防负 */
     }
     g_foc_if_rotor_rad = elec;
+}
+
+/*******************************************************************************
+ * Foc_Core_UpdateCurrentObs - mode 0 / 空闲时刷新静止系电流观测量（主循环调用）
+ *
+ *   与 Foc_Core_UpdateAngleObs 同套路：活跃模式下由各 step 的 GetDq 刷新，
+ *   空闲态（无 ISR 控制流）由本函数补上，保证 VOFA 静止系通道始终有效。
+ *
+ *   刷新：g_foc_ialpha / g_foc_ibeta / g_foc_iab_mag （单位 mA）
+ *   取值：I.c 的 g_i_*_ma 全局（已含 I_Calibrate 的 boot 零偏扣除）
+ *   ⚠ 与活跃模式的差异：不做 foc_calib 的温漂零偏扣除（那是各模式 step
+ *     内部的事），故 mode 0 下这三条曲线含残余零偏 —— 这正是观测用途。
+ ******************************************************************************/
+void Foc_Core_UpdateCurrentObs(void)
+{
+    float ia, ib, ic;
+
+    /* 与控制路径同源：I.c 的 mA 全局 */
+    ia = g_i_iu_ma;
+    ib = g_i_iv_ma;
+    ic = g_i_iw_ma;
+
+    Foc_Clarke(ia, ib, ic, &g_foc_ialpha, &g_foc_ibeta);
+    g_foc_ialpha  *= 1000.0f;   /* A -> mA */
+    g_foc_ibeta   *= 1000.0f;
+    g_foc_iab_mag  = sqrtf(g_foc_ialpha * g_foc_ialpha
+                         + g_foc_ibeta  * g_foc_ibeta);
 }
 
 /*******************************************************************************
@@ -269,8 +311,16 @@ void Foc_Core_GetDq(const stc_i_data_t *pData, float theta, float *id, float *iq
     } else {
         ia = ib = ic = 0.0f;
     }
+
     Foc_Clarke(ia, ib, ic, &ialpha, &ibeta);
     Foc_Park(ialpha, ibeta, theta, id, iq);
+
+    /* 把 Clarke 的中间量导出为共享观测量（零额外开销：本来就要算这一步）。
+     * 单位：ialpha/ibeta 是安培，共享量 g_foc_i* 按 mA 存（VOFA 传 ×1000）。 */
+    g_foc_ialpha  = ialpha * 1000.0f;
+    g_foc_ibeta   = ibeta  * 1000.0f;
+    g_foc_iab_mag = sqrtf(g_foc_ialpha * g_foc_ialpha
+                        + g_foc_ibeta  * g_foc_ibeta);
 }
 
 void Foc_Core_ResetEma(void)

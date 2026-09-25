@@ -54,10 +54,10 @@ static int32_t  s_drag_enc_ref = 0;              /* 采样起点编码器计数�
 static float    s_id_rotor_f = 0.0f;
 static float    s_iq_rotor_f = 0.0f;
 
-/* 静止两相系电流观测（A，瞬时值）：Clarke(dataCal) 输出与幅值 */
-volatile float   g_foc_ialpha  = 0.0f;
-volatile float   g_foc_ibeta   = 0.0f;
-volatile float   g_foc_iab_mag = 0.0f;
+/* 静止两相系电流观测量 g_foc_ialpha / g_foc_ibeta / g_foc_iab_mag
+ * ★ 2026-09-23 已迁至 foc_core.c（共享核心）—— 它们被 mode 0/29/31/32/40/41
+ *   共用，放在本模式模块里是归属错误。本模式仍是主要写入者之一（见下方
+ *   Foc_Clarke 调用处），但定义与声明都在 foc_core。 */
 
 /**
  * @brief 启动 ZIZENG 模式
@@ -208,16 +208,11 @@ void Foc_Zizeng_Step(const stc_i_data_t *pData)
     dataCal.i16IV_mA = (int16_t)((float)pData->i16IV_mA - off_v);
     dataCal.i16IW_mA = (int16_t)((float)pData->i16IW_mA - off_w);
 
-    /* 2.5 静止两相系观测：与 GetDq 同源的 Clarke（同符号约定），瞬时值无 EMA */
-    {
-        float sign = (float)g_foc_cur_sign;
-        float ia = (float)dataCal.i16IU_mA * 0.001f * sign;
-        float ib = (float)dataCal.i16IV_mA * 0.001f * sign;
-        float ic = (float)dataCal.i16IW_mA * 0.001f * sign;
-        Foc_Clarke(ia, ib, ic, &g_foc_ialpha, &g_foc_ibeta);
-        g_foc_iab_mag = sqrtf(g_foc_ialpha * g_foc_ialpha
-                            + g_foc_ibeta  * g_foc_ibeta);
-    }
+    /* 2.5 静止两相系观测量（g_foc_ialpha/ibeta/iab_mag）
+     * ★ 2026-09-23：原先这里有一段独立 Clarke 计算，现已**删除**——
+     *   紧跟其后的 Foc_Core_GetDq() 内部就会算 Clarke 并顺带刷新这三个
+     *   共享量（同源数据 dataCal、同单位 mA），本段纯属重复计算。
+     *   详见 foc_core.c 的 Foc_Core_GetDq()。 */
 
     Foc_Core_GetDq(&dataCal, theta, &id, &iq);
     Foc_Core_EmaFilter(&id, &iq);

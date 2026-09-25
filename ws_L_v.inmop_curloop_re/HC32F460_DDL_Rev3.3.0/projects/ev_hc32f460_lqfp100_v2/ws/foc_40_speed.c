@@ -17,7 +17,6 @@
 #include "motor_config.h"
 #include "hc32_ll_tmra.h"
 #include "I.h"            /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
-#include "foc_30_ramp.h"   /* g_foc_ialpha/ibeta/iab_mag（VOFA 静止系通道） */
 
 #define SPEED40_ISR_DT_US     (1000000u / FOC_ISR_HZ)
 #define SPEED40_SPD_WIN_TICKS (SPEED40_SPD_WIN_MS * FOC_ISR_HZ / 1000u)

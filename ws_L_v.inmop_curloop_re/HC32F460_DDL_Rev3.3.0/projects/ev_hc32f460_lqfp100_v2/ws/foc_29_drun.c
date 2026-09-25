@@ -18,9 +18,6 @@
 #include "timer6_timebase.h"
 #include "hc32_ll_tmra.h"
 #include "I.h"   /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
-#include "foc_30_ramp.h"  /* g_foc_ialpha/ibeta（静止系观测，VOFA 用）
-                           * ⚠ 这三个量定义在 mode 30 模块里却被多模式共用，
-                           *   属架构不洁点；后续宜迁至 foc_core（阶段 3 待办） */
 
 #define DRUN29_ISR_DT_US  (1000000u / FOC_ISR_HZ)
 

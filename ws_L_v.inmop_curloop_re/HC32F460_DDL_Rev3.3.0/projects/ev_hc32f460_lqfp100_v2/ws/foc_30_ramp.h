@@ -138,12 +138,10 @@ extern volatile int8_t  g_zizeng_drag_dir;       /* 拖动方向: +1/-1 = 偏移
 extern volatile float   g_foc_id_rotor_ma;
 extern volatile float   g_foc_iq_rotor_ma;
 
-/* 静止两相坐标系电流观测（Clarke 输出，扣除 foc_calib 残余零偏，
- * 与控制系/转子系电流同源，A 单位，瞬时值无 EMA）：
- * iab_mag = sqrt(ialpha^2 + ibeta^2) = 电流矢量幅值（与坐标系选取无关） */
-extern volatile float   g_foc_ialpha;
-extern volatile float   g_foc_ibeta;
-extern volatile float   g_foc_iab_mag;
+/* ★ 静止两相系电流观测量 g_foc_ialpha / g_foc_ibeta / g_foc_iab_mag
+ *   已于 2026-09-23 迁至 **foc_core.h**（它们被 mode 0/29/31/32/40/41 共用，
+ *   放在本模式头文件里属归属错误）。此处不再声明 —— 需要用的模块请包含
+ *   foc_core.h（几乎所有 FOC 模块都已包含）。 */
 
 /* 启动/停止自增模式 */
 void Foc_StartZizeng(void);

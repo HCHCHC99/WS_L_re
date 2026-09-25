@@ -66,6 +66,13 @@ extern volatile float    g_foc_iq_ma;            /* q-axis feedback (mA) */
 extern volatile float    g_foc_vd;               /* d-axis PI output (V) */
 extern volatile float    g_foc_vq;               /* q-axis PI output (V) */
 
+/* 共享静止系电流观测量（mA）—— 2026-09-23 由 foc_30_ramp 迁入 foc_core。
+ * 任何调 Foc_Core_GetDq() 的模式都会刷新；mode 0 空闲态由
+ * Foc_Core_UpdateCurrentObs() 刷新。各模式 VOFA 的静止系通道读这三个量。 */
+extern volatile float    g_foc_ialpha;           /* 静止系 ialpha (mA) */
+extern volatile float    g_foc_ibeta;            /* 静止系 ibeta  (mA) */
+extern volatile float    g_foc_iab_mag;          /* 静止系电流幅值 sqrt(ia²+ib²) (mA) */
+
 extern volatile uint8_t  g_foc_align_state;      /* 0=idle, 1=aligning, 2=running */
 extern volatile uint8_t  g_foc_fault;            /* 1 = over-current fault */
 
@@ -156,6 +163,14 @@ void Foc_Core_SetAlignOffset(int32_t offset);
  * [0,360*极对数)）（deg，显示/Watch 用）。
  * 活跃模式下各 step 函数会覆盖 g_foc_if_rotor_rad，不冲突。 */
 void Foc_Core_UpdateAngleObs(void);
+
+/* mode 0 / 空闲时刷新静止系电流观测量（主循环调用，与上者同套路）：
+ * 取 I.c 的 g_i_*_ma，做 Clarke 后写入 g_foc_ialpha / g_foc_ibeta /
+ * g_foc_iab_mag（单位 mA）。活跃模式下各 step 的 Foc_Core_GetDq()
+ * 会顺带刷新同样这三个量，故本函数只补空闲态，两者不冲突。
+ * ⚠ 本函数不做 foc_calib 温漂零偏扣除（那是各模式 step 内部的事），
+ *   故 mode 0 下这三条曲线含残余零偏 —— 这正是观测用途。 */
+void Foc_Core_UpdateCurrentObs(void);
 
 /*******************************************************************************
  * 原有对外 API（实现移自 foc.c，名称不变）

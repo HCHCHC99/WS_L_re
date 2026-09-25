@@ -130,6 +130,13 @@ void Foc_Obs_Task(void)
      * 活跃模式下 ISR 会覆盖 g_foc_if_rotor_rad，此写入无害。 */
     Foc_Core_UpdateAngleObs();
 
+    /* ---- 静止系电流实时观测（2026-09-23 加） ----
+     * 与上者同套路：mode 0 / 空闲态没人跑控制 ISR，这三个共享量会停在
+     * 上一次活跃模式的残值；本调用保证 mode 0 下 VOFA 静止系通道始终有效
+     * （这正是"静止态观察电流零漂/噪声"的用途）。
+     * 活跃模式下各 step 的 Foc_Core_GetDq() 已刷新，此写入无害。 */
+    Foc_Core_UpdateCurrentObs();
+
     /* ---- mode45 SMO 旁观诊断（sqrtf/atan2f 只在主循环，不进 ISR） ----
      * omega_e = 机械 rpm -> 电角速度 rad/s（×2π/60×极对数） */
     if (g_smo45_running) {
