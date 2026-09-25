@@ -120,6 +120,7 @@
         <SetRegEntry>
           <Number>0</Number>
           <Key>DLGUARM</Key>
+          <Name>?(9?</Name>
         </SetRegEntry>
         <SetRegEntry>
           <Number>0</Number>
@@ -399,7 +400,7 @@
         <Ww>
           <count>20</count>
           <WinNumber>2</WinNumber>
-          <ItemText>g_smo_diag_theta_err_filt_deg</ItemText>
+          <ItemText>g_speed40_pid_iq_cfg</ItemText>
         </Ww>
         <Ww>
           <count>21</count>
@@ -409,7 +410,7 @@
         <Ww>
           <count>22</count>
           <WinNumber>2</WinNumber>
-          <ItemText>check_noisy_mode </ItemText>
+          <ItemText>g_speed40_pid_speed_cfg</ItemText>
         </Ww>
         <Ww>
           <count>23</count>

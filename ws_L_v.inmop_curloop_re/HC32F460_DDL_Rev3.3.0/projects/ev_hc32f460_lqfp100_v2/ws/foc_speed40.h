@@ -15,10 +15,10 @@
  * 【Watch 可调变量】（名称 = 默认值 单位）
  *   g_speed40_speed_target_rpm = 0     rpm       目标转速
  *   g_speed40_iq_filt_alpha    = 0.10  -         iq 反馈滤波系数
- *   g_speed40_pid_speed_cfg.kp = 2.0   mA/rpm    速度环 P（Watch 改立即生效）
- *   g_speed40_pid_speed_cfg.ki = 0.45  mA/rpm/s  速度环 I（同上）
- *        ↑ 2026-09-23：kp 由 1.8 调到 2.0，ki 0.2→0.45
- *          ⚠ 速度环 P 是唯一的带宽旋钮（ωc≈72·kp）；ki 只管稳态精度
+ *   g_speed40_pid_speed_cfg.kp = 0.8   mA/rpm    速度环 P（Watch 改立即生效）
+ *   g_speed40_pid_speed_cfg.ki = 0.03  mA/rpm/s  速度环 I（同上）
+ *        ↑ 2026-09-23 **定稿值**（实测：0→1000rpm 超调 4.1%、上升 ~600ms、
+ *          稳态差收敛正常）。勿随意改动，详见宏定义处完整记录。
  *   g_speed40_pid_id_cfg / iq_cfg .kp = 0.1  V/A  电流环 P（带 6.2V 输出限幅）
  *   g_speed40_pid_id_cfg / iq_cfg .ki = 300  V/(A·s)
  *        ↑ 2026-09-23 实测：kp 0.5→0.1 大幅降低静止噪声（0.1 与 0.05 无差别，
@@ -96,18 +96,27 @@ extern "C" {
 #define SPEED40_IQ_FILT_ALPHA     0.10f
 
 /* Outer speed PI output is a signed q-axis current reference in mA.
- * 2026-09-23 调参：kp 1.8 → **2.0**，ki 0.2 → 0.45。
- *   2.0 是折中：比原 1.8 略快，但不逼近 200Hz 采样率的带宽极限
- *   （kp=4 时 ωc≈46Hz，约为速度环采样率 200Hz 的 1/4.3，偏激进）。
+ * 2026-09-23 调参轨迹：kp 1.8 → 4.0 → 2.0 → **0.8**；
+ *                      ki 0.2 → 0.45 → 0.01 → **0.03**
+ *
+ * ★ 实测结果（kp=0.8 / ki=0.03，0→1000rpm 阶跃）：
+ *     超调 **4.1%**（峰值 1041rpm）— 反推阻尼比 ζ≈0.71，属"优秀"档（≤5%）
+ *     上升 **约 600ms**          — 斜坡限幅物理下限 1000/1950 = 513ms，
+ *                                  仅多 87ms，已接近最优
+ *     稳态差 **收敛正常**        — 实测未出现积分过慢现象
+ *   ⇒ **本组参数为定稿值，勿再改动。**
+ *
+ *   （注：按 kp/ki 推算积分时间常数 τi=27s，曾担心稳态差收敛需数十秒；
+ *     实测证否——说明本机摩擦远小于估算、且积分器在爬坡段已积累足够电流。
+ *     理论模型在此偏保守，以实测为准。）
  *
  * 理论要点（详见 md_record/mode40控制系统_纯理论计算手册.md）：
- *   ωc ≈ 72·kp（在机械阻尼 kfb=2 下）→ kp=2.0 约 36 Hz
- *   相位裕度随 kp 上升而下降；随 ki 上升而**上升**（PI 零点抬高提供相位超前）
- *   ⚠ 速度环 P 是唯一的带宽旋钮——改 ki 改不了响应速度（PI 零点比穿越频率低 3 个数量级）
+ *   kp 同时决定带宽与相位裕度（唯一带宽旋钮，主导超调与上升时间）；
+ *   ki 主导稳态差收敛（且越大 PI 零点越高、相位裕度反而**提高**）。
  *
  * 注：运行时可用 Watch 改 g_speed40_pid_speed_cfg.kp/.ki，此处仅为上电默认值。 */
-#define SPEED40_SPD_KP_MA_PER_RPM       2.0f
-#define SPEED40_SPD_KI_MA_PER_RPM_S     0.45f
+#define SPEED40_SPD_KP_MA_PER_RPM       0.8f
+#define SPEED40_SPD_KI_MA_PER_RPM_S     0.03f
 /* 速度环输出限幅 = 最大电流 × 20%（17A × 0.2 = 3400mA）。
  * 取 20% 而非更高：17A 是峰值能力（厂商规格书原文「最大电流」），
  * 按其 20% 折算已相当于一个合理的连续工作点。 */
