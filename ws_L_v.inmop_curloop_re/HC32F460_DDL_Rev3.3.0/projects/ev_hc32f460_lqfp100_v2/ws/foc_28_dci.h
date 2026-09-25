@@ -111,14 +111,20 @@
  * 【P 重调判据】kp 扫参 0.5→1.0→2.0：**快速接近目标电流且不超过（不振铃）**。
  *   注意 P-only 稳态落差 = R·i_ref/(kp+R) 属理论必然（kp=0.5 → 77%），不是故障。
  *
- * 【VOFA 通道】通用 17ch 布局（见 main.c 顶部说明），mode 28 下语义：
- *   ch0~2 三相电流(A)   ch3 静止系 ialpha(A)
- *   ch4 **id 反馈(A)**   ch5 iq 反馈(A)
- *   ch6 **id 参考(A)** ← 不恒为 0    ch7 **iq 参考(A)**
- *   ch8 **vd 输出(V)**   ch9 **vq 输出(V)**
- *   ch10 **iq 3s 均值(A)**   ch11 **id 3s 均值(A)**
- *   ch12 mode31 iq 参考（恒 0）   ch13 mode26 负载角（恒 0）
- *   ch14~15 预留 0   ch16 预留 0
+ * 【VOFA 通道】**自持布局，固定 17ch**（实现见 foc_28_dci.c
+ *   Foc_Dci_VofaFill，单位换算：传"毫单位"，SendScaled 内部 ×0.001）：
+ *   ch0~2  三相电流(A)
+ *   ch3    实测电频率(Hz)            ch4  δ 指令(deg)     ch5  功角实测(deg)
+ *   ch6    iq 反馈(A)                ch7  id 反馈(A)
+ *   ch8    iq 参考(A)                ch9  id 参考(A)（= I_ref·cosδ，**不恒为 0**）
+ *   ch10   电流矢量**幅值**参考(A)
+ *   ch11   **q 误差均值(A) ← P 调参主判据**（=稳态落差，P-only 时属理论必然）
+ *   ch12   d 误差均值(A)
+ *   ch13   iq 3s 均值(A)             ch14 id 3s 均值(A)
+ *   ch15   **q 误差峰峰值(A) ← 振铃判据**（增大 = 振荡，调参数据作废）
+ *   ch16   状态 0IDLE/1零偏/2BETA/3ALPHA/4RUN/5OC
+ *   ⚠ 共 17ch —— 切到本模式时 VOFA+ 通道数需同步改为 17。
+ *   ⚠ **改通道数：改 Foc_Dci_VofaFill 末尾的 return 值**。
  * ===========================================================================
  */
 
@@ -257,6 +263,7 @@ void Foc_Dci_Step(const stc_i_data_t *pData);
 /* 停止（用户中途切模式时调用）：清运行标志 + 关 PWM（若在输出）。
  * 自带 g_foc_active 清零，防止 ISR 回退。 */
 void Foc_Dci_Stop(void);
+int  Foc_Dci_VofaFill(int32_t *cur);   /* 模式自持 VOFA，17ch，见顶部速览卡 */
 
 #ifdef __cplusplus
 }

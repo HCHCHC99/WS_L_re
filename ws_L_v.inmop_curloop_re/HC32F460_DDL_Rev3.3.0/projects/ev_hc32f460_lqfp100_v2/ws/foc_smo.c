@@ -3,11 +3,12 @@
  * @file  foc_smo.c
  * @brief 无感滑模观测器（SMO）实现 —— 纯旁观者，见 foc_smo.h 顶部说明。
  *
- * 离散格式（每轴，Ts = 1/FOC_ISR_HZ，当前 valley 采样 = 10kHz）：
+ * 离散格式（每轴，Ts = 1/FOC_ISR_HZ；当前 VALLEY 采样 ⇒ Ts = 1/MOTOR_PWM_FREQ_HZ
+ *   = 50µs @20kHz，2026-09-23 由 10kHz/100µs 提升）：
  *   预测：  î_p = î_k + (Ts/L)·(v_k − R·î_k)                （无滑模项）
  *   层内：  î_{k+1} = (î_p + g·i_k)/(1+g)，z = (k/φ)(î_{k+1} − i_k)，
  *           g = Ts·k/(φ·L) —— 对 î_{k+1} 半隐式解析解，无条件稳定
- *           （显式 Euler 在 Ts=100µs 下要求 k/φ < 2L/Ts ≈ 0.75，会自激）
+ *           （显式 Euler 则要求 k/φ < 2L/Ts − R，Ts=50µs 时阈值 ≈1.5）
  *   层外：  z = ±k 饱和注入，î_{k+1} = î_p − Ts·z
  *   e_hat = EMA(z)
  *   符号约定：err = î − i，滑模面上 z ≈ +e（若 e 矢量滞后转子 d 轴 90°

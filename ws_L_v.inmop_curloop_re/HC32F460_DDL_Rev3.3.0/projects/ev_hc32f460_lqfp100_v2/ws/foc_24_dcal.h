@@ -40,10 +40,12 @@
  *     结构体含：valid / offset / zero_u_ma / zero_v_ma / zero_w_ma
  *     **按值拷贝，无运行时共享状态**
  *
- * 【VOFA 通道】mode 24 走通用 17ch 布局（见 main.c 顶部说明）：
- *   ch0~2 三相电流(A)，校准期间可见 BETA/ALPHA 吸附的电流包络
- *   ch3~16 通用布局其余通道 —— **本模式无专属语义**
- *   判读建议：用 RTT 的 [DCAL24] 事件（"cal-only done"）+ Watch 变量，不要依赖 VOFA。
+ * 【VOFA 通道】mode 24 **无专属布局，回落通用布局（20ch）**：
+ *   通道定义见 main.c 的 Foc_Common_VofaFill（ch0~2 三相电流 / ch3~5 零偏 /
+ *   ch6~7 静止系 / ch8~11 id-iq-vd-vq / ch12 幅值 / ch13~14 角度 /
+ *   ch15 零点 / ch16 故障 / ch17~18 ZIZENG 兼容 / ch19 OC 阈值）。
+ *   校准期间只有 ch0~2 有波形（零偏窗/BETA/ALPHA 的电流包络）。
+ *   判读建议：用 RTT 的 [DCAL24] 事件（"cal-only done"）+ Watch 变量。
  * ===========================================================================
  */
 

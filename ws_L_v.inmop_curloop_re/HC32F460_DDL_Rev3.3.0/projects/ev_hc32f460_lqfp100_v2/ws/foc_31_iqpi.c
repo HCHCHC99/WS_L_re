@@ -22,6 +22,7 @@
 #include "motor_config.h"
 #include "rtt_log.h"
 #include "hc32_ll_tmra.h"   /* 直接读取 TIMERA_1 计数器 */
+#include "I.h"              /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
 
 /* ISR period in us */
 #define FOC_ISR_DT_US  (1000000u / FOC_ISR_HZ)
@@ -412,4 +413,35 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
     g_foc_du = du;
     g_foc_dv = dv;
     g_foc_dw = dw;
+}
+
+/*===========================================================================
+ * mode 31 自持 VOFA：固定 16ch 布局
+ * 通道含义速览卡 = foc_31_iqpi.h 顶部【模式速览卡】（唯一事实源）
+ *
+ * 本模式是"编码器 PI 电流环"（id 参考恒 0，iq 手动给）：
+ *   ch11 是**斜坡后的实际给定**——闭环真正吃的就是它，判跟踪看 ch6 追 ch11。
+ *   ch3 是静止系电流幅值，ch13/ch14 是占空比，用于判断电压是否够用。
+ * 单位换算：传"毫单位"，SendScaled 内部 ×0.001
+ *===========================================================================*/
+int Foc_IqPi_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                    /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                    /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                    /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_foc_iab_mag * 1000.0f);      /* ch3  静止系电流幅值 */
+    cur[4]  = (int32_t)(g_foc_ialpha * 1000.0f);       /* ch4  静止系 ialpha */
+    cur[5]  = (int32_t)(g_foc_ibeta  * 1000.0f);       /* ch5  静止系 ibeta */
+    cur[6]  = (int32_t)(g_foc_iq_ma);                  /* ch6  iq 反馈 ← 环反馈 */
+    cur[7]  = (int32_t)(g_foc_id_ma);                  /* ch7  id 反馈（参考恒 0） */
+    cur[8]  = (int32_t)(g_iqpi_iq_ref_ma);             /* ch8  iq 目标（手动给） */
+    cur[9]  = (int32_t)(g_foc_vd * 1000.0f);           /* ch9  vd 输出 (mV -> V) */
+    cur[10] = (int32_t)(g_foc_vq * 1000.0f);           /* ch10 vq 输出 */
+    cur[11] = (int32_t)(g_iqpi_iq_ref_ramp_ma);        /* ch11 **斜坡后实际 iq 参考 ← 判跟踪看这个** */
+    cur[12] = (int32_t)(g_iqpi_theta_rad * 1000.0f);   /* ch12 使用的转子电角度 (mrad -> rad) */
+    cur[13] = (int32_t)(g_foc_du * 1000.0f);           /* ch13 U 相占空比 (m% -> %) */
+    cur[14] = (int32_t)(g_foc_dv * 1000.0f);           /* ch14 V 相占空比 */
+    cur[15] = (int32_t)(g_iqpi_step);                  /* ch15 状态 0IDLE/1无偏移/2零矢量/3闭环
+                                                        *      4电压饱和/5堵转/6过流/7已翻转 */
+    return 16;
 }

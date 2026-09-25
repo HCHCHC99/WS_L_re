@@ -47,11 +47,20 @@ typedef struct {
 } comm_runner_config_t;
 
 /*=============================================================================
- * 模式自持 VOFA 接口（通道含义速览卡 = 各模式 .h 顶部注释，唯一事实源）
- *   各模式在 .c 中实现 fill 函数：把"毫单位"值填入 cur[]（SendScaled 内部
- *   ×0.001：mA->A / mV->V / mrad->rad / mdeg->deg），返回通道数；
- *   返回 0 = 使用 main.c 的通用 17ch 布局。
- *   通道数上限 USART3_VOFA_MAX_CHANNELS(24)，main.c 的 cur[] 即按该上限定义。
+ * 模式自持 VOFA 接口（通道含义速览卡 = 各模式 .h 顶部【模式速览卡】，唯一事实源）
+ *   各模式在 .c 中实现 Foc_Xxx_VofaFill()：把"毫单位"值填入 cur[]
+ *   （SendScaled 内部 ×0.001：mA→A / mV→V / mrad→rad / mdeg→deg），
+ *   并返回**自己的通道数**（各模式可不同，见下表）。
+ *
+ *   返回 0 = 该模式无专属布局，回落到 main.c 的通用布局
+ *             （Foc_Common_VofaFill，20ch；校准类模式 20/23/24/25 走这条）。
+ *
+ *   现行通道数一览（改动时请同步本表与 main.c 分发链）：
+ *     mode 0/通用 20ch | 26 16ch | 27 17ch | 28 17ch | 29 19ch | 30 15ch
+ *     mode 31 16ch | 32 16ch | 40 18ch | 41 21ch | 45 8或16ch（随 wave_mode）
+ *
+ *   ⚠ 通道数可变 ⇒ 切模式时 VOFA+ 上位机的通道数必须同步修改。
+ *   ⚠ 硬上限 USART3_VOFA_MAX_CHANNELS(24)；main.c 内部缓冲 cur[32]。
  *=============================================================================*/
 typedef int (*comm_vofa_fn_t)(int32_t *cur);
 

@@ -341,14 +341,14 @@ int main(void)
             else if (g_dcal24_running)    { n = 0; }   /* mode24 待迁移 */
             else if (g_drun29_running)    { n = Foc_Drun29_VofaFill(cur); }  /* 19ch */
             else if (g_drun41_running)    { n = Foc_Drun41_VofaFill(cur); }  /* 21ch */
-            else if (g_dci_running)       { n = 0; }   /* mode28 待迁移 */
-            else if (g_dcl_running)       { n = 0; }   /* mode27 待迁移 */
-            else if (g_olf_running)       { n = 0; }   /* mode26 待迁移 */
-            else if (g_calang_running)    { n = 0; }   /* mode25 待迁移 */
-            else if (g_cal_running)       { n = 0; }   /* mode20 待迁移 */
-            else if (g_zizeng_running)    { n = 0; }   /* mode30 待迁移 */
-            else if (g_lockiq_running)    { n = 0; }   /* mode32 待迁移 */
-            else if (g_iqpi_running)      { n = 0; }   /* mode31 待迁移 */
+            else if (g_dci_running)       { n = Foc_Dci_VofaFill(cur); }     /* 17ch */
+            else if (g_dcl_running)       { n = Foc_Dcl_VofaFill(cur); }     /* 17ch */
+            else if (g_olf_running)       { n = Foc_Olf_VofaFill(cur); }     /* 16ch */
+            else if (g_calang_running)    { n = 0; }   /* mode25 无专属标志，用通用 */
+            else if (g_cal_running)       { n = 0; }   /* mode20 无专属标志，用通用 */
+            else if (g_zizeng_running)    { n = Foc_Ramp_VofaFill(cur); }    /* 15ch */
+            else if (g_lockiq_running)    { n = Foc_LockIq_VofaFill(cur); }  /* 16ch */
+            else if (g_iqpi_running)      { n = Foc_IqPi_VofaFill(cur); }    /* 16ch */
             else                          { n = 0; }   /* mode 0 及空闲态 */
 
             if (n <= 0) {

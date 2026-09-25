@@ -16,13 +16,14 @@
 #include "motor_config.h"
 #include "rtt_log.h"
 #include "hc32_ll_tmra.h"   /* 直接读取 TIMERA_1 计数器 */
+#include "I.h"              /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
 #include <math.h>           /* sqrtf */
 
 /* ============================================================================
  * ZIZENG 自动偏移补偿参数
  * ==========================================================================*/
 #define ZIZENG_OFFSET_WAIT_MS     1000           /* 启动后等待 1000ms 再采样 */
-#define ZIZENG_OFFSET_SAMPLES     2000           /* 采样 2000 次（约 100ms @20kHz） */
+#define ZIZENG_OFFSET_SAMPLES     2000           /* 采样 2000 次 = 100ms @20kHz（= 2000/FOC_ISR_HZ） */
 #define ZIZENG_DRAGDIR_MIN_CNTS   (ENCODER_CPR/50u) /* 采样窗口内位移低于此值算方向未知
                                                        (3Hz电角度下正常应走约123 counts) */
 
@@ -374,4 +375,33 @@ void Foc_Zizeng_SetOffsetRad(float rad)
 void Foc_Zizeng_SetDragDir(int8_t dir)
 {
     g_zizeng_drag_dir = dir;
+}
+
+/*===========================================================================
+ * mode 30 自持 VOFA：固定 15ch 布局
+ * 通道含义速览卡 = foc_30_ramp.h 顶部【模式速览卡】（唯一事实源）
+ *
+ * 本模式目的是**锁定偏移量**（编码器只旁观）：
+ *   ch5 = 编码器角 − 磁场角，**锁定后应≈0**；ch13 drag_dir=0 表示锁定失败。
+ * ch3/ch4 是静止系电流（本模块顺带维护，被 mode 40/41 复用）。
+ * 单位换算：传"毫单位"，SendScaled 内部 ×0.001
+ *===========================================================================*/
+int Foc_Ramp_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                   /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                   /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                   /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_foc_ialpha * 1000.0f);      /* ch3  静止系 ialpha */
+    cur[4]  = (int32_t)(g_foc_ibeta  * 1000.0f);      /* ch4  静止系 ibeta */
+    cur[5]  = (int32_t)(g_foc_if_diff_rad * 1000.0f); /* ch5 **编码器角−磁场角(mrad)，锁定后≈0** */
+    cur[6]  = (int32_t)(g_zizeng_freq_hz * 1000.0f);  /* ch6  自增频率 (mHz -> Hz) */
+    cur[7]  = (int32_t)(g_zizeng_theta_rad * 1000.0f);/* ch7  磁场电角度 (mrad -> rad) */
+    cur[8]  = (int32_t)(g_zizeng_volt_v * 1000.0f);   /* ch8  电压幅值 (mV -> V) */
+    cur[9]  = (int32_t)(g_foc_id_rotor_ma);           /* ch9  转子系 id（锁定后有效） */
+    cur[10] = (int32_t)(g_foc_iq_rotor_ma);           /* ch10 转子系 iq */
+    cur[11] = (int32_t)(g_foc_iab_mag * 1000.0f);     /* ch11 静止系电流幅值 */
+    cur[12] = (int32_t)(g_zizeng_du * 1000.0f);       /* ch12 U 相占空比 (m% -> %) */
+    cur[13] = (int32_t)(g_zizeng_drag_dir);           /* ch13 **方向 +1/-1，0=锁定失败** */
+    cur[14] = (int32_t)(g_zizeng_running);            /* ch14 运行标志 */
+    return 15;
 }

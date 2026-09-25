@@ -39,6 +39,7 @@
 #include "encoder.h"
 #include "motor_config.h"
 #include "hc32_ll_tmra.h"       /* TMRA_GetCountValue(CM_TMRA_1) */
+#include "I.h"                  /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
 
 /* 阶段时长 -> ISR tick 数 */
 #define OLF_BETA_TICKS    ((uint32_t)OLF_BETA_MS    * (uint32_t)FOC_ISR_HZ / 1000u)
@@ -365,4 +366,34 @@ void Foc_Olf_Stop(void)
         }
         OLF_DBG("stopped");
     }
+}
+
+/*===========================================================================
+ * mode 26 自持 VOFA：固定 16ch 布局
+ * 通道含义速览卡 = foc_26_olf.h 顶部【模式速览卡】（唯一事实源）
+ *
+ * 本模式是"开环 VF 负载角实验"，**核心观测量是 ch7 的 delta**——
+ * 它随频率的走势就是实验结论（摩擦锥 → 缓升 → 逼近 90° 牵出）。
+ * ch3/ch4 给出参考转速与实际转速，ch12/ch13 是相位裕度检查量。
+ * 单位换算：传"毫单位"，SendScaled 内部 ×0.001
+ *===========================================================================*/
+int Foc_Olf_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                 /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                 /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                 /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_olf_freq_hz * 1000.0f);   /* ch3  磁场自增频率 (mHz -> Hz) */
+    cur[4]  = (int32_t)(g_olf_freq_targ_hz * 1000.0f);/* ch4 目标频率（SW1 可调） */
+    cur[5]  = (int32_t)(g_olf_iq_ma);               /* ch5  iq（力矩分量） */
+    cur[6]  = (int32_t)(g_olf_id_ma);               /* ch6  id（磁链分量，高频转负） */
+    cur[7]  = (int32_t)(g_olf_diff_deg * 1000);     /* ch7  **负载角 delta (mdeg -> deg) ← 实验主曲线** */
+    cur[8]  = (int32_t)(g_olf_field_deg * 1000);    /* ch8  磁场电角度 (mdeg -> deg) */
+    cur[9]  = (int32_t)(g_olf_rotor_deg * 1000);    /* ch9  转子电角度 */
+    cur[10] = (int32_t)(g_olf_volt_v * 1000.0f);    /* ch10 拖动电压幅值 (mV -> V) */
+    cur[11] = (int32_t)(g_olf_iq_pp_ma);            /* ch11 iq 峰峰值（失步后剧烈振荡） */
+    cur[12] = (int32_t)(g_olf_id_pp_ma);            /* ch12 id 峰峰值 */
+    cur[13] = (int32_t)(g_olf_theta_rad * 1000.0f); /* ch13 控制系 d 轴角 (mrad -> rad) */
+    cur[14] = (int32_t)(g_olf_dir);                 /* ch14 自增方向 +1/-1 */
+    cur[15] = (int32_t)(g_olf_state);               /* ch15 状态 0IDLE/1BETA/2ALPHA/3DRAG/4OC */
+    return 16;
 }

@@ -33,6 +33,7 @@
 
 #include "foc_27_dcl.h"
 #include "foc_math.h"
+#include "I.h"   /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
 #include "tmr4_pwm.h"
 #include "encoder.h"
 #include "motor_config.h"
@@ -380,4 +381,35 @@ void Foc_Dcl_Stop(void)
         }
         DCL_DBG("stopped");
     }
+}
+
+/*===========================================================================
+ * mode 27 自持 VOFA：固定 17ch 布局
+ * 通道含义速览卡 = foc_27_dcl.h 顶部【模式速览卡】（唯一事实源）
+ *
+ * 本模式是"功角闭环拖动"（磁场=转子+δ），**调速靠电压不是频率**：
+ *   扫 g_dcl_dlt_targ_deg 看 ch3(转速) → 90° 附近转速最高（MTPA 闭环验证）
+ * ch5 是实测功角，应≈ch4 的 δ 指令（恒等验证）；两者背离说明框架有问题。
+ * 单位换算：传"毫单位"，SendScaled 内部 ×0.001
+ *===========================================================================*/
+int Foc_Dcl_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                 /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                 /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                 /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_dcl_speed_hz * 1000.0f);  /* ch3  **实测电频率 (mHz -> Hz) ← 扫 δ 看这个** */
+    cur[4]  = (int32_t)(g_dcl_dlt_now_deg * 1000.0f);/* ch4 δ 指令 (mdeg -> deg) */
+    cur[5]  = (int32_t)(g_dcl_diff_deg * 1000);     /* ch5  功角实测 (mdeg -> deg)，应≈ch4 */
+    cur[6]  = (int32_t)(g_dcl_iq_ma);               /* ch6  iq（力矩分量） */
+    cur[7]  = (int32_t)(g_dcl_id_ma);               /* ch7  id（磁链分量，δ 小时变大） */
+    cur[8]  = (int32_t)(g_dcl_field_deg * 1000);    /* ch8  磁场电角度 (mdeg -> deg) */
+    cur[9]  = (int32_t)(g_dcl_rotor_deg * 1000);    /* ch9  转子电角度 */
+    cur[10] = (int32_t)(g_dcl_volt_v * 1000.0f);    /* ch10 电压幅值 (mV -> V)，=调速旋钮 */
+    cur[11] = (int32_t)(g_dcl_iq_pp_ma);            /* ch11 iq 峰峰值（猎振判据） */
+    cur[12] = (int32_t)(g_dcl_id_pp_ma);            /* ch12 id 峰峰值 */
+    cur[13] = (int32_t)(g_dcl_du * 1000.0f);        /* ch13 U 相占空比 (m% -> %) */
+    cur[14] = (int32_t)(g_dcl_dv * 1000.0f);        /* ch14 V 相占空比 */
+    cur[15] = (int32_t)(g_dcl_dw * 1000.0f);        /* ch15 W 相占空比 */
+    cur[16] = (int32_t)(g_dcl_state);               /* ch16 状态 0IDLE/1BETA/2ALPHA/3RUN/4OC */
+    return 17;
 }

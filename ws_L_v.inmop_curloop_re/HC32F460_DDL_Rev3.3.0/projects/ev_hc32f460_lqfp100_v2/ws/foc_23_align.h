@@ -21,15 +21,11 @@
  *   g_foc_align_evt_v1/v2/v3  事件附带数据（含义随事件类型）
  *   g_foc_elec_deg       对齐后转子电角度（deg，[0, 360×极对数)）
  *
- * 【VOFA 通道】通用 17ch 布局（见 main.c 顶部说明），mode 23 下：
- *   ch0~2 三相电流(A)   ch3 静止系 ialpha(A)   ch4 静止系 ibeta(A)
- *   ch5 控制系 iq(A)    ch6 控制系 id(A)
- *   ch7 自增电压幅值 g_zizeng_volt_v(V)  ← 非本模式量，恒 0
- *   ch8 控制系电流合成幅值 sqrt(iq²+id²)(A)
- *   ch9 控制系角度 g_zizeng_theta_rad(rad)  ← 非本模式量，恒 0
- *   ch10 静止系电流幅值(A)   ch11 母线直流电流估算(A)
- *   ch12~16 通用布局预留（本模式无专属量）
- *   ⚠ mode 23 无专属 VOFA 布局，通道语义借用通用布局，参考价值有限。
+ * 【VOFA 通道】mode 23 **无专属布局，回落通用布局（20ch）**：
+ *   通道定义见 main.c 的 Foc_Common_VofaFill（ch0~2 三相电流 / ch3~5 零偏 /
+ *   ch6~7 静止系 / ch8~11 id-iq-vd-vq / ch12 幅值 / ch13~14 角度 /
+ *   ch15 零点 / ch16 故障 / ch17~18 ZIZENG 兼容 / ch19 OC 阈值）。
+ *   ⚠ 本模式无专属语义，判读请用 g_foc_align_evt 事件 + Watch 变量。
  * ===========================================================================
  */
 

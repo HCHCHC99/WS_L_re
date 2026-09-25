@@ -85,15 +85,19 @@
  *   g_iqpi_theta_rad       当前使用的转子电角度(rad)
  *   状态历史 g_iqpi_step_hist[] 与转向诊断量在 **foc_obs.h**（不在本文件）
  *
- * 【VOFA 通道】通用 17ch 布局（见 main.c 顶部说明），mode 31 下语义：
- *   ch0~2 三相电流(A)   ch3 静止系 ialpha(A)   ch4 静止系 ibeta(A)
- *   ch5 控制系 iq(A)    ch6 控制系 id(A)
- *   ch7 自增电压幅值(V) ← 非本模式量，恒 0
- *   ch8 控制系合成幅值 sqrt(iq²+id²)(A)
- *   ch9 控制系角度(rad) ← 非本模式量，恒 0
- *   ch10 静止系电流幅值(A)   ch11 母线直流电流估算(A)
- *   ch12 **mode31 iq 参考（斜坡后）(A)**  ← mode31 专属语义
- *   ch13 mode26 负载角（本模式恒 0）   ch14~15 预留 0   ch16 预留 0
+ * 【VOFA 通道】**自持布局，固定 16ch**（实现见 foc_31_iqpi.c
+ *   Foc_IqPi_VofaFill，单位换算：传"毫单位"，SendScaled 内部 ×0.001）：
+ *   ch0~2  三相电流(A)
+ *   ch3    静止系电流幅值(A)         ch4  ialpha(A)      ch5  ibeta(A)
+ *   ch6    iq 反馈(A) ← 环反馈       ch7  id 反馈(A)（参考恒 0）
+ *   ch8    iq 目标(A)（手动给）
+ *   ch9    vd 输出(V)                ch10 vq 输出(V)
+ *   ch11   **斜坡后的实际 iq 参考(A) ← 判跟踪看 ch6 追 ch11**
+ *   ch12   使用的转子电角度(rad)
+ *   ch13   U 相占空比(%)             ch14 V 相占空比(%)
+ *   ch15   状态 0IDLE/1无偏移/2零矢量/3闭环/4电压饱和/5堵转/6过流/7已翻转
+ *   ⚠ 共 16ch —— 切到本模式时 VOFA+ 通道数需同步改为 16。
+ *   ⚠ **改通道数：改 Foc_IqPi_VofaFill 末尾的 return 值**。
  * ===========================================================================
  */
 
@@ -196,6 +200,9 @@ void Foc_StopIqPi(void);
 
 /* 模式31 单步运算（20 kHz ISR 中由 Foc_Isr 分发调用） */
 void Foc_IqPi_Step(const stc_i_data_t *pData);
+
+/* 模式自持 VOFA（16ch，通道含义见顶部速览卡） */
+int  Foc_IqPi_VofaFill(int32_t *cur);
 
 #ifdef __cplusplus
 }

@@ -93,15 +93,11 @@
  *   g_calang_evt        事件（[CALANG] RTT：LOCKED / HOLD ok / HOLD FAIL / FAULT_OC）
  *   ⚠ 变量名带 deg 但单位是 **0.1°**（历史命名，见上方说明）
  *
- * 【VOFA 通道】通用 17ch 布局（见 main.c 顶部说明），mode 25 下语义：
- *   ch0~2 三相电流(A)   ch3 静止系 ialpha(A)   ch4 静止系 ibeta(A)
- *   ch5 控制系 iq(A)    ch6 控制系 id(A)
- *   ch7 自增电压幅值(V) ← 非本模式量，恒 0
- *   ch8 控制系合成幅值 sqrt(iq²+id²)(A)
- *   ch9 控制系角度(rad) ← 非本模式量，恒 0
- *   ch10 静止系电流幅值(A)   ch11 母线直流电流估算(A)
- *   ch12~16 预留 0
- *   ⚠ mode 25 无专属 VOFA 布局。**精度判读用 g_calang_err_deg（Watch）+ [CALANG] RTT**；
+ * 【VOFA 通道】mode 25 **无专属布局，回落通用布局（20ch）**：
+ *   通道定义见 main.c 的 Foc_Common_VofaFill（ch0~2 三相电流 / ch3~5 零偏 /
+ *   ch6~7 静止系 / ch8~11 id-iq-vd-vq / ch12 幅值 / ch13~14 角度 /
+ *   ch15 零点 / ch16 故障 / ch17~18 ZIZENG 兼容 / ch19 OC 阈值）。
+ *   ⚠ 精度判读必须用 g_calang_err_deg（Watch）+ [CALANG] RTT；
  *     VOFA 只能看电流/占空比包络。
  * ===========================================================================
  */

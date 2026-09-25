@@ -76,15 +76,22 @@
  *   事件码 LOCKIQ_EVT_*：1 LOCKED / 2 FAIL_TIMEOUT / 3 FAIL_TRACK
  *   （事件经 foc_obs 在主循环打印并执行交接）
  *
- * 【VOFA 通道】与 mode 31 完全一致（交接后就是 mode 31 在跑）：
- *   ch0~2 三相电流(A)   ch3 静止系 ialpha(A)   ch4 静止系 ibeta(A)
- *   ch5 控制系 iq(A)    ch6 控制系 id(A)
- *   ch7 自增电压幅值(V) ← 恒 0      ch8 合成幅值 sqrt(iq²+id²)(A)
- *   ch9 控制系角度(rad) ← 恒 0
- *   ch10 静止系电流幅值(A)   ch11 母线直流电流估算(A)
- *   ch12 **mode31 iq 参考（斜坡后）(A)**  ← 交接后有效
- *   ch13~15 预留 0   ch16 预留 0
- *   ⚠ 锁定阶段（step 1~4）看 Watch 的 g_lockiq_step，VOFA 无专属语义。
+ * 【VOFA 通道】**自持布局，固定 16ch**（实现见 foc_32_lockiq.c
+ *   Foc_LockIq_VofaFill，单位换算：传"毫单位"，SendScaled 内部 ×0.001）：
+ *   ch0~2  三相电流(A)
+ *   ch3    静止系电流幅值(A)（吸附期间可见）  ch4 ialpha(A)   ch5 ibeta(A)
+ *   ch6    iq 反馈(A)                ch7  id 反馈(A)
+ *   ch8    iq 目标(A)（交接后有效）
+ *   ch9    vd 输出(V)                ch10 vq 输出(V)
+ *   ch11   斜坡后 iq 参考(A)（交接后有效）
+ *   ch12   使用的转子电角度(rad)
+ *   ch13   U 相占空比(%)
+ *   ch14   已注入的偏移(deg)
+ *   ch15   **状态 ← 锁定阶段主判据**：
+ *          0IDLE / 1ALIGN_BETA / 2ALIGN_ALPHA / 3ALIGN_VERIFY（位移≈90°电）
+ *          / 4LOCKED_WAIT_HANDOFF / 5LOCK_FAIL（超时或跟踪失败）/ 6FAULT_OC
+ *   ⚠ 共 16ch（与 mode 31 通道一致，便于交接前后连续观察）。
+ *   ⚠ **改通道数：改 Foc_LockIq_VofaFill 末尾的 return 值**。
  * ===========================================================================
  */
 
@@ -171,6 +178,9 @@ void Foc_LockIqPi_Stop(void);
 
 /* 模式32 单步运算（20 kHz ISR 中由 Foc_Isr 分发调用） */
 void Foc_LockIqPi_Step(const stc_i_data_t *pData);
+
+/* 模式自持 VOFA（16ch，通道与 mode 31 一致便于交接前后连续观察） */
+int  Foc_LockIq_VofaFill(int32_t *cur);
 
 #ifdef __cplusplus
 }

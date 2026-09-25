@@ -50,18 +50,21 @@
  *   g_smo_jdg_fail           判定失败掩码 bit0 转速/bit1 幅值/bit2 相位
  *   g_smo45_state / g_smo45_evt  状态机与事件（2=过流故障停机）
  *
- * 【VOFA 通道】g_smo45_wave_mode 选择（921600bps）：
- *   wave_mode=0：16ch SMO 验收面板（直流观测量为主）
+ * 【VOFA 通道】**自持布局，通道数随 g_smo45_wave_mode 变**（实现见
+ *   foc_45_smo.c Foc_Smo45_VofaFill；单位换算：传"毫单位"，×0.001）：
+ *   ⚠ 本模式是**变长帧（8 或 16ch）**，与本工程其它模式不同 ——
+ *     切 wave_mode 时 VOFA+ 通道数必须同步跟着改。
+ *   wave_mode=0：**16ch** SMO 验收面板（直流观测量为主）
  *     ch0 iq(A) ch1 iq滤波(A) ch2 iq参考(A)
  *     ch3 理论eα(V) ch4 理论eβ(V) ch5 原始zα(V) ch6 原始zβ(V)
  *     ch7 滤波eα̂(V) ch8 滤波eβ̂(V) ch9 相位误差(deg)
  *     ch10 e_on_q(V) ch11 e_on_d(V) ch12 误差范数(V) ch13 理论幅值ωψf(V)
  *     ch14 实际转速-滤波(rpm) ch15 相位误差滤波(deg)
  *     ⚠ ch3~8 为电频率正弦，VOFA 帧率必混叠只查存在性；验收看 ch9~13
- *   wave_mode=1：8ch 波形窄帧（~2.9kHz 帧率，看正弦细节降到 1500rpm）
+ *   wave_mode=1：**8ch** 波形窄帧（~2.9kHz 帧率，看正弦细节降到 1500rpm）
  *     ch0 zα原始(V) ch1 zβ原始(V) ch2 eα̂滤波(V) ch3 eβ̂滤波(V)
  *     ch4 理论eα(V) ch5 理论eβ(V) ch6 相位差(deg) ch7 相位差滤波(deg)
- *   wave_mode=2：16ch PLL/无感验收面板
+ *   wave_mode=2：**16ch** PLL/无感验收面板
  *     ch0 enc原始转速 ch1 enc滤波转速 ch2 ω̂原始 ch3 ω̂低通(无感反馈) (rpm)
  *     ch4 转速差原始 ch5 转速差滤波 (rpm)
  *     ch6 角差原始(deg) ch7 角差滤波(deg) ch8 iq(A) ch9 补偿角δ̂(deg)

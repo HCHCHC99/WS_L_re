@@ -62,9 +62,11 @@
  *   g_cal_evt           1=BETA_DONE 2=LOCKED 3=OC（ISR 置位，obs 打印后清）
  *   g_foc_elec_deg      校准后 mode 0 下实时电角度（deg，捏转子可见跟随）
  *
- * 【VOFA 通道】mode 20 走通用 17ch 布局（见 main.c 顶部说明）：
- *   ch0~2 三相电流(A)，校准期间可见 BETA/ALPHA 吸附的电流包络
- *   ch3~16 通用布局其余通道 —— **本模式无专属语义，参考价值有限**
+ * 【VOFA 通道】mode 20 **无专属布局，回落通用布局（20ch）**：
+ *   通道定义见 main.c 的 Foc_Common_VofaFill（ch0~2 三相电流 / ch3~5 零偏 /
+ *   ch6~7 静止系 / ch8~11 id-iq-vd-vq / ch12 幅值 / ch13~14 角度 /
+ *   ch15 零点 / ch16 故障 / ch17~18 ZIZENG 兼容 / ch19 OC 阈值）。
+ *   校准期间只有 ch0~2 有波形（BETA/ALPHA 吸附的电流包络）。
  *   判读建议：用 RTT 的 [CAL] 事件 + Watch 变量，不要依赖 VOFA。
  * ===========================================================================
  */

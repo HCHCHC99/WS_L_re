@@ -52,11 +52,15 @@
 #include "foc_obs.h"
 #include "foc_math.h"
 #include "foc_30_ramp.h"
+#include "foc_31_iqpi.h"    /* g_iqpi_iq_ref_ma / _ramp_ma / theta_rad
+                             * （本模块交接后读 mode31 的量；原先靠 foc_obs.h
+                             *   间接包含，此处改为显式依赖） */
 #include "tmr4_pwm.h"
 #include "encoder.h"
 #include "motor_config.h"
 #include "rtt_log.h"
 #include "hc32_ll_tmra.h"   /* 直接读取 TIMERA_1 计数器 */
+#include "I.h"              /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
 
 /*******************************************************************************
  * Keil Watch 可调变量 / 观测量
@@ -372,4 +376,35 @@ void Foc_LockIqPi_Step(const stc_i_data_t *pData)
             g_lockiq_step = LOCKIQ_STEP_LOCK_FAIL;
         }
     }
+}
+
+/*===========================================================================
+ * mode 32 自持 VOFA：固定 16ch 布局（与 mode 31 通道一致，便于交接前后连续观察）
+ * 通道含义速览卡 = foc_32_lockiq.h 顶部【模式速览卡】（唯一事实源）
+ *
+ * 本模式是"自锁偏移 + 自动交接 mode 31"：
+ *   锁定阶段（step 1~4）主要看 ch15 状态；交接后 ch0~ch14 就是 mode 31 的量。
+ * 单位换算：传"毫单位"，SendScaled 内部 ×0.001
+ *===========================================================================*/
+int Foc_LockIq_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                    /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                    /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                    /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_foc_iab_mag * 1000.0f);      /* ch3  静止系电流幅值（吸附期间可见） */
+    cur[4]  = (int32_t)(g_foc_ialpha * 1000.0f);       /* ch4  静止系 ialpha */
+    cur[5]  = (int32_t)(g_foc_ibeta  * 1000.0f);       /* ch5  静止系 ibeta */
+    cur[6]  = (int32_t)(g_foc_iq_ma);                  /* ch6  iq 反馈 */
+    cur[7]  = (int32_t)(g_foc_id_ma);                  /* ch7  id 反馈 */
+    cur[8]  = (int32_t)(g_iqpi_iq_ref_ma);             /* ch8  iq 目标（交接后有效） */
+    cur[9]  = (int32_t)(g_foc_vd * 1000.0f);           /* ch9  vd 输出 (mV -> V) */
+    cur[10] = (int32_t)(g_foc_vq * 1000.0f);           /* ch10 vq 输出 */
+    cur[11] = (int32_t)(g_iqpi_iq_ref_ramp_ma);        /* ch11 斜坡后实际 iq 参考（交接后） */
+    cur[12] = (int32_t)(g_iqpi_theta_rad * 1000.0f);   /* ch12 使用的转子电角度 (mrad -> rad) */
+    cur[13] = (int32_t)(g_foc_du * 1000.0f);           /* ch13 U 相占空比 (m% -> %) */
+    cur[14] = (int32_t)(g_lockiq_off_deg * 1000);      /* ch14 已注入的偏移 (mdeg -> deg) */
+    cur[15] = (int32_t)(g_lockiq_step);                /* ch15 **状态 ← 锁定阶段主判据**：
+                                                        * 0IDLE/1BETA/2ALPHA/3VERIFY/
+                                                        * 4LOCKED_WAIT_HANDOFF/5LOCK_FAIL/6OC */
+    return 16;
 }

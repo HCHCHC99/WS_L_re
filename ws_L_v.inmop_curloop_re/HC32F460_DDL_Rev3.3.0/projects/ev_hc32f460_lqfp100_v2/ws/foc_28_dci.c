@@ -45,6 +45,7 @@
 #include "encoder.h"
 #include "motor_config.h"
 #include "hc32_ll_tmra.h"       /* TMRA_GetCountValue(CM_TMRA_1) */
+#include "I.h"                  /* g_i_iu/iv/iw_ma（VOFA 三相电流通道） */
 
 #define FOC_ISR_DT_US  (1000000u / FOC_ISR_HZ)   /* PI 积分离散步长 (us) */
 
@@ -615,4 +616,35 @@ void Foc_Dci_Stop(void)
         }
         DCI_DBG("stopped");
     }
+}
+
+/*===========================================================================
+ * mode 28 自持 VOFA：固定 17ch 布局
+ * 通道含义速览卡 = foc_28_dci.h 顶部【模式速览卡】（唯一事实源）
+ *
+ * 本模式是"校准+功角电流闭环一体化"，P 重调主判据在 ch11/ch12（误差均值）
+ * 与 ch15/ch16（误差峰峰值）：**均值=稳态落差（P-only 属正常），峰峰值增大=振铃**。
+ * ⚠ i_valid=0（P-only）时稳态落差 = R·i_ref/(kp+R) 是理论必然，不是故障。
+ * 单位换算：传"毫单位"，SendScaled 内部 ×0.001
+ *===========================================================================*/
+int Foc_Dci_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                 /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                 /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                 /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_dci_speed_hz * 1000.0f);  /* ch3  实测电频率 (mHz -> Hz) */
+    cur[4]  = (int32_t)(g_dci_dlt_now_deg * 1000.0f);/* ch4 δ 指令 (mdeg -> deg) */
+    cur[5]  = (int32_t)(g_dci_diff_deg * 1000);     /* ch5  功角实测 (mdeg -> deg) */
+    cur[6]  = (int32_t)(g_dci_iq_ma);               /* ch6  iq 反馈 */
+    cur[7]  = (int32_t)(g_dci_id_ma);               /* ch7  id 反馈 */
+    cur[8]  = (int32_t)(g_dci_iq_ref_ma);           /* ch8  iq 参考 */
+    cur[9]  = (int32_t)(g_dci_id_ref_ma);           /* ch9  id 参考（= I_ref·cosδ） */
+    cur[10] = (int32_t)(g_dci_i_ref_ma);            /* ch10 电流矢量**幅值**参考 */
+    cur[11] = (int32_t)(g_dci_eq_mean_ma);          /* ch11 **q 误差均值 ← P 调参主判据** */
+    cur[12] = (int32_t)(g_dci_ed_mean_ma);          /* ch12 d 误差均值 */
+    cur[13] = (int32_t)(g_dci_iq_mean_ma);          /* ch13 iq 3s 均值 */
+    cur[14] = (int32_t)(g_dci_id_mean_ma);          /* ch14 id 3s 均值 */
+    cur[15] = (int32_t)(g_dci_eq_pp_ma);            /* ch15 **q 误差峰峰值（振铃判据）** */
+    cur[16] = (int32_t)(g_dci_state);               /* ch16 状态 0IDLE/1零偏/2BETA/3ALPHA/4RUN/5OC */
+    return 17;
 }

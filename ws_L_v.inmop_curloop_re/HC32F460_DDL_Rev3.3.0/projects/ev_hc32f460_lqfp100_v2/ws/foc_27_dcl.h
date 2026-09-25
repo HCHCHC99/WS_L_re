@@ -98,18 +98,19 @@
  * 【实验价值】扫 g_dcl_dlt_targ_deg（5→45→89）看 g_dcl_speed_hz：
  *   **90° 附近转速最高**（MTPA 的闭环验证）。δ 小时 id 大（铜损 ~2W），注意温升。
  *
- * 【VOFA 通道】通用 17ch 布局（见 main.c 顶部说明），mode 27 下语义：
- *   ch0~2 三相电流(A)   ch3 静止系 ialpha(A)   ch4 静止系 ibeta(A)
- *   ch5 控制系 iq(A)    ch6 控制系 id(A)
- *   ch7 自增电压幅值(V) ← 非本模式量，恒 0
- *   ch8 控制系合成幅值 sqrt(iq²+id²)(A)
- *   ch9 控制系角度(rad) ← 非本模式量，恒 0
- *   ch10 静止系电流幅值(A)   ch11 母线直流电流估算(A)
- *   ch12 mode31 iq 参考（本模式恒 0）
- *   ch13 mode26 负载角 g_olf_diff_deg ← **本模式恒 0**（勿误读为 δ）
- *   ch14~16 预留 0
- *   ⚠ mode 27 无专属 VOFA 布局。**看 δ / 转速请用 Watch 的
- *     g_dcl_dlt_now_deg 与 g_dcl_speed_hz**，VOFA 只有电流信息。
+ * 【VOFA 通道】**自持布局，固定 17ch**（实现见 foc_27_dcl.c
+ *   Foc_Dcl_VofaFill，单位换算：传"毫单位"，SendScaled 内部 ×0.001）：
+ *   ch0~2  三相电流(A)
+ *   ch3    **实测电频率(Hz) ← 扫 δ 看这个**（90° 附近转速最高 = MTPA 闭环验证）
+ *   ch4    δ 指令(deg)               ch5  功角实测(deg)，**应≈ch4**（背离=框架有问题）
+ *   ch6    iq（力矩分量）(A)          ch7  id（磁链分量，δ 小时变大）(A)
+ *   ch8    磁场电角度(deg)            ch9  转子电角度(deg)
+ *   ch10   电压幅值(V)，=本模式的调速旋钮
+ *   ch11   iq 峰峰值(A)（猎振判据）   ch12 id 峰峰值(A)
+ *   ch13   U 相占空比(%)   ch14 V 相    ch15 W 相
+ *   ch16   状态 0IDLE/1BETA/2ALPHA/3RUN/4OC
+ *   ⚠ 共 17ch —— 切到本模式时 VOFA+ 通道数需同步改为 17。
+ *   ⚠ **改通道数：改 Foc_Dcl_VofaFill 末尾的 return 值**。
  * ===========================================================================
  */
 
@@ -206,6 +207,7 @@ void Foc_Dcl_Step(const stc_i_data_t *pData);
 /* 停止（用户中途切模式时调用）：清运行标志 + 关 PWM（若在输出）。
  * 自带 g_foc_active 清零，防止 ISR 回退。 */
 void Foc_Dcl_Stop(void);
+int  Foc_Dcl_VofaFill(int32_t *cur);   /* 模式自持 VOFA，17ch，见顶部速览卡 */
 
 #ifdef __cplusplus
 }

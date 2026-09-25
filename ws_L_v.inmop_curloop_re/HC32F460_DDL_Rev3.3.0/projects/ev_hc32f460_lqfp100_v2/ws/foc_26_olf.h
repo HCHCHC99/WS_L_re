@@ -116,16 +116,21 @@
  * 【实验预期】delta 低频稳在 5~15°（摩擦锥，不是 0）→ 频率升高缓升（BEMF 偷电压）
  *   → 逼近 90°（牵出边界）→ 越过即锯齿崩塌振荡（失步）。id 低频≈0，高频转负。
  *
- * 【VOFA 通道】通用 17ch 布局（见 main.c 顶部说明），mode 26 下语义：
- *   ch0~2 三相电流(A)   ch3 静止系 ialpha(A)   ch4 静止系 ibeta(A)
- *   ch5 控制系 iq(A)    ch6 控制系 id(A)
- *   ch7 自增电压幅值(V) ← 非本模式量，恒 0
- *   ch8 控制系合成幅值 sqrt(iq²+id²)(A)
- *   ch9 控制系角度(rad) ← 非本模式量，恒 0
- *   ch10 静止系电流幅值(A)   ch11 母线直流电流估算(A)
- *   ch12 mode31 iq 参考（本模式恒 0）
- *   ch13 **负载角 delta g_olf_diff_deg (mdeg → deg) ← mode26 专属，实验主曲线**
- *   ch14~16 预留 0
+ * 【VOFA 通道】**自持布局，固定 16ch**（实现见 foc_26_olf.c
+ *   Foc_Olf_VofaFill，单位换算：传"毫单位"，SendScaled 内部 ×0.001）：
+ *   ch0~2  三相电流(A)
+ *   ch3    磁场自增频率(Hz)          ch4  目标频率(Hz，SW1 可调)
+ *   ch5    iq（力矩分量）(A)          ch6  id（磁链分量，高频转负）(A)
+ *   ch7    **负载角 delta(deg) ← 实验主曲线**（随频率：摩擦锥→缓升→逼近90°牵出）
+ *   ch8    磁场电角度(deg)            ch9  转子电角度(deg)
+ *   ch10   拖动电压幅值(V)
+ *   ch11   iq 峰峰值(A)（失步后剧烈振荡）
+ *   ch12   id 峰峰值(A)
+ *   ch13   控制系 d 轴角(rad)
+ *   ch14   自增方向 +1/-1
+ *   ch15   状态 0IDLE/1BETA/2ALPHA/3DRAG/4OC
+ *   ⚠ 共 16ch —— 切到本模式时 VOFA+ 通道数需同步改为 16。
+ *   ⚠ **改通道数：改 Foc_Olf_VofaFill 末尾的 return 值**。
  * ===========================================================================
  */
 
@@ -215,6 +220,7 @@ void Foc_Olf_Step(const stc_i_data_t *pData);
 /* 停止（用户中途切模式时调用）：清运行标志 + 关 PWM（若在输出）。
  * 自带 g_foc_active 清零，防止 ISR 回退。 */
 void Foc_Olf_Stop(void);
+int  Foc_Olf_VofaFill(int32_t *cur);   /* 模式自持 VOFA，16ch，见顶部速览卡 */
 
 #ifdef __cplusplus
 }

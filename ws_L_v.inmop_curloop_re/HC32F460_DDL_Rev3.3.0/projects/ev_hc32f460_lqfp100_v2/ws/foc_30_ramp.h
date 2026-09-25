@@ -71,15 +71,21 @@
  *   g_foc_id_rotor_ma / g_foc_iq_rotor_ma  转子系电流（锁定后有效）
  *   产品接口：Foc_Zizeng_GetOffsetRad() / Foc_Zizeng_GetDragDir()
  *
- * 【VOFA 通道】通用 17ch 布局（见 main.c 顶部说明），mode 30 下语义：
- *   ch0~2 三相电流(A)          ch3 静止系 ialpha(A)
- *   ch4 静止系 ibeta(A)        ch5 控制系 iq(A)     ch6 控制系 id(A)
- *   ch7 **自增电压幅值 g_zizeng_volt_v(V)**  ← mode30 专属语义
- *   ch8 控制系合成幅值 sqrt(iq²+id²)(A)
- *   ch9 **控制系角度 g_zizeng_theta_rad(rad)**  ← mode30 专属语义
- *   ch10 静止系电流幅值(A)     ch11 母线直流电流估算(A)
- *   ch12~16 预留 0
- *   ⚠ mode 30 无专属布局函数，以上为通用布局的 mode30 分支语义。
+ * 【VOFA 通道】**自持布局，固定 15ch**（实现见 foc_30_ramp.c
+ *   Foc_Ramp_VofaFill，单位换算：传"毫单位"，SendScaled 内部 ×0.001）：
+ *   ch0~2  三相电流(A)
+ *   ch3    静止系 ialpha(A)          ch4  静止系 ibeta(A)
+ *   ch5    **编码器角−磁场角(rad) ← 锁定后应≈0**；不收敛=打滑，锁出的偏移是错的
+ *   ch6    自增频率(Hz)              ch7  磁场电角度(rad)
+ *   ch8    电压幅值(V)
+ *   ch9    转子系 id(A)（锁定后有效） ch10 转子系 iq(A)
+ *   ch11   静止系电流幅值(A)
+ *   ch12   U 相占空比(%)
+ *   ch13   **拖动方向 +1/-1，0 = 没测到（锁定失败信号）**
+ *   ch14   运行标志
+ *   ⚠ 共 15ch —— 切到本模式时 VOFA+ 通道数需同步改为 15。
+ *   ⚠ **改通道数：改 Foc_Ramp_VofaFill 末尾的 return 值**。
+ *   ⚠ ch3/ch4 由本模块维护，被 mode 40/41 复用（架构不洁点，待迁 foc_core）。
  * ===========================================================================
  */
 
@@ -159,6 +165,9 @@ void Foc_Zizeng_SetDragDir(int8_t dir);
 
 /* 模式30 单步运算（20 kHz ISR 中由 Foc_Isr 分发调用） */
 void Foc_Zizeng_Step(const stc_i_data_t *pData);
+
+/* 模式自持 VOFA（15ch，通道含义见顶部速览卡） */
+int  Foc_Ramp_VofaFill(int32_t *cur);
 
 #ifdef __cplusplus
 }
