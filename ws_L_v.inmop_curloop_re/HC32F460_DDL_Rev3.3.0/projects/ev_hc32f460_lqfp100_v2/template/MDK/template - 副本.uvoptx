@@ -119,6 +119,10 @@
       <TargetDriverDllRegistry>
         <SetRegEntry>
           <Number>0</Number>
+          <Key>DLGUARM</Key>
+        </SetRegEntry>
+        <SetRegEntry>
+          <Number>0</Number>
           <Key>UL2CM3</Key>
           <Name>UL2CM3(-S0 -C0 -P0 ) -FN2 -FC1000 -FD1FFF8000 -FF0HC32F46x -FF1HC32F46x_otp -FL0200000 -FL13FC -FS00 -FS13000C00 -FP0($$Device:HC32F460JETA$FlashARM\HC32F46x.FLM) -FP1($$Device:HC32F460JETA$FlashARM\HC32F46x_otp.FLM)</Name>
         </SetRegEntry>
@@ -396,6 +400,16 @@
           <count>20</count>
           <WinNumber>2</WinNumber>
           <ItemText>g_smo_diag_theta_err_filt_deg</ItemText>
+        </Ww>
+        <Ww>
+          <count>21</count>
+          <WinNumber>2</WinNumber>
+          <ItemText>g_speed40_pid_id_cfg</ItemText>
+        </Ww>
+        <Ww>
+          <count>22</count>
+          <WinNumber>2</WinNumber>
+          <ItemText>check_noisy_mode </ItemText>
         </Ww>
       </WatchWindow2>
       <Tracepoint>
@@ -1177,7 +1191,7 @@
 
   <Group>
     <GroupName>Adp</GroupName>
-    <tvExp>1</tvExp>
+    <tvExp>0</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -1829,7 +1843,7 @@
 
   <Group>
     <GroupName>ws</GroupName>
-    <tvExp>0</tvExp>
+    <tvExp>1</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>

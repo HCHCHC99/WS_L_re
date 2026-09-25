@@ -15,9 +15,14 @@
  * 【Watch 可调变量】（名称 = 默认值 单位）
  *   g_speed40_speed_target_rpm = 0     rpm       目标转速
  *   g_speed40_iq_filt_alpha    = 0.10  -         iq 反馈滤波系数
- *   g_speed40_pid_speed_cfg.kp = 1.8   mA/rpm    速度环 P（Watch 改立即生效，
- *                                                稳态中小步 ±20% 调）
- *   g_speed40_pid_speed_cfg.ki = 0.2   mA/rpm/s  速度环 I（同上）
+ *   g_speed40_pid_speed_cfg.kp = 2.0   mA/rpm    速度环 P（Watch 改立即生效）
+ *   g_speed40_pid_speed_cfg.ki = 0.45  mA/rpm/s  速度环 I（同上）
+ *        ↑ 2026-09-23：kp 由 1.8 调到 2.0，ki 0.2→0.45
+ *          ⚠ 速度环 P 是唯一的带宽旋钮（ωc≈72·kp）；ki 只管稳态精度
+ *   g_speed40_pid_id_cfg / iq_cfg .kp = 0.1  V/A  电流环 P（带 6.2V 输出限幅）
+ *   g_speed40_pid_id_cfg / iq_cfg .ki = 300  V/(A·s)
+ *        ↑ 2026-09-23 实测：kp 0.5→0.1 大幅降低静止噪声（0.1 与 0.05 无差别，
+ *          已到底噪）。⚠ 0.1 是串级结构下限，勿再降；完整机理见下方宏定义处。
  *
  * 【关键观察变量】
  *   g_speed40_speed_filt_rpm   PI 反馈真实转速（调参判超调/振铃看这个；
@@ -61,8 +66,28 @@ extern "C" {
 #define SPEED40_LOG(fmt, ...)  ((void)0)
 #endif
 
-/* Inner current PI: start from the verified mode 29 values. */
-#define SPEED40_PI_KP             0.5f
+/* Inner current PI.
+ * ⚠ 2026-09-23 实测调参：kp 0.5 → 0.1（= mode 40 静止噪声的处置，已在用）
+ *
+ * 现象：目标 0、静止时电机有嘈杂噪声，且电流反馈真的在振荡
+ *       （VOFA ch5 iq 反馈 +1.21/−0.8A，ch8 vd ±0.3V、ch9 vq ±0.5V 不规则抖动）。
+ * 机理：开关纹波 → 无抗混叠的电流反馈原样采入 → PI 的 P 项（kp × 纹波）放大
+ *       → 占空比被推偏 → 纹波更大 = 正反馈极限环。kp 直接决定这条路的增益。
+ * 实测：kp=0.5 → 明显噪声；kp=0.1 → 大幅下降；kp=0.05 → 与 0.1 无差别
+ *       ⇒ 0.1 以下噪声已到底噪（PWM 开关本身），再降无收益。
+ *
+ * ⚠⚠ 0.1 是**结构下限，不要再降**：
+ *   电流环带宽 ωc = kp/L = 0.1/42.3µH = 376 rad/s ≈ 60 Hz，
+ *   仅比速度环（kp=2 → 约 36 Hz）快 1.7 倍，**已低于串级经验要求 5~10 倍**。
+ *   再降内环会慢过外环，串级结构失效。
+ *   要恢复带宽必须从硬件侧切断纹波（传感器输出 1kΩ+100nF → fc≈1.6kHz，
+ *   10kHz 处 −16dB，且在环路之外不消耗相位裕度），之后 kp 可回到 0.3~0.5。
+ *
+ * 副产物：kp=0.1 时电流环 ζ = (R+kp)/(2√(ki·L)) = 0.2/(2×0.1127) ≈ 0.89，
+ *   接近临界阻尼（ζ=1 对应 kp≈0.108），比原来的过阻尼(2.66)更"刚好"。
+ *
+ * 注：运行时可用 Watch 改 g_speed40_pid_id_cfg / iq_cfg .kp，此处为上电默认值。 */
+#define SPEED40_PI_KP             0.1f
 #define SPEED40_PI_KI             300.0f
 /* ⚠ UMAX 3.5→6.2 / ITERM 3.2→6.0（与 mode 45 SMO45 同步，2026-09-23）：
  *   12V 母线 SVPWM 线性区相电压峰值 6.93V，原 3.5V 是高速电压墙（卡 ~4800rpm） */
@@ -70,10 +95,23 @@ extern "C" {
 #define SPEED40_ITERM_MAX_V       6.0f
 #define SPEED40_IQ_FILT_ALPHA     0.10f
 
-/* Outer speed PI output is a signed q-axis current reference in mA. */
-#define SPEED40_SPD_KP_MA_PER_RPM       1.8f
-#define SPEED40_SPD_KI_MA_PER_RPM_S     0.2f
-#define SPEED40_SPD_IQ_LIMIT_MA         ((float)FOC_MOTOR_RATED_CURRENT_A \
+/* Outer speed PI output is a signed q-axis current reference in mA.
+ * 2026-09-23 调参：kp 1.8 → **2.0**，ki 0.2 → 0.45。
+ *   2.0 是折中：比原 1.8 略快，但不逼近 200Hz 采样率的带宽极限
+ *   （kp=4 时 ωc≈46Hz，约为速度环采样率 200Hz 的 1/4.3，偏激进）。
+ *
+ * 理论要点（详见 md_record/mode40控制系统_纯理论计算手册.md）：
+ *   ωc ≈ 72·kp（在机械阻尼 kfb=2 下）→ kp=2.0 约 36 Hz
+ *   相位裕度随 kp 上升而下降；随 ki 上升而**上升**（PI 零点抬高提供相位超前）
+ *   ⚠ 速度环 P 是唯一的带宽旋钮——改 ki 改不了响应速度（PI 零点比穿越频率低 3 个数量级）
+ *
+ * 注：运行时可用 Watch 改 g_speed40_pid_speed_cfg.kp/.ki，此处仅为上电默认值。 */
+#define SPEED40_SPD_KP_MA_PER_RPM       2.0f
+#define SPEED40_SPD_KI_MA_PER_RPM_S     0.45f
+/* 速度环输出限幅 = 最大电流 × 20%（17A × 0.2 = 3400mA）。
+ * 取 20% 而非更高：17A 是峰值能力（厂商规格书原文「最大电流」），
+ * 按其 20% 折算已相当于一个合理的连续工作点。 */
+#define SPEED40_SPD_IQ_LIMIT_MA         ((float)FOC_MOTOR_MAX_CURRENT_A \
                                         * 1000.0f * 0.20f)
 
 /* Safety envelope derived from motor_config.h. */

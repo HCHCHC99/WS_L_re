@@ -42,13 +42,24 @@
 
 /* ============================================================================
  * 电机电气参数（3505-KV650 云台/外转子电机）
+ *
+ * 命名与厂商规格对齐（2026-09-23 核对）：
+ *   厂商规格书写的是「最大电流 17A」「扭矩 0.2Nm」——都是**峰值**而非额定。
+ *   故命名为 MAX_*，避免被误读成连续工作点。
+ *   依据：17²×0.1Ω = 28.9W 铜损，对 58g 电机显然不是连续额定；
+ *        且 0.2Nm/17A = 0.01176 N·m/A ≈ Kt = 1.5×pp×ψf = 0.0126，两者自洽。
+ *
+ * ⚠ FOC_MOTOR_FLUX_VS 与 FOC_MOTOR_KV_RPM_V 差 √3 倍：
+ *   由 KV 反推 ψf = 60000/(√3·π·pp·KV) = 0.001695，比值正好 2.02 ≈ √3，
+ *   属「相峰值」与「线-线 RMS」的定义差异，不是数据错误。
+ *   → **算转矩/电流用 FLUX_VS；不要用 KV 反推 ψf。**
  * ==========================================================================*/
-#define FOC_MOTOR_RS_OHM            0.1f
-#define FOC_MOTOR_LS_UH             42.3f
-#define FOC_MOTOR_FLUX_VS           0.00084f
-#define FOC_MOTOR_KV_RPM_V          650u
-#define FOC_MOTOR_RATED_CURRENT_A   17.0f
-#define FOC_MOTOR_RATED_TORQUE_NM   0.2f
+#define FOC_MOTOR_RS_OHM            0.1f      /* 相电阻（厂商，非本机辨识） */
+#define FOC_MOTOR_LS_UH             42.3f     /* 相电感（厂商，相值；真值存疑见 mdl 文档） */
+#define FOC_MOTOR_FLUX_VS           0.00084f  /* 磁链，相峰值 */
+#define FOC_MOTOR_KV_RPM_V          650u      /* 转速常数 */
+#define FOC_MOTOR_MAX_CURRENT_A     17.0f     /* 最大（峰值）电流，非额定 */
+#define FOC_MOTOR_MAX_TORQUE_NM     0.2f      /* 17A 对应的峰值扭矩，非额定 */
 #define FOC_MOTOR_MAX_SPEED_RPM     7800u
 
 /* ============================================================================

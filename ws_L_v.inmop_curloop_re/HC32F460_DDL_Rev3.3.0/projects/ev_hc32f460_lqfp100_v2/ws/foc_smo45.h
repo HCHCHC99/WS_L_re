@@ -95,7 +95,7 @@ extern "C" {
 /* Outer speed PI output is a signed q-axis current reference in mA. */
 #define SMO45_SPD_KP_MA_PER_RPM       1.8f
 #define SMO45_SPD_KI_MA_PER_RPM_S     0.2f
-#define SMO45_SPD_IQ_LIMIT_MA         ((float)FOC_MOTOR_RATED_CURRENT_A \
+#define SMO45_SPD_IQ_LIMIT_MA         ((float)FOC_MOTOR_MAX_CURRENT_A \
                                       * 1000.0f * 0.20f)
 
 /* Safety envelope derived from motor_config.h. */

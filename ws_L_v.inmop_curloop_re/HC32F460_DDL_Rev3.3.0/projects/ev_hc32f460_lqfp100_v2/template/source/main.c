@@ -124,7 +124,7 @@ int main(void)
     /* ---- USART3 + VOFA+ ---- */
     {
         Usart3_HW_Config_t cfg = USART3_HW_CONFIG_DEFAULT;
-        cfg.baudrate = 912600;   /* SMO 波形观察：15ch 帧 ~1440fps / 5ch 窄帧 ~3840fps
+        cfg.baudrate = 115200;   /* SMO 波形观察：15ch 帧 ~1440fps / 5ch 窄帧 ~3840fps
                                     （115200 时仅 ~180fps，433Hz 电频率必然混叠）。
                                     VOFA+ 串口设置需同步改为 921600 */
         Usart3_Vofa_Init(&cfg);
