@@ -154,7 +154,7 @@ static uint16_t s_timer_last_count;
 static uint64_t s_time_elapsed_us;
 static uint8_t  s_timer_initialized;
 
-static void Drun29_ResetLoopState(void)
+static void Drun_ResetLoopState(void)
 {
     s_rotor_count = 0;
     s_encoder_prev_hw = 0u;
@@ -198,7 +198,7 @@ static void Drun29_ResetLoopState(void)
     s_timer_initialized = 0u;
 }
 
-static void Drun29_ClearObservables(void)
+static void Drun_ClearObservables(void)
 {
     g_drun29_evt = 0u;
     g_drun29_dlt_now_deg = g_drun29_dlt_init_deg;
@@ -234,7 +234,7 @@ static void Drun29_ClearObservables(void)
     g_drun29_iq_step_t90_us = FOC29_STEP_TIME_TIMEOUT;
 }
 
-static void Drun29_PpFeed(float id, float iq)
+static void Drun_PpFeed(float id, float iq)
 {
     if (s_pp_init == 0u) {
         s_id_min = s_id_max = id;
@@ -256,7 +256,7 @@ static void Drun29_PpFeed(float id, float iq)
     }
 }
 
-static stc_i_data_t Drun29_CorrectedData(const stc_i_data_t *pData)
+static stc_i_data_t Drun_CorrectedData(const stc_i_data_t *pData)
 {
     stc_i_data_t data = *pData;
     data.i16IU_mA = (int16_t)((float)pData->i16IU_mA - s_zero_u_ma);
@@ -265,7 +265,7 @@ static stc_i_data_t Drun29_CorrectedData(const stc_i_data_t *pData)
     return data;
 }
 
-static void Drun29_ClearCurrentFeedback(void)
+static void Drun_ClearCurrentFeedback(void)
 {
     g_drun29_id_ma = 0.0f;
     g_drun29_iq_ma = 0.0f;
@@ -276,7 +276,7 @@ static void Drun29_ClearCurrentFeedback(void)
     g_foc_iq_ma = 0.0f;
 }
 
-static uint32_t Drun29_TimeUpdate(void)
+static uint32_t Drun_TimeUpdate(void)
 {
     uint32_t now_count;
     int32_t timer_delta;
@@ -302,7 +302,7 @@ static uint32_t Drun29_TimeUpdate(void)
     return (uint32_t)s_time_elapsed_us;
 }
 
-static void Drun29_StepFeed(drun29_step_track_t *track,
+static void Drun_StepFeed(drun29_step_track_t *track,
                             volatile uint8_t *state_out,
                             volatile float *target_out,
                             volatile uint32_t *time_out,
@@ -384,8 +384,8 @@ void Foc_Drun_Start(void)
     }
 
     Foc_Core_ClearFault();
-    Drun29_ResetLoopState();
-    Drun29_ClearObservables();
+    Drun_ResetLoopState();
+    Drun_ClearObservables();
     s_zero_u_ma = calibration.zero_u_ma;
     s_zero_v_ma = calibration.zero_v_ma;
     s_zero_w_ma = calibration.zero_w_ma;
@@ -438,7 +438,7 @@ void Foc_Drun_Stop(void)
         }
         FOC29_LOG("stopped");
     }
-    Drun29_ClearCurrentFeedback();
+    Drun_ClearCurrentFeedback();
 }
 
 void Foc_Drun_Step(const stc_i_data_t *pData)
@@ -456,7 +456,7 @@ void Foc_Drun_Step(const stc_i_data_t *pData)
         g_drun29_evt = FOC29_EVT_OC;
         g_drun29_running = 0u;
         Foc_Core_FaultStop(1u);
-        Drun29_ClearCurrentFeedback();
+        Drun_ClearCurrentFeedback();
         return;
     }
 
@@ -464,7 +464,7 @@ void Foc_Drun_Step(const stc_i_data_t *pData)
         return;
     }
 
-    now_us = Drun29_TimeUpdate();
+    now_us = Drun_TimeUpdate();
     ramp_ticks = g_drun29_dlt_tr_ms * (FOC_ISR_HZ / 1000u);
     if (ramp_ticks == 0u) {
         progress = 1.0f;
@@ -504,7 +504,7 @@ void Foc_Drun_Step(const stc_i_data_t *pData)
     rotor_rad -= (float)((int32_t)(rotor_rad * (1.0f / FOC_MATH_2PI))) * FOC_MATH_2PI;
     if (rotor_rad < 0.0f) rotor_rad += FOC_MATH_2PI;
 
-    data = Drun29_CorrectedData(pData);
+    data = Drun_CorrectedData(pData);
     Foc_Core_GetDq(&data, rotor_rad, &id, &iq);
     g_drun29_id_ma = id * 1000.0f;
     g_drun29_iq_ma = iq * 1000.0f;
@@ -523,7 +523,7 @@ void Foc_Drun_Step(const stc_i_data_t *pData)
     }
     g_foc_id_ma = g_drun29_id_ma;
     g_foc_iq_ma = g_drun29_iq_ma;
-    Drun29_PpFeed(id, iq);
+    Drun_PpFeed(id, iq);
 
     s_id_sum_ma += (int32_t)(id * 1000.0f);
     s_iq_sum_ma += (int32_t)(iq * 1000.0f);
@@ -553,11 +553,11 @@ void Foc_Drun_Step(const stc_i_data_t *pData)
     iq_ref = (s_i_ref_ramp * 0.001f) * Foc_Math_Sin(delta_rad);
     g_drun29_id_ref_ma = id_ref * 1000.0f;
     g_drun29_iq_ref_ma = iq_ref * 1000.0f;
-    Drun29_StepFeed(&s_id_step, &g_drun29_id_step_state,
+    Drun_StepFeed(&s_id_step, &g_drun29_id_step_state,
                     &g_drun29_id_step_target_ma,
                     &g_drun29_id_step_t90_us,
                     g_drun29_id_ref_ma, g_drun29_id_ma, now_us);
-    Drun29_StepFeed(&s_iq_step, &g_drun29_iq_step_state,
+    Drun_StepFeed(&s_iq_step, &g_drun29_iq_step_state,
                     &g_drun29_iq_step_target_ma,
                     &g_drun29_iq_step_t90_us,
                     g_drun29_iq_ref_ma, g_drun29_iq_ma, now_us);

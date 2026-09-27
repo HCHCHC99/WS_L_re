@@ -460,7 +460,7 @@ static void I_Tmr4ValleyEvtConfig(void)
  */
 /* Read the three ADC channels and remap to logical U/V/W per g_i_phase_order.
  * Fixes a ~120deg rotation of the measured current if the PCB/channel mapping
- * differs from the code labels. Watch tunable; run mode 23 and find the order
+ * differs from the code labels. Watch tunable; run mode 25 and find the order
  * that gives id ~ +target, iq ~ 0. */
 static void I_ReadRemapped(uint16_t *iu, uint16_t *iv, uint16_t *iw)
 {

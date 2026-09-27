@@ -6,8 +6,8 @@
  * 第 1 步（当前，已完成）：完全复刻 mode 40 串级结构 —— 速度 PI 抽稀到 5ms，
  * 输出带符号 mA 作为 q 轴电流参考；id 参考 = 0；id/iq 电流 PI 在每个
  * 电流采样 ISR 用 TMRA_1 编码器转子角执行。
- * 新增 1：启动自动转速 profile（0/200/500/1000/1500/2000 rpm，每秒一档，
- * 5s 后保持；g_smo45_auto_ramp=0 可关闭，此后 Watch 直接改目标）。
+ * 新增 1：启动自动转速 profile（0/200/500/1000 rpm，每秒一档，4s 后保持；
+ * g_smo45_auto_ramp=0 可关闭，此后 Watch 直接改目标）。
  * 新增 2：SMO 纯旁观（foc_smo.c，见其头文件）—— 编码器闭环控制路径
  * 零改动，SMO 输入 = 上一拍指令电压 + 同源 Clarke 电流，输出
  * e_alpha_hat/e_beta_hat 与诊断量（|e| vs ωψf、atan2 角 vs 编码器角）。
@@ -222,7 +222,8 @@ static float Smo45_LimitSpeedRPM(float rpm)
     return rpm;
 }
 
-/* 启动自动转速 profile：前 5s 每秒抬一档目标，之后停止写入（Watch 接管）。
+/* 启动自动转速 profile：前 4s（秒 0/1/2/3 -> 0/200/500/1000 rpm）每拍写目标，
+ * 之后停止写入（Watch 接管）。表长 = FOC45_AUTO_RAMP_SECS + 1。
  * s_run_ticks 每 ISR 拍 +1，20kHz -> 整秒 = s_run_ticks / FOC_ISR_HZ */
 static void Smo45_AutoRamp(void)
 {

@@ -1,0 +1,83 @@
+{
+  "mode": 30,
+  "title": "磁场角度自增拖动（锁定编码器-磁场偏移）",
+  "entry": "comm_mode = 30（其他模式下 SW1 短按也可进入）",
+  "pre": "无（自带 foc_calib 零矢量零偏窗约 210ms，之后直接拖动）",
+  "end": "SW2 短按或 comm_mode = 0；不会自动停，ISR 内无过流判据",
+  "files": { "h": "foc_30_ramp.h", "c": "foc_30_ramp.c" },
+  "watch": [
+    { "mk": "", "name": "g_zizeng_freq_hz", "val": "0.5", "unit": "Hz", "desc": "拖动电频率（SW1 加 0.5Hz）" },
+    { "mk": "", "name": "g_zizeng_volt_v", "val": "0.7", "unit": "V", "desc": "拖动电压幅值（力道）" },
+    { "mk": "(*)", "note": "锁定窗 100ms（FOC30_OFFSET_SAMPLES=2000 @20kHz），窗内位移要 >= FOC30_DRAGDIR_MIN_CNTS=81 counts 才判得出方向：0.5Hz 只有约 20 counts，3Hz 约 123 counts（源码注释值）。" },
+    { "mk": "[!]", "note": "foc_30_ramp.h 顶部速览卡写 3.0Hz/0.6V，代码初值实为 0.5Hz/0.7V（foc_30_ramp.c:32）；Start 只在值 <= 0 时才改成 5.0Hz/0.6V。以代码为准。" },
+    { "mk": "[!]", "note": "运行中改频率只改拖动速度，不会自动重锁偏移；要重锁必须退到 comm_mode = 0 再进 30（Foc_Ramp_Start 会复位锁定状态）。" }
+  ],
+  "obs": [
+    { "mk": "(*)", "name": "g_zizeng_drag_dir", "desc": "拖动方向 +1/-1；0 = 锁定失败（ch13）" },
+    { "mk": "", "name": "g_foc_if_diff_rad", "desc": "编码器角-磁场角 (rad)；锁定后跳到 0 附近" },
+    { "mk": "", "name": "g_zizeng_theta_rad", "desc": "当前磁场电角度 (rad)，应匀速绕圈（ch7）" },
+    { "mk": "", "name": "g_zizeng_running", "desc": "1 = 正在拖动（ch14），停机后清 0" },
+    { "mk": "", "name": "g_zizeng_du", "desc": "U 相占空比 (%)，随磁场角摆动（ch12）" },
+    { "mk": "", "name": "g_foc_id_rotor_ma", "desc": "转子系 id (mA)；锁定前恒 0（ch9）" },
+    { "mk": "", "name": "g_foc_iq_rotor_ma", "desc": "转子系 iq (mA)；锁定后即力矩电流（ch10）" },
+    { "mk": "(*)", "note": "产物接口：Foc_Ramp_GetOffsetRad() 与 Foc_Ramp_GetDragDir()（mode 31 启动时自动取用）；mode 32 可用 Foc_Ramp_SetOffsetRad() / Foc_Ramp_SetDragDir() 覆盖。" }
+  ],
+  "vofa": {
+    "n": 15,
+    "fn": "Foc_Ramp_VofaFill",
+    "shared": false,
+    "rows": [
+      { "mk": "", "ch": "ch0", "what": "U 相电流", "unit": "A", "desc": "" },
+      { "mk": "", "ch": "ch1", "what": "V 相电流", "unit": "A", "desc": "" },
+      { "mk": "", "ch": "ch2", "what": "W 相电流", "unit": "A", "desc": "" },
+      { "mk": "", "ch": "ch3", "what": "静止系 ialpha", "unit": "A", "desc": "本模块刷新，mode 40/41 复用" },
+      { "mk": "", "ch": "ch4", "what": "静止系 ibeta", "unit": "A", "desc": "" },
+      { "mk": "(*)", "ch": "ch5", "what": "编码器角-磁场角", "unit": "rad", "desc": "锁定后跳到 0 附近；不收敛 = 打滑" },
+      { "mk": "", "ch": "ch6", "what": "自增频率", "unit": "Hz", "desc": "跟 g_zizeng_freq_hz（SW1 可加）" },
+      { "mk": "", "ch": "ch7", "what": "磁场电角度", "unit": "rad", "desc": "" },
+      { "mk": "", "ch": "ch8", "what": "电压幅值", "unit": "V", "desc": "" },
+      { "mk": "", "ch": "ch9", "what": "转子系 id", "unit": "A", "desc": "锁定前恒 0" },
+      { "mk": "", "ch": "ch10", "what": "转子系 iq", "unit": "A", "desc": "锁定后 = 力矩电流" },
+      { "mk": "", "ch": "ch11", "what": "静止系电流幅值", "unit": "A", "desc": "" },
+      { "mk": "", "ch": "ch12", "what": "U 相占空比", "unit": "%", "desc": "" },
+      { "mk": "(*)", "ch": "ch13", "what": "拖动方向", "unit": "-", "desc": "+1/-1；0 = 没测到 = 锁定失败" },
+      { "mk": "", "ch": "ch14", "what": "运行标志", "unit": "-", "desc": "" }
+    ]
+  },
+  "notes": [
+    { "mk": "(*)", "text": "主判据：启动约 1.3s 后（校准窗约 210ms + FOC30_OFFSET_WAIT_MS=1000 等待 + FOC30_OFFSET_SAMPLES=2000 采 100ms）RTT 打出 Offset LOCKED: .. deg, samples=2000, drag_dir=+1/-1；同时 ch13 由 0 变 +/-1，ch5 跳到 0 附近。" },
+    { "mk": "[!]", "text": "ch13 一直是 0 有两种原因：转子真没动（失步 / 电压太小），或 100ms 窗内位移没到 81 counts（默认 0.5Hz 只有约 20 counts，SW1 按 4 下提到 2.5Hz 再看）。" },
+    { "mk": "[!]", "text": "ch13 = 0 的连带后果：mode 31 启动时拿不到方向基准，它的 180deg 框架自检整段跳过，转向错了也不会被纠正。" },
+    { "mk": "[!]", "text": "锁定是在拖动中做的：转子打滑/失步时锁出的偏移本身就是错的，mode 31 启动方向会随机（foc_30_ramp.h 已注明该缺陷）-> 优先用 mode 32 静止吸附法锁偏移。" },
+    { "mk": "[!]", "text": "本模式 ISR 内没有过流判据（其他 FOC 模式都调 Foc_Core_OverCurrent），别随手加大 g_zizeng_volt_v；退出只能靠 SW2 / comm_mode = 0（Foc_Ramp_Stop）。" },
+    { "mk": "[!]", "text": "VOFA+ 通道数必须同步配成 15，否则整帧错位；改通道数改 Foc_Ramp_VofaFill 末尾的 return。" }
+  ],
+  "evidence": {
+    "g_zizeng_theta_rad": "foc_30_ramp.c:31",
+    "g_zizeng_freq_hz": "foc_30_ramp.c:32",
+    "g_zizeng_volt_v": "foc_30_ramp.c:33",
+    "g_zizeng_du": "foc_30_ramp.c:34",
+    "g_zizeng_running": "foc_30_ramp.c:37",
+    "g_zizeng_drag_dir": "foc_30_ramp.c:38",
+    "g_foc_id_rotor_ma": "foc_30_ramp.c:41",
+    "g_foc_iq_rotor_ma": "foc_30_ramp.c:42",
+    "g_foc_if_diff_rad": "foc_core.h:100",
+    "g_foc_ialpha": "foc_core.h:72",
+    "g_foc_ibeta": "foc_core.h:73",
+    "g_foc_iab_mag": "foc_core.h:74",
+    "g_i_iu_ma": "I.h:214",
+    "g_i_iv_ma": "I.h:215",
+    "g_i_iw_ma": "I.h:216",
+    "Foc_Ramp_Start": "foc_30_ramp.c:65",
+    "Foc_Ramp_Stop": "foc_30_ramp.c:113",
+    "Foc_Ramp_GetOffsetRad": "foc_30_ramp.c:340",
+    "Foc_Ramp_GetDragDir": "foc_30_ramp.c:352",
+    "Foc_Ramp_SetOffsetRad": "foc_30_ramp.c:361",
+    "Foc_Ramp_SetDragDir": "foc_30_ramp.c:370",
+    "Foc_Ramp_VofaFill": "foc_30_ramp.c:384",
+    "FOC30_OFFSET_WAIT_MS": "foc_30_ramp.c:25",
+    "FOC30_OFFSET_SAMPLES": "foc_30_ramp.c:26",
+    "FOC30_DRAGDIR_MIN_CNTS": "foc_30_ramp.c:27",
+    "Foc_Core_OverCurrent": "foc_core.c:208"
+  }
+}

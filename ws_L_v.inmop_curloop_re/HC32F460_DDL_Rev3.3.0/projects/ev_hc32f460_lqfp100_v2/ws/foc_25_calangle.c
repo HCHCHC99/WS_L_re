@@ -37,6 +37,7 @@
  */
 
 #include "foc_25_calangle.h"
+#include "I.h"                 /* g_i_iu/iv/iw_ma（VOFA 自持布局用） */
 #include "foc_math.h"
 #include "tmr4_pwm.h"
 #include "encoder.h"
@@ -106,7 +107,7 @@ static int32_t  s_max        = 0;     /* 窗口内最大相对位移 */
 /*******************************************************************************
  * 内部助手：输出指定电角度的固定磁场 + 刷新观测量（ISR 内调用）
  ******************************************************************************/
-static void CalAng_OutputField(const stc_i_data_t *pData, float theta)
+static void CalAngle_OutputField(const stc_i_data_t *pData, float theta)
 {
     float valpha, vbeta, du, dv, dw, id, iq;
 
@@ -136,7 +137,7 @@ static void CalAng_OutputField(const stc_i_data_t *pData, float theta)
 /*******************************************************************************
  * 内部助手：刹车 50/50/50 零矢量（不出力）
  ******************************************************************************/
-static void CalAng_OutputBrake(void)
+static void CalAngle_OutputBrake(void)
 {
     TMR4_PWM_SetDuty3Phase(50.0f, 50.0f, 50.0f);
 
@@ -155,7 +156,7 @@ static void CalAng_OutputBrake(void)
 /*******************************************************************************
  * 内部助手：锁存目标角（wrap 到 [0,3600)，单位 0.1°）+ 阶段计时清零
  ******************************************************************************/
-static void CalAng_LatchTarget(void)
+static void CalAngle_LatchTarget(void)
 {
     int32_t t = Foc_Core_ModPos(g_foc_angle_input, 3600);
 
@@ -168,7 +169,7 @@ static void CalAng_LatchTarget(void)
  * 内部助手：读 TMRA_1 原始计数 -> 实测转子电角度 ×0.1° (0~3599)
  *   与 mode 0 观测同框架（原始计数×方向 - offset, mod CPR）
  ******************************************************************************/
-static int32_t CalAng_ReadElecDeg(void)
+static int32_t CalAngle_ReadElecDeg(void)
 {
     uint16_t hw = TMRA_GetCountValue(CM_TMRA_1);
     int32_t  diff;
@@ -185,14 +186,14 @@ static int32_t CalAng_ReadElecDeg(void)
  *   转子已在目标 ±5° 内 -> 直接抖动；否则先到"转子一侧 15°"引导点
  *   （同侧预拉，最后一段拉程只有 15°，到站动量小、过冲小）。
  ******************************************************************************/
-static void CalAng_StartHold(void)
+static void CalAngle_StartHold(void)
 {
     int32_t rotor, d;
 
     s_last_input = g_foc_angle_input;
-    CalAng_LatchTarget();                            /* 锁存目标 + 计时清零 */
+    CalAngle_LatchTarget();                            /* 锁存目标 + 计时清零 */
 
-    rotor = CalAng_ReadElecDeg();
+    rotor = CalAngle_ReadElecDeg();
     d     = rotor - g_calang_target_deg;             /* 转子在目标哪一侧 (×0.1°) */
     d     = 1800 - Foc_Core_ModPos(1800 - d, 3600);  /* 折叠 (-1800,1800] */
 
@@ -269,7 +270,7 @@ void Foc_CalAngle_Step(const stc_i_data_t *pData)
     switch (g_calang_state) {
     /* ===== 校准 BETA：磁场定 90°，2s ===== */
     case FOC25_STEP_CAL_BETA:
-        CalAng_OutputField(pData, FOC_MATH_HALF_PI);
+        CalAngle_OutputField(pData, FOC_MATH_HALF_PI);
         if (++s_phase_tick >= FOC25_BETA_TICKS) {
             s_phase_tick   = 0u;
             g_calang_state = FOC25_STEP_CAL_ALPHA;
@@ -279,7 +280,7 @@ void Foc_CalAngle_Step(const stc_i_data_t *pData)
 
     /* ===== 校准 ALPHA：磁场定 0°，2s，结束锁零点 -> 刹车等待 ===== */
     case FOC25_STEP_CAL_ALPHA:
-        CalAng_OutputField(pData, 0.0f);
+        CalAngle_OutputField(pData, 0.0f);
         if (++s_phase_tick >= FOC25_ALPHA_TICKS) {
             int32_t off;
 
@@ -295,16 +296,16 @@ void Foc_CalAngle_Step(const stc_i_data_t *pData)
             s_phase_tick   = 0u;
             g_calang_state = FOC25_STEP_BRAKE_WAIT;
             g_calang_evt   = FOC25_EVT_LOCKED;
-            CalAng_OutputBrake();        /* 立即切刹车，模式停在 25 */
+            CalAngle_OutputBrake();        /* 立即切刹车，模式停在 25 */
         }
         break;
 
     /* ===== 刹车等待：50/50/50，监视 g_foc_angle_input 改值 ===== */
     case FOC25_STEP_BRAKE_WAIT:
-        CalAng_OutputBrake();
+        CalAngle_OutputBrake();
         if (g_foc_angle_input != s_last_input) {
             g_calang_state = FOC25_STEP_HOLD_ATTRACT;
-            CalAng_StartHold();          /* 锁存目标 + 判来向 + 选子阶段 */
+            CalAngle_StartHold();          /* 锁存目标 + 判来向 + 选子阶段 */
         }
         break;
 
@@ -312,12 +313,12 @@ void Foc_CalAngle_Step(const stc_i_data_t *pData)
      *       (1.3s)（中途改值 -> 重新判向/锁存/计时） ===== */
     case FOC25_STEP_HOLD_ATTRACT:
         if (g_foc_angle_input != s_last_input) {
-            CalAng_StartHold();
+            CalAngle_StartHold();
             break;
         }
         switch (s_hold_sub) {
         case FOC25_SUB_GUIDE:
-            CalAng_OutputField(pData, (float)s_guide_deg * FOC25_DDEG2RAD);
+            CalAngle_OutputField(pData, (float)s_guide_deg * FOC25_DDEG2RAD);
             if (++s_phase_tick >= FOC25_GUIDE_TICKS) {
                 s_phase_tick = 0u;
                 s_hold_sub   = FOC25_SUB_DITHER;
@@ -325,7 +326,7 @@ void Foc_CalAngle_Step(const stc_i_data_t *pData)
             break;
 
         case FOC25_SUB_DITHER:
-            CalAng_OutputField(pData, s_target_rad
+            CalAngle_OutputField(pData, s_target_rad
                     + FOC25_DITHER_AMP_RAD * Foc_Math_Sin(
                         (float)s_phase_tick * FOC25_DITHER_W_RAD));
             if (++s_phase_tick >= FOC25_DITHER_TICKS) {
@@ -335,7 +336,7 @@ void Foc_CalAngle_Step(const stc_i_data_t *pData)
             break;
 
         default:   /* FOC25_SUB_SETTLE：纯目标角落座 */
-            CalAng_OutputField(pData, s_target_rad);
+            CalAngle_OutputField(pData, s_target_rad);
             if (++s_phase_tick >= FOC25_SETTLE_TICKS) {
                 /* 进入 500ms 校验窗：位移窗口清零（磁场保持不动，用户决定） */
                 s_hw_prev      = TMRA_GetCountValue(CM_TMRA_1);
@@ -351,7 +352,7 @@ void Foc_CalAngle_Step(const stc_i_data_t *pData)
 
     /* ===== 校验：磁场保持 y，500ms 窗口跟踪位移，判吸稳 ===== */
     case FOC25_STEP_HOLD_VERIFY:
-        CalAng_OutputField(pData, s_target_rad);
+        CalAngle_OutputField(pData, s_target_rad);
         hw = TMRA_GetCountValue(CM_TMRA_1);
         d  = (int16_t)((uint16_t)hw - (uint16_t)s_hw_prev);
         s_hw_prev = hw;
@@ -363,7 +364,7 @@ void Foc_CalAngle_Step(const stc_i_data_t *pData)
             g_calang_win_moved = s_max - s_min;
 
             /* 实测电角度 ×0.1°(0~3599)：与 mode 0 观测同框架（原始计数 - offset） */
-            g_calang_meas_deg = CalAng_ReadElecDeg();
+            g_calang_meas_deg = CalAngle_ReadElecDeg();
 
             /* err = meas - target，折叠到 (-1800,1800]（单位 0.1°） */
             e = g_calang_meas_deg - g_calang_target_deg;
@@ -399,4 +400,30 @@ void Foc_CalAngle_Stop(void)
         }
         FOC25_DBG("stopped");
     }
+}
+
+/*===========================================================================
+ * 模式自持 VOFA：固定 16ch 布局，通道含义见 foc_25_calangle.h 顶部速览卡
+ *（唯一事实源）。单位换算：传"毫单位"，SendScaled 内部 ×0.001；
+ *角度量源码是 ×0.1°(0~3599)，×100 转成 mdeg 正好显示成 deg（两位小数）。
+ *===========================================================================*/
+int Foc_CalAngle_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                    /* ch0 U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                    /* ch1 V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                    /* ch2 W 相电流 */
+    cur[3]  = (int32_t)(g_foc_id_ma);                  /* ch3 控制系 id 反馈 (mA -> A) */
+    cur[4]  = (int32_t)(g_foc_iq_ma);                  /* ch4 控制系 iq 反馈 */
+    cur[5]  = (int32_t)(g_calang_state);               /* ch5 状态 见卡片状态机表 */
+    cur[6]  = (int32_t)(g_calang_evt);                 /* ch6 事件 1..5 */
+    cur[7]  = (int32_t)(g_calang_target_deg * 100);    /* ch7 目标电角度 (0.1deg -> mdeg) */
+    cur[8]  = (int32_t)(g_calang_meas_deg * 100);      /* ch8 实测电角度 (0.1deg -> mdeg) */
+    cur[9]  = (int32_t)(g_calang_err_deg * 100);       /* ch9 误差 meas-target (0.1deg -> mdeg) */
+    cur[10] = (int32_t)(g_calang_win_moved);           /* ch10 校验窗位移 (counts) */
+    cur[11] = (int32_t)(g_calang_offset);              /* ch11 本次锁定的零点 (counts) */
+    cur[12] = (int32_t)(g_calang_du * 1000.0f);        /* ch12 U 相占空比 (m% -> %) */
+    cur[13] = (int32_t)(g_calang_dv * 1000.0f);        /* ch13 V 相占空比 */
+    cur[14] = (int32_t)(g_calang_dw * 1000.0f);        /* ch14 W 相占空比 */
+    cur[15] = (int32_t)(g_foc_elec_deg);               /* ch15 实时转子电角度 (deg) */
+    return 16;
 }

@@ -32,7 +32,6 @@ typedef enum {
     COMM_RUNNER_SPEED_FOC  = 40, /* mode 40 编码器 FOC 速度/电流双闭环 */
     COMM_RUNNER_SMO45      = 45, /* mode 45 SMO+PLL 无感（第 1 步 = 复刻 mode 40 + 自动转速 profile） */
     COMM_RUNNER_DRUN41     = 41, /* mode 41 纯电流环 + 可选 dq 前馈实验 */
-    COMM_RUNNER_FOC_ALIGN  = 23, /* FOC 对齐校准 */
     COMM_RUNNER_ZIZENG     = 30, /* 磁场角度自增拖动模式 */
     COMM_RUNNER_IQ_PI      = 31, /* PI 电流环模式（需先跑 mode 30 锁偏移） */
     COMM_RUNNER_LOCK_IQ_PI = 32, /* 自锁偏移 + 自动交接 mode 31（不依赖 mode 30） */
@@ -53,11 +52,12 @@ typedef struct {
  *   并返回**自己的通道数**（各模式可不同，见下表）。
  *
  *   返回 0 = 该模式无专属布局，回落到 main.c 的通用布局
- *             （Foc_Common_VofaFill，20ch；校准类模式 20/23/24/25 走这条）。
+ *             （Foc_Common_VofaFill，20ch；只有六步方波模式 1~11 与空闲态走这条）。
  *
  *   现行通道数一览（改动时请同步本表与 main.c 分发链）：
- *     mode 0/通用 20ch | 26 16ch | 27 17ch | 28 17ch | 29 19ch | 30 15ch
- *     mode 31 16ch | 32 16ch | 40 18ch | 41 21ch | 45 8或16ch（随 wave_mode）
+ *     mode 0/通用 20ch | 20 14ch | 24 16ch | 25 16ch | 26 16ch
+ *     mode 27 17ch | 28 17ch | 29 19ch | 30 15ch | 31 16ch
+ *     mode 32 16ch | 40 18ch | 41 21ch | 45 16/8/16ch（随 wave_mode）
  *
  *   ⚠ 通道数可变 ⇒ 切模式时 VOFA+ 上位机的通道数必须同步修改。
  *   ⚠ 硬上限 USART3_VOFA_MAX_CHANNELS(24)；main.c 内部缓冲 cur[32]。

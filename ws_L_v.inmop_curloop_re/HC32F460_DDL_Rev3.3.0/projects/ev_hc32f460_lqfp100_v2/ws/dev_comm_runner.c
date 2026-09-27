@@ -147,13 +147,6 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         RUNNER_DBG("OLF (mode 26)");
         break;
 
-    case COMM_RUNNER_FOC_ALIGN:
-        CommRunner_StopFocModes();
-        Commutation_Stop();
-        Foc_Align_Start();
-        RUNNER_DBG("FOC_ALIGN (mode 23)");
-        break;
-
     case COMM_RUNNER_ZIZENG:
         CommRunner_StopFocModes();
         Commutation_Stop();
@@ -264,12 +257,12 @@ float CommRunner_GetDuty(void)
 }
 
 /*=============================================================================
- * CommRunner_Update — 几乎空操作（FOC ISR 驱动模式23和30）
+ * CommRunner_Update — 几乎空操作（FOC 模式与 mode 30 都由 Foc_Isr 驱动）
  *=============================================================================*/
 void CommRunner_Update(void)
 {
     if (!s_initialized) return;
-    /* 模式23和30完全由 Foc_Isr 驱动，主循环无事可做 */
+    /* FOC 模式与 mode 30 完全由 Foc_Isr 驱动，主循环无事可做 */
 }
 
 /*=============================================================================

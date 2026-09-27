@@ -4,7 +4,7 @@
  * @brief Current PI loop — 精简版：电流环 PI 控制已禁用
  *        （电流采集由 I.c 继续工作，ADC 回调不再执行电流环 PI）
  *
- *        模式23（对齐校准）和模式30（自增拖动）不需要电流环 PI 控制，
+ *        模式30（自增拖动）与各 FOC 模式不需要本模块的电流环 PI 控制，
  *        因此 curloop_isr 被替换为空函数，所有 PI 相关代码都被条件编译排除。
  *******************************************************************************
  */
@@ -92,7 +92,7 @@ void CurLoop_Init(void)
     I_RegisterCallback(curloop_isr);
 
     s_inited = 1;
-    CURLOOP_DBG("Init done (current-loop PI DISABLED - only mode23/30)");
+    CURLOOP_DBG("Init done (current-loop PI DISABLED)");
 }
 
 /**

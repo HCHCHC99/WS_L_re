@@ -38,7 +38,7 @@
  *          得出），故注入 ref_dir = FOC_ENC_DIR。实测佐证：FOC_ENC_DIR=-1
  *          与 mode 30 五次拖动 drag_dir=-1 一致。
  *
- *        相位时序（沿用 mode 23 的两段式单侧逼近，破坏摩擦迟滞）：
+ *        相位时序（沿用老版对齐的两段式单侧逼近，破坏摩擦迟滞）：
  *          BETA(磁场 90°, 盲等) -> ALPHA(磁场 0°, 等静止, 取基准位置)
  *          -> VERIFY(磁场 90°, 等静止, 校验位移 ≈ +90°电角度)
  *          -> 锁定注入 -> 零矢量等 foc_obs 交接。
@@ -94,7 +94,7 @@ static uint8_t  s_quiet = 0u;         /* 连续静止窗口计数 */
 static float    s_alpha_avg = 0.0f;
 
 /*******************************************************************************
- * LockIqPi_OutputVolt - 对齐加压输出（磁场定 theta，模式23同款路径）
+ * LockIqPi_OutputVolt - 对齐加压输出（磁场定 theta，老版对齐同款路径）
  ******************************************************************************/
 static void LockIqPi_OutputVolt(const stc_i_data_t *pData, float theta)
 {

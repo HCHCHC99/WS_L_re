@@ -1,0 +1,1205 @@
+################ 1. VOFA 填充函数（每个 mode 自持布局） ################
+
+=== foc_26_olf.c :: Foc_Olf_VofaFill()  (第 380 行) ===
+int Foc_Olf_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                 /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                 /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                 /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_olf_freq_hz * 1000.0f);   /* ch3  磁场自增频率 (mHz -> Hz) */
+    cur[4]  = (int32_t)(g_olf_freq_targ_hz * 1000.0f);/* ch4 目标频率（SW1 可调） */
+    cur[5]  = (int32_t)(g_olf_iq_ma);               /* ch5  iq（力矩分量） */
+    cur[6]  = (int32_t)(g_olf_id_ma);               /* ch6  id（磁链分量，高频转负） */
+    cur[7]  = (int32_t)(g_olf_diff_deg * 1000);     /* ch7  **负载角 delta (mdeg -> deg) ← 实验主曲线** */
+    cur[8]  = (int32_t)(g_olf_field_deg * 1000);    /* ch8  磁场电角度 (mdeg -> deg) */
+    cur[9]  = (int32_t)(g_olf_rotor_deg * 1000);    /* ch9  转子电角度 */
+    cur[10] = (int32_t)(g_olf_volt_v * 1000.0f);    /* ch10 拖动电压幅值 (mV -> V) */
+    cur[11] = (int32_t)(g_olf_iq_pp_ma);            /* ch11 iq 峰峰值（失步后剧烈振荡） */
+    cur[12] = (int32_t)(g_olf_id_pp_ma);            /* ch12 id 峰峰值 */
+    cur[13] = (int32_t)(g_olf_theta_rad * 1000.0f); /* ch13 控制系 d 轴角 (mrad -> rad) */
+    cur[14] = (int32_t)(g_olf_dir);                 /* ch14 自增方向 +1/-1 */
+    cur[15] = (int32_t)(g_olf_state);               /* ch15 状态 0IDLE/1BETA/2ALPHA/3DRAG/4OC */
+    return 16;
+}
+
+=== foc_27_dcl.c :: Foc_Dcl_VofaFill()  (第 395 行) ===
+int Foc_Dcl_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                 /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                 /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                 /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_dcl_speed_hz * 1000.0f);  /* ch3  **实测电频率 (mHz -> Hz) ← 扫 δ 看这个** */
+    cur[4]  = (int32_t)(g_dcl_dlt_now_deg * 1000.0f);/* ch4 δ 指令 (mdeg -> deg) */
+    cur[5]  = (int32_t)(g_dcl_diff_deg * 1000);     /* ch5  功角实测 (mdeg -> deg)，应≈ch4 */
+    cur[6]  = (int32_t)(g_dcl_iq_ma);               /* ch6  iq（力矩分量） */
+    cur[7]  = (int32_t)(g_dcl_id_ma);               /* ch7  id（磁链分量，δ 小时变大） */
+    cur[8]  = (int32_t)(g_dcl_field_deg * 1000);    /* ch8  磁场电角度 (mdeg -> deg) */
+    cur[9]  = (int32_t)(g_dcl_rotor_deg * 1000);    /* ch9  转子电角度 */
+    cur[10] = (int32_t)(g_dcl_volt_v * 1000.0f);    /* ch10 电压幅值 (mV -> V)，=调速旋钮 */
+    cur[11] = (int32_t)(g_dcl_iq_pp_ma);            /* ch11 iq 峰峰值（猎振判据） */
+    cur[12] = (int32_t)(g_dcl_id_pp_ma);            /* ch12 id 峰峰值 */
+    cur[13] = (int32_t)(g_dcl_du * 1000.0f);        /* ch13 U 相占空比 (m% -> %) */
+    cur[14] = (int32_t)(g_dcl_dv * 1000.0f);        /* ch14 V 相占空比 */
+    cur[15] = (int32_t)(g_dcl_dw * 1000.0f);        /* ch15 W 相占空比 */
+    cur[16] = (int32_t)(g_dcl_state);               /* ch16 状态 0IDLE/1BETA/2ALPHA/3RUN/4OC */
+    return 17;
+}
+
+=== foc_28_dci.c :: Foc_Dci_VofaFill()  (第 630 行) ===
+int Foc_Dci_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                 /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                 /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                 /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_dci_speed_hz * 1000.0f);  /* ch3  实测电频率 (mHz -> Hz) */
+    cur[4]  = (int32_t)(g_dci_dlt_now_deg * 1000.0f);/* ch4 δ 指令 (mdeg -> deg) */
+    cur[5]  = (int32_t)(g_dci_diff_deg * 1000);     /* ch5  功角实测 (mdeg -> deg) */
+    cur[6]  = (int32_t)(g_dci_iq_ma);               /* ch6  iq 反馈 */
+    cur[7]  = (int32_t)(g_dci_id_ma);               /* ch7  id 反馈 */
+    cur[8]  = (int32_t)(g_dci_iq_ref_ma);           /* ch8  iq 参考 */
+    cur[9]  = (int32_t)(g_dci_id_ref_ma);           /* ch9  id 参考（= I_ref·cosδ） */
+    cur[10] = (int32_t)(g_dci_i_ref_ma);            /* ch10 电流矢量**幅值**参考 */
+    cur[11] = (int32_t)(g_dci_eq_mean_ma);          /* ch11 **q 误差均值 ← P 调参主判据** */
+    cur[12] = (int32_t)(g_dci_ed_mean_ma);          /* ch12 d 误差均值 */
+    cur[13] = (int32_t)(g_dci_iq_mean_ma);          /* ch13 iq 3s 均值 */
+    cur[14] = (int32_t)(g_dci_id_mean_ma);          /* ch14 id 3s 均值 */
+    cur[15] = (int32_t)(g_dci_eq_pp_ma);            /* ch15 **q 误差峰峰值（振铃判据）** */
+    cur[16] = (int32_t)(g_dci_state);               /* ch16 状态 0IDLE/1零偏/2BETA/3ALPHA/4RUN/5OC */
+    return 17;
+}
+
+=== foc_29_drun.c :: Foc_Drun_VofaFill()  (第 648 行) ===
+int Foc_Drun_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                  /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                  /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                  /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_foc_ialpha * 1000.0f);     /* ch3  静止系 ialpha */
+    cur[4]  = (int32_t)(g_foc_ibeta  * 1000.0f);     /* ch4  静止系 ibeta */
+    cur[5]  = (int32_t)(g_foc_iq_ma);                /* ch5  iq 反馈 ← 环反馈 */
+    cur[6]  = (int32_t)(g_foc_id_ma);                /* ch6  id 反馈 ← 环反馈 */
+    cur[7]  = (int32_t)(g_drun29_iq_ref_ma);         /* ch7  iq 参考 */
+    cur[8]  = (int32_t)(g_drun29_id_ref_ma);         /* ch8  id 参考（不恒为 0！） */
+    cur[9]  = (int32_t)(g_foc_vq * 1000.0f);         /* ch9  vq 输出 (mV -> V) */
+    cur[10] = (int32_t)(g_foc_vd * 1000.0f);         /* ch10 vd 输出 */
+    cur[11] = (int32_t)(g_drun29_eq_mean_ma);        /* ch11 q 轴误差均值 ← P 调参主判据 */
+    cur[12] = (int32_t)(g_drun29_ed_mean_ma);        /* ch12 d 轴误差均值 */
+    cur[13] = (int32_t)(g_drun29_iq_mean_ma);        /* ch13 iq 3s 均值 */
+    cur[14] = (int32_t)(g_drun29_id_mean_ma);        /* ch14 id 3s 均值 */
+    cur[15] = (int32_t)(g_drun29_iq_pp_ma);          /* ch15 iq 误差峰峰值（振铃判据） */
+    cur[16] = (int32_t)(g_drun29_iq_filt_ma);        /* ch16 显示用滤波 iq（PI 不用） */
+    cur[17] = (int32_t)(g_drun29_diff_deg * 1000);   /* ch17 功角 delta (mdeg -> deg) */
+    cur[18] = (int32_t)(g_drun29_speed_hz * 1000.0f);/* ch18 实测电频率 (mHz -> Hz) */
+    return 19;
+}
+
+=== foc_30_ramp.c :: Foc_Ramp_VofaFill()  (第 384 行) ===
+int Foc_Ramp_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                   /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                   /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                   /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_foc_ialpha * 1000.0f);      /* ch3  静止系 ialpha */
+    cur[4]  = (int32_t)(g_foc_ibeta  * 1000.0f);      /* ch4  静止系 ibeta */
+    cur[5]  = (int32_t)(g_foc_if_diff_rad * 1000.0f); /* ch5 **编码器角−磁场角(mrad)，锁定后≈0** */
+    cur[6]  = (int32_t)(g_zizeng_freq_hz * 1000.0f);  /* ch6  自增频率 (mHz -> Hz) */
+    cur[7]  = (int32_t)(g_zizeng_theta_rad * 1000.0f);/* ch7  磁场电角度 (mrad -> rad) */
+    cur[8]  = (int32_t)(g_zizeng_volt_v * 1000.0f);   /* ch8  电压幅值 (mV -> V) */
+    cur[9]  = (int32_t)(g_foc_id_rotor_ma);           /* ch9  转子系 id（锁定后有效） */
+    cur[10] = (int32_t)(g_foc_iq_rotor_ma);           /* ch10 转子系 iq */
+    cur[11] = (int32_t)(g_foc_iab_mag * 1000.0f);     /* ch11 静止系电流幅值 */
+    cur[12] = (int32_t)(g_zizeng_du * 1000.0f);       /* ch12 U 相占空比 (m% -> %) */
+    cur[13] = (int32_t)(g_zizeng_drag_dir);           /* ch13 **方向 +1/-1，0=锁定失败** */
+    cur[14] = (int32_t)(g_zizeng_running);            /* ch14 运行标志 */
+    return 15;
+}
+
+=== foc_31_iqpi.c :: Foc_IqPi_VofaFill()  (第 427 行) ===
+int Foc_IqPi_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                    /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                    /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                    /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_foc_iab_mag * 1000.0f);      /* ch3  静止系电流幅值 */
+    cur[4]  = (int32_t)(g_foc_ialpha * 1000.0f);       /* ch4  静止系 ialpha */
+    cur[5]  = (int32_t)(g_foc_ibeta  * 1000.0f);       /* ch5  静止系 ibeta */
+    cur[6]  = (int32_t)(g_foc_iq_ma);                  /* ch6  iq 反馈 ← 环反馈 */
+    cur[7]  = (int32_t)(g_foc_id_ma);                  /* ch7  id 反馈（参考恒 0） */
+    cur[8]  = (int32_t)(g_iqpi_iq_ref_ma);             /* ch8  iq 目标（手动给） */
+    cur[9]  = (int32_t)(g_foc_vd * 1000.0f);           /* ch9  vd 输出 (mV -> V) */
+    cur[10] = (int32_t)(g_foc_vq * 1000.0f);           /* ch10 vq 输出 */
+    cur[11] = (int32_t)(g_iqpi_iq_ref_ramp_ma);        /* ch11 **斜坡后实际 iq 参考 ← 判跟踪看这个** */
+    cur[12] = (int32_t)(g_iqpi_theta_rad * 1000.0f);   /* ch12 使用的转子电角度 (mrad -> rad) */
+    cur[13] = (int32_t)(g_foc_du * 1000.0f);           /* ch13 U 相占空比 (m% -> %) */
+    cur[14] = (int32_t)(g_foc_dv * 1000.0f);           /* ch14 V 相占空比 */
+    cur[15] = (int32_t)(g_iqpi_step);                  /* ch15 状态 0IDLE/1无偏移/2零矢量/3闭环
+                                                        *      4电压饱和/5堵转/6过流/7已翻转 */
+    return 16;
+}
+
+=== foc_32_lockiq.c :: Foc_LockIq_VofaFill()  (第 389 行) ===
+int Foc_LockIq_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                    /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                    /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                    /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_foc_iab_mag * 1000.0f);      /* ch3  静止系电流幅值（吸附期间可见） */
+    cur[4]  = (int32_t)(g_foc_ialpha * 1000.0f);       /* ch4  静止系 ialpha */
+    cur[5]  = (int32_t)(g_foc_ibeta  * 1000.0f);       /* ch5  静止系 ibeta */
+    cur[6]  = (int32_t)(g_foc_iq_ma);                  /* ch6  iq 反馈 */
+    cur[7]  = (int32_t)(g_foc_id_ma);                  /* ch7  id 反馈 */
+    cur[8]  = (int32_t)(g_iqpi_iq_ref_ma);             /* ch8  iq 目标（交接后有效） */
+    cur[9]  = (int32_t)(g_foc_vd * 1000.0f);           /* ch9  vd 输出 (mV -> V) */
+    cur[10] = (int32_t)(g_foc_vq * 1000.0f);           /* ch10 vq 输出 */
+    cur[11] = (int32_t)(g_iqpi_iq_ref_ramp_ma);        /* ch11 斜坡后实际 iq 参考（交接后） */
+    cur[12] = (int32_t)(g_iqpi_theta_rad * 1000.0f);   /* ch12 使用的转子电角度 (mrad -> rad) */
+    cur[13] = (int32_t)(g_foc_du * 1000.0f);           /* ch13 U 相占空比 (m% -> %) */
+    cur[14] = (int32_t)(g_lockiq_off_deg * 1000);      /* ch14 已注入的偏移 (mdeg -> deg) */
+    cur[15] = (int32_t)(g_lockiq_step);                /* ch15 **状态 ← 锁定阶段主判据**：
+                                                        * 0IDLE/1BETA/2ALPHA/3VERIFY/
+                                                        * 4LOCKED_WAIT_HANDOFF/5LOCK_FAIL/6OC */
+    return 16;
+}
+
+=== foc_40_speed.c :: Foc_Speed_VofaFill()  (第 444 行) ===
+int Foc_Speed_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);              /* ch0 U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);              /* ch1 V 相电流 (mA -> A) */
+    cur[2]  = (int32_t)(g_i_iw_ma);              /* ch2 W 相电流 (mA -> A) */
+    cur[3]  = (int32_t)(g_foc_ialpha * 1000.0f); /* ch3 静止系 ialpha (mA -> A) */
+    cur[4]  = (int32_t)(g_foc_ibeta * 1000.0f);  /* ch4 静止系 ibeta (mA -> A) */
+    cur[5]  = (int32_t)(g_foc_iq_ma);            /* ch5 控制系 iq (mA -> A) */
+    cur[6]  = (int32_t)(g_speed40_id_ref_ma);    /* ch6 id 参考 (mA -> A) */
+    cur[7]  = (int32_t)(g_speed40_iq_ref_ma);    /* ch7 iq 参考 (mA -> A) */
+    cur[8]  = (int32_t)(g_speed40_vd * 1000.0f); /* ch8 电流环输出 vd (mV -> V) */
+    cur[9]  = (int32_t)(g_speed40_vq * 1000.0f); /* ch9 电流环输出 vq (mV -> V)，
+                                                  * 贴 6.2V = 电压墙 */
+    cur[10] = (int32_t)(g_foc_iab_mag * 1000.0f); /* ch10 静止系电流幅值 (mA -> A) */
+    cur[11] = 0;                                 /* ch11~12 预留 */
+    cur[12] = 0;
+    cur[13] = (int32_t)(g_speed40_speed_ramp_rpm * 1000.0f); /* ch13 斜坡输出转速
+                                                  * (mrpm -> rpm)：内部斜坡限幅整形后的
+                                                  * 真实给定；反馈与它比（ch17）：ch13 慢
+                                                  * =斜坡限幅卡住，ch17 慢=环路/滤波滞后 */
+    cur[14] = (int32_t)(g_speed40_speed_target_rpm * 1000.0f); /* ch14 目标转速
+                                                  * (mrpm -> rpm) */
+    cur[15] = (int32_t)(g_speed40_speed_disp_rpm * 1000.0f);   /* ch15 显示强滤波
+                                                  * 转速 (mrpm -> rpm)，α=0.05
+                                                  * τ≈100ms，刻意滞后，只看趋势 */
+    cur[16] = (int32_t)(g_speed40_iq_filt_ma);   /* ch16 滤波 iq (mA -> A) */
+    cur[17] = (int32_t)(g_speed40_speed_filt_rpm * 1000.0f);   /* ch17 PI 反馈真实转速
+                                                  * (mrpm -> rpm)，α=0.25 τ≈20ms：
+                                                  * 速度环真正吃的那个值，与 ch13
+                                                  * 之差决定 P 项大小。调外环判据用
+                                                  * ch17 追 ch13，不要用 ch15 */
+    return 18;
+}
+
+=== foc_41_drun.c :: Foc_Drun41_VofaFill()  (第 712 行) ===
+int Foc_Drun41_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);                  /* ch0  U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);                  /* ch1  V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);                  /* ch2  W 相电流 */
+    cur[3]  = (int32_t)(g_foc_ialpha * 1000.0f);     /* ch3  静止系 ialpha */
+    cur[4]  = (int32_t)(g_foc_ibeta  * 1000.0f);     /* ch4  静止系 ibeta */
+    cur[5]  = (int32_t)(g_foc_iq_ma);                /* ch5  iq 反馈 ← 环反馈 */
+    cur[6]  = (int32_t)(g_foc_id_ma);                /* ch6  id 反馈 ← 环反馈 */
+    cur[7]  = (int32_t)(g_drun41_iq_ref_ma);         /* ch7  iq 参考 */
+    cur[8]  = (int32_t)(g_drun41_id_ref_ma);         /* ch8  id 参考（不恒为 0！） */
+    cur[9]  = (int32_t)(g_foc_vq * 1000.0f);         /* ch9  vq 总输出（含前馈） */
+    cur[10] = (int32_t)(g_foc_vd * 1000.0f);         /* ch10 vd 总输出（含前馈） */
+    cur[11] = (int32_t)(g_drun41_eq_mean_ma);        /* ch11 q 轴误差均值 ← 主判据 */
+    cur[12] = (int32_t)(g_drun41_ed_mean_ma);        /* ch12 d 轴误差均值 */
+    cur[13] = (int32_t)(g_drun41_iq_mean_ma);        /* ch13 iq 3s 均值 */
+    cur[14] = (int32_t)(g_drun41_id_mean_ma);        /* ch14 id 3s 均值 */
+    cur[15] = (int32_t)(g_drun41_eq_pp_ma);          /* ch15 q 轴误差峰峰值（振铃判据） */
+    cur[16] = (int32_t)(g_drun41_iq_filt_ma);        /* ch16 显示用滤波 iq（PI 不用） */
+    cur[17] = (int32_t)(g_drun41_diff_deg * 1000);   /* ch17 功角 delta (mdeg -> deg) */
+    cur[18] = (int32_t)(g_drun41_speed_hz * 1000.0f);/* ch18 实测电频率 (mHz -> Hz) */
+    cur[19] = (int32_t)(g_drun41_vd_ff_v * 1000.0f); /* ch19 **d 轴前馈电压** ← 本模式专属 */
+    cur[20] = (int32_t)(g_drun41_vq_ff_v * 1000.0f); /* ch20 **q 轴前馈电压** ← 本模式专属 */
+    return 21;
+}
+
+=== foc_45_smo.c :: Foc_Smo45_VofaFill()  (第 563 行) ===
+int Foc_Smo45_VofaFill(int32_t *cur)
+{
+    if (g_smo45_wave_mode == 2u) {
+        /*===== wave_mode=2：PLL/无感验收面板（16ch）=====*/
+        float pll_emag = sqrtf(g_smo_e_alpha_hat_v * g_smo_e_alpha_hat_v
+                             + g_smo_e_beta_hat_v * g_smo_e_beta_hat_v);
+
+        cur[0]  = (int32_t)(g_smo45_speed_meas_rpm * 1000.0f);   /* mrpm -> rpm */
+        cur[1]  = (int32_t)(g_smo45_speed_filt_rpm * 1000.0f);   /* mrpm -> rpm */
+        cur[2]  = (int32_t)(g_pll_omega_hat_rpm * 1000.0f);      /* mrpm -> rpm */
+        cur[3]  = (int32_t)(g_pll_omega_out_rpm * 1000.0f);      /* mrpm -> rpm */
+        cur[4]  = (int32_t)((g_pll_omega_hat_rpm
+                           - g_smo45_speed_meas_rpm) * 1000.0f); /* mrpm -> rpm */
+        cur[5]  = (int32_t)((g_pll_omega_out_rpm
+                           - g_smo45_speed_filt_rpm) * 1000.0f); /* mrpm -> rpm */
+        cur[6]  = (int32_t)(g_pll_diag_theta_err_deg * 1000.0f); /* mdeg -> deg */
+        cur[7]  = (int32_t)(g_pll_diag_theta_err_filt_deg * 1000.0f);
+        cur[8]  = (int32_t)(g_smo45_iq_filt_ma);                 /* mA -> A */
+        cur[9]  = (int32_t)(g_pll_comp_deg_out * 1000.0f);       /* mdeg -> deg */
+        cur[10] = (int32_t)(g_smo45_sl_active * 1000.0f);        /* 0/1 */
+        cur[11] = (int32_t)(pll_emag * 1000.0f);                 /* mV -> V */
+        cur[12] = (int32_t)(g_pll_diag_smo_err_deg * 1000.0f);   /* mdeg -> deg */
+        cur[13] = (int32_t)(g_smo45_speed_target_rpm * 1000.0f); /* mrpm -> rpm */
+        cur[14] = (int32_t)(g_smo45_speed_disp_rpm * 1000.0f);   /* 显示滤波转速 */
+        cur[15] = (int32_t)(g_smo45_speed_ramp_rpm * 1000.0f);   /* 斜坡输出转速
+                                              * (mrpm -> rpm)：与 ch13 目标对比看
+                                              * 斜坡限幅段，与 ch1 反馈对比看环路 */
+        return 16;
+    } else if (g_smo45_wave_mode != 0u) {
+        /*===== wave_mode=1：波形窄帧（8ch=32B，~2.9kHz 帧率）=====*/
+        cur[0] = (int32_t)(g_smo_z_alpha_v * 1000.0f);      /* mV -> V */
+        cur[1] = (int32_t)(g_smo_z_beta_v * 1000.0f);       /* mV -> V */
+        cur[2] = (int32_t)(g_smo_e_alpha_hat_v * 1000.0f);  /* mV -> V */
+        cur[3] = (int32_t)(g_smo_e_beta_hat_v * 1000.0f);   /* mV -> V */
+        cur[4] = (int32_t)(g_smo_theory_alpha_v * 1000.0f); /* mV -> V */
+        cur[5] = (int32_t)(g_smo_theory_beta_v * 1000.0f);  /* mV -> V */
+        cur[6] = (int32_t)(g_smo_diag_theta_err_deg * 1000.0f);      /* mdeg -> deg */
+        cur[7] = (int32_t)(g_smo_diag_theta_err_filt_deg * 1000.0f); /* mdeg -> deg */
+        return 8;
+    } else {
+        /*===== wave_mode=0：SMO 验收面板（16ch）=====*/
+        cur[0] = (int32_t)(g_smo45_iq_ma);                      /* ch0 当前 iq (mA -> A) */
+        cur[1] = (int32_t)(g_smo45_iq_filt_ma);                 /* ch1 滤波后 iq (mA -> A) */
+        cur[2] = (int32_t)(g_smo45_iq_ref_ma);                  /* ch2 目标 iq (mA -> A) */
+        cur[3] = (int32_t)(g_smo_theory_alpha_v * 1000.0f);     /* ch3 理论 e_alpha (mV -> V) */
+        cur[4] = (int32_t)(g_smo_theory_beta_v * 1000.0f);      /* ch4 理论 e_beta (mV -> V) */
+        cur[5] = (int32_t)(g_smo_z_alpha_v * 1000.0f);          /* ch5 SMO 原始 z_alpha (mV -> V) */
+        cur[6] = (int32_t)(g_smo_z_beta_v * 1000.0f);           /* ch6 SMO 原始 z_beta (mV -> V) */
+        cur[7] = (int32_t)(g_smo_e_alpha_hat_v * 1000.0f);      /* ch7 滤波 e_alpha_hat (mV -> V) */
+        cur[8] = (int32_t)(g_smo_e_beta_hat_v * 1000.0f);       /* ch8 滤波 e_beta_hat (mV -> V) */
+        cur[9] = (int32_t)(g_smo_diag_theta_err_deg * 1000.0f); /* ch9 相位误差 (mdeg -> deg) */
+        cur[10] = (int32_t)(g_smo_diag_e_on_q_v * 1000.0f);     /* ch10 e_on_q 投影 (mV -> V) */
+        cur[11] = (int32_t)(g_smo_diag_e_on_d_v * 1000.0f);     /* ch11 e_on_d 投影 (mV -> V) */
+        cur[12] = (int32_t)(g_smo_diag_e_err_v * 1000.0f);      /* ch12 总误差范数 (mV -> V) */
+        cur[13] = (int32_t)(g_smo_diag_e_expect_v * 1000.0f);   /* ch13 理论幅值 ωψf (mV -> V) */
+        cur[14] = (int32_t)(g_smo45_speed_filt_rpm * 1000.0f);  /* ch14 实际转速 (mrpm -> rpm) */
+        cur[15] = (int32_t)(g_smo_diag_theta_err_filt_deg * 1000.0f); /* ch15 相位差滤波 (mdeg -> deg) */
+        return 16;
+    }
+}
+
+
+################ 2. 头文件 extern 符号 ################
+
+=== Bemf.h (12) ===
+27: extern "C" {
+118: extern volatile uint16_t g_bemf_m_raw;
+119: extern volatile uint16_t g_bemf_u_raw;
+120: extern volatile uint16_t g_bemf_v_raw;
+121: extern volatile uint16_t g_bemf_w_raw;
+124: extern volatile int16_t  g_bemf_u_mv;
+125: extern volatile int16_t  g_bemf_v_mv;
+126: extern volatile int16_t  g_bemf_w_mv;
+129: extern volatile uint16_t g_bemf_m_mv;
+132: extern volatile uint32_t g_bemf_sample_cnt;
+135: extern volatile uint8_t  g_bemf_running;
+139: extern volatile int16_t  g_bemf_wave_data;
+
+=== I.h (25) ===
+30: extern "C" {
+209: extern volatile uint16_t g_i_iu_raw;
+210: extern volatile uint16_t g_i_iv_raw;
+211: extern volatile uint16_t g_i_iw_raw;
+214: extern volatile float    g_i_iu_ma;
+215: extern volatile float    g_i_iv_ma;
+216: extern volatile float    g_i_iw_ma;
+219: extern volatile float   g_scope_iu_ma;
+220: extern volatile float   g_scope_iv_ma;
+221: extern volatile float   g_scope_iw_ma;
+224: extern volatile float    g_i_iu_filt;
+225: extern volatile float    g_i_iv_filt;
+226: extern volatile float    g_i_iw_filt;
+229: extern volatile uint16_t g_i_iu_disp;
+230: extern volatile uint16_t g_i_iv_disp;
+231: extern volatile uint16_t g_i_iw_disp;
+234: extern volatile float    g_i_uvw_ma;
+235: extern volatile int32_t  g_i_uvw_raw;
+238: extern volatile uint32_t g_i_sample_cnt;
+241: extern volatile uint8_t  g_i_running;
+242: extern volatile int8_t    g_i_phase_order;     /* current phase remap: 0=UVW 1=UWV 2=VUW 3=VWU 4=WUV 5=WVU (Watch tunable) */
+246: extern volatile uint8_t  g_i_calib_state;
+249: extern volatile uint16_t g_i_calib_zero_u;
+250: extern volatile uint16_t g_i_calib_zero_v;
+251: extern volatile uint16_t g_i_calib_zero_w;
+
+=== cur_loop.h (13) ===
+17: extern "C" {
+32: extern volatile float g_i_ref_ma;
+35: extern volatile float g_scope_i_ref;
+36: extern volatile float g_scope_i_fb;
+37: extern volatile float g_scope_i_fb_raw;
+38: extern volatile float g_scope_i_duty;
+39: extern volatile float g_scope_i_err;
+40: extern volatile float g_scope_i_ol;
+41: extern volatile uint32_t g_scope_i_dt_us;
+44: extern volatile float g_cur_fb_alpha;
+47: extern volatile uint32_t g_cur_dbg_ms;
+50: extern pid_config_t g_cur_pid_cfg;
+62: extern volatile float g_cur_ref_ext_ma;
+
+=== foc.h (1) ===
+58: extern "C" {
+
+=== foc_20_cal.h (8) ===
+140: extern "C" {
+178: extern volatile uint8_t  g_cal_running;   /* 1 = 正在运行 */
+179: extern volatile uint8_t  g_cal_phase;     /* CAL_PHASE_xxx */
+180: extern volatile uint8_t  g_cal_evt;       /* CAL_EVT_xxx */
+181: extern volatile uint16_t g_cal_beta_hw;   /* BETA 结束时 TMRA_1 原始计数 */
+182: extern volatile uint16_t g_cal_alpha_hw;  /* ALPHA 结束时 TMRA_1 原始计数 */
+183: extern volatile int32_t  g_cal_moved;     /* BETA->ALPHA 位移(带符号 counts) */
+184: extern volatile int32_t  g_cal_offset;    /* 锁定的零点 (counts, [0,CPR)) */
+
+=== foc_23_align.h (6) ===
+113: extern "C" {
+117: extern volatile float   g_foc_align_volt_v; /* fixed align voltage (V), Watch tunable */
+120: extern volatile uint8_t g_foc_align_evt;    /* 1=start 2=beta done 3=locked 4=done 5=fault */
+121: extern volatile int32_t g_foc_align_evt_v1;
+122: extern volatile int32_t g_foc_align_evt_v2;
+123: extern volatile int32_t g_foc_align_evt_v3;
+
+=== foc_24_dcal.h (12) ===
+97: extern "C" {
+132: extern volatile uint8_t  g_dcal24_running;
+133: extern volatile uint8_t  g_dcal24_state;
+134: extern volatile uint8_t  g_dcal24_evt;
+135: extern volatile uint16_t g_dcal24_beta_hw;
+136: extern volatile uint16_t g_dcal24_alpha_hw;
+137: extern volatile int32_t  g_dcal24_moved;
+138: extern volatile int32_t  g_dcal24_offset;
+139: extern volatile float    g_dcal24_zero_u_ma;
+140: extern volatile float    g_dcal24_zero_v_ma;
+141: extern volatile float    g_dcal24_zero_w_ma;
+142: extern volatile float    g_dcal24_volt_v;
+
+=== foc_25_calangle.h (15) ===
+161: extern "C" {
+206: extern volatile int32_t  g_foc_angle_input;  /* 用户输入目标电角度 ×0.1° (0~3599, 改值即触发) */
+207: extern volatile float    g_calang_volt_v;    /* 吸附电压 (V, 默认 FOC_ALIGN_VOLT_V) */
+208: extern volatile uint8_t  g_calang_running;   /* 1 = 正在运行 */
+209: extern volatile uint8_t  g_calang_state;     /* FOC25_STEP_xxx */
+210: extern volatile uint8_t  g_calang_evt;       /* FOC25_EVT_xxx */
+211: extern volatile int32_t  g_calang_stable_cnts; /* 校验窗静止判据 (counts, 默认 8) */
+212: extern volatile int32_t  g_calang_target_deg;  /* 快照：锁存的目标角 ×0.1° (0~3599) */
+213: extern volatile int32_t  g_calang_meas_deg;    /* 快照：校验结束实测电角度 ×0.1° (0~3599) */
+214: extern volatile int32_t  g_calang_err_deg;     /* 快照：meas-target 折叠 (-1800,1800] ×0.1° */
+215: extern volatile int32_t  g_calang_win_moved;   /* 快照：校验窗位移 (counts, max-min) */
+216: extern volatile int32_t  g_calang_offset;      /* 快照：校准锁定的零点 (counts) */
+217: extern volatile float    g_calang_du;          /* 三相占空比观测 (%) — SVPWM */
+218: extern volatile float    g_calang_dv;
+219: extern volatile float    g_calang_dw;
+
+=== foc_26_olf.h (23) ===
+179: extern "C" {
+220: extern volatile float    g_olf_freq_hz;      /* 当前磁场自增频率 (Hz, 斜坡实时输出, Start 复位为 init) */
+221: extern volatile float    g_olf_freq_init_hz; /* 斜坡起点频率 (Hz, 默认 0.5, Start 不复位) */
+222: extern volatile float    g_olf_freq_targ_hz; /* 斜坡目标频率 (Hz, 默认 0.5, Start 不复位, SW1 每按 +0.5) */
+223: extern volatile uint32_t g_olf_freq_tr_ms;   /* 斜坡过渡时间 (ms, 0=立即, Start 不复位, 如 50000=50s 扫频) */
+224: extern volatile int32_t  g_olf_step_010;   /* 自增步长 (×0.1°/步, 1≈连续旋转, 建议 1~3600) */
+225: extern volatile int32_t  g_olf_dir;        /* 自增方向 (+1=角度加 / -1=角度减, Start 复位 +1) */
+226: extern volatile float    g_olf_volt_v;     /* 拖动电压幅值 (V, 默认 0.6 与 mode30 同) */
+227: extern volatile uint8_t  g_olf_running;    /* 1 = 正在运行 */
+228: extern volatile uint8_t  g_olf_state;      /* FOC26_STEP_xxx */
+229: extern volatile uint8_t  g_olf_evt;        /* FOC26_EVT_xxx */
+230: extern volatile int32_t  g_olf_offset;     /* 校准锁定的零点 (counts) */
+231: extern volatile int32_t  g_olf_field_deg;  /* 磁场电角度 (deg, 0~359) */
+232: extern volatile int32_t  g_olf_rotor_deg;  /* 转子电角度 (deg, 0~359, 已扣零点) */
+233: extern volatile int32_t  g_olf_diff_deg;   /* 负载角 delta = field - rotor (deg, -180~180) */
+234: extern volatile float    g_olf_id_ma;      /* 真实转子系 id (mA, 磁链分量) */
+235: extern volatile float    g_olf_iq_ma;      /* 真实转子系 iq (mA, 力矩分量) */
+236: extern volatile float    g_olf_id_pp_ma;   /* id 峰峰值 (mA, FOC26_PP_WIN_MS 窗口每 5s 刷新) */
+237: extern volatile float    g_olf_iq_pp_ma;   /* iq 峰峰值 (mA, 同上) */
+238: extern volatile float    g_olf_theta_rad;  /* 控制系 d 轴角 (rad, 磁场角=theta+90°) */
+239: extern volatile float    g_olf_du;         /* 三相占空比观测 (%) */
+240: extern volatile float    g_olf_dv;
+241: extern volatile float    g_olf_dw;
+
+=== foc_27_dcl.h (22) ===
+161: extern "C" {
+209: extern volatile float    g_dcl_dlt_init_deg;  /* 功角爬坡起点 (deg, 默认5, Start不复位) */
+210: extern volatile float    g_dcl_dlt_targ_deg;  /* 功角爬坡终点 (deg, 默认45, Start不复位) */
+211: extern volatile uint32_t g_dcl_dlt_tr_ms;     /* 功角爬坡过渡时间 (ms, 0=立即, Start不复位) */
+212: extern volatile float    g_dcl_volt_v;        /* 电压幅值 (V, 默认0.6, Start复位; =调速旋钮) */
+213: extern volatile uint8_t  g_dcl_running;       /* 1 = 正在运行 */
+214: extern volatile uint8_t  g_dcl_state;         /* FOC27_STEP_xxx */
+215: extern volatile uint8_t  g_dcl_evt;           /* FOC27_EVT_xxx */
+216: extern volatile int32_t  g_dcl_offset;        /* 校准锁零点 (hw绝对帧counts, 显示/对比用) */
+217: extern volatile float    g_dcl_dlt_now_deg;   /* 当前 delta 指令 (deg, 爬坡中实时) */
+218: extern volatile float    g_dcl_speed_hz;      /* 实测电频率 (Hz, 200ms窗口, 带符号) */
+219: extern volatile int32_t  g_dcl_field_deg;     /* 磁场电角度 (deg, 0~359) */
+220: extern volatile int32_t  g_dcl_rotor_deg;     /* 转子电角度 (deg, 0~359, 已扣零点) */
+221: extern volatile int32_t  g_dcl_diff_deg;      /* 功角实测 = field-rotor (deg, -180~180) */
+222: extern volatile float    g_dcl_id_ma;         /* 真实转子系 id (mA, 磁链分量) */
+223: extern volatile float    g_dcl_iq_ma;         /* 真实转子系 iq (mA, 力矩分量) */
+224: extern volatile float    g_dcl_id_pp_ma;      /* id 峰峰值 (mA, FOC27_PP_WIN_MS 窗口每 5s 刷新) */
+225: extern volatile float    g_dcl_iq_pp_ma;      /* iq 峰峰值 (mA, 同上) */
+226: extern volatile int32_t  g_dcl_enc_pos;       /* 编码器相对计数镜像 (毛刺排查用) */
+227: extern volatile float    g_dcl_du;            /* 三相占空比观测 (%) */
+228: extern volatile float    g_dcl_dv;
+229: extern volatile float    g_dcl_dw;
+
+=== foc_28_dci.h (35) ===
+186: extern "C" {
+258: extern volatile float    g_dci_dlt_init_deg;  /* 功角爬坡起点 (deg, 默认5, Start不复位) */
+259: extern volatile float    g_dci_dlt_targ_deg;  /* 功角爬坡终点 (deg, 默认45, Start不复位) */
+260: extern volatile uint32_t g_dci_dlt_tr_ms;     /* 功角爬坡过渡时间 (ms, 0=立即, Start不复位) */
+261: extern volatile float    g_dci_volt_v;        /* 电压幅值 (V, 默认0.6, Start复位; =调速旋钮) */
+262: extern volatile uint8_t  g_dci_running;       /* 1 = mode 28 正在运行 */
+263: extern volatile uint8_t  g_dci_state;         /* FOC28_STEP_xxx */
+264: extern volatile uint8_t  g_dci_evt;           /* FOC28_EVT_xxx */
+265: extern volatile int32_t  g_dci_offset;        /* 校准锁零点 (hw绝对帧counts, 显示/对比用) */
+266: extern volatile float    g_dci_dlt_now_deg;   /* 当前 delta 指令 (deg, 爬坡中实时) */
+267: extern volatile float    g_dci_speed_hz;      /* 实测电频率 (Hz, 200ms窗口, 带符号) */
+268: extern volatile int32_t  g_dci_field_deg;     /* 磁场电角度 (deg, 0~359) */
+269: extern volatile int32_t  g_dci_rotor_deg;     /* 转子电角度 (deg, 0~359, 已扣零点) */
+270: extern volatile int32_t  g_dci_diff_deg;      /* 功角实测 = field-rotor (deg, -180~180) */
+271: extern volatile float    g_dci_id_ma;         /* 真实转子系 id (mA, 零偏校正后) */
+272: extern volatile float    g_dci_iq_ma;         /* 真实转子系 iq (mA, 零偏校正后) */
+273: extern volatile float    g_dci_id_pp_ma;      /* id 峰峰值 (mA, FOC28_PP_WIN_MS 窗口每 5s 刷新) */
+274: extern volatile float    g_dci_iq_pp_ma;      /* iq 峰峰值 (mA, 同上) */
+275: extern volatile float    g_dci_id_mean_ma;    /* id 均值 (mA, FOC28_MEAN_WIN_MS 窗口每 3s 刷新) */
+276: extern volatile float    g_dci_iq_mean_ma;    /* iq 均值 (mA, 同上) */
+277: extern volatile float    g_dci_i_ref_ma;      /* 电流矢量幅值参考 (mA, Start 不复位, Watch 可调) */
+278: extern volatile float    g_dci_id_ref_ma;     /* d 轴电流参考 (mA, 实时 = I_ref·cosδ) */
+279: extern volatile float    g_dci_iq_ref_ma;     /* q 轴电流参考 (mA, 实时 = 斜坡后幅值·sinδ) */
+280: extern volatile float    g_dci_i_ramp_ma_s;   /* I_ref 软启动斜率 (mA/s, Watch 可调；<=0 = 直通阶跃) */
+281: extern volatile uint8_t  g_dci_vsat;          /* 电压饱和标志 (1 = 任一轴顶到 UMAX，调参数据作废) */
+282: extern volatile float    g_dci_ed_mean_ma;    /* d 轴误差均值 (mA, FOC28_ERR_WIN_MS 窗口刷新) */
+283: extern volatile float    g_dci_eq_mean_ma;    /* q 轴误差均值 (mA, 同上；P-only 稳态落差) */
+284: extern volatile float    g_dci_ed_pp_ma;      /* d 轴误差峰峰值 (mA, 同上；增大 = 振荡) */
+285: extern volatile float    g_dci_eq_pp_ma;      /* q 轴误差峰峰值 (mA, 同上) */
+286: extern pid_config_t      g_dci_pid_id_cfg;    /* d 轴 PI 配置（字段 volatile，Watch 实时可调） */
+287: extern pid_config_t      g_dci_pid_iq_cfg;    /* q 轴 PI 配置（i_valid=0 为 P-only） */
+288: extern volatile int32_t  g_dci_enc_pos;       /* 编码器相对计数镜像 (毛刺排查用) */
+289: extern volatile float    g_dci_du;            /* 三相占空比观测 (%) */
+290: extern volatile float    g_dci_dv;
+291: extern volatile float    g_dci_dw;
+
+=== foc_29_drun.h (43) ===
+124: extern "C" {
+166: extern volatile uint8_t  g_drun29_running;
+167: extern volatile uint8_t  g_drun29_state;
+168: extern volatile uint8_t  g_drun29_evt;
+169: extern volatile float    g_drun29_dlt_init_deg;
+170: extern volatile float    g_drun29_dlt_targ_deg;
+171: extern volatile uint32_t g_drun29_dlt_tr_ms;
+172: extern volatile float    g_drun29_dlt_now_deg;
+173: extern volatile float    g_drun29_speed_hz;
+174: extern volatile int32_t  g_drun29_field_deg;
+175: extern volatile int32_t  g_drun29_rotor_deg;
+176: extern volatile int32_t  g_drun29_diff_deg;
+177: extern volatile int32_t  g_drun29_rotor_count;
+178: extern volatile float    g_drun29_id_ma;
+179: extern volatile float    g_drun29_iq_ma;
+180: extern volatile float    g_drun29_iq_filt_ma;
+181: extern volatile float    g_drun29_iq_filt_alpha;
+182: extern volatile float    g_drun29_id_pp_ma;
+183: extern volatile float    g_drun29_iq_pp_ma;
+184: extern volatile float    g_drun29_id_mean_ma;
+185: extern volatile float    g_drun29_iq_mean_ma;
+186: extern volatile float    g_drun29_i_ref_ma;
+187: extern volatile float    g_drun29_id_ref_ma;
+188: extern volatile float    g_drun29_iq_ref_ma;
+189: extern volatile float    g_drun29_i_ramp_ma_s;
+190: extern volatile uint8_t  g_drun29_vsat;
+191: extern volatile float    g_drun29_ed_mean_ma;
+192: extern volatile float    g_drun29_eq_mean_ma;
+193: extern volatile float    g_drun29_ed_pp_ma;
+194: extern volatile float    g_drun29_eq_pp_ma;
+195: extern volatile float    g_drun29_du;
+196: extern volatile float    g_drun29_dv;
+197: extern volatile float    g_drun29_dw;
+203: extern volatile uint32_t g_drun29_time_us;
+204: extern volatile float    g_drun29_step_frac_pct;
+205: extern volatile uint8_t  g_drun29_id_step_state;
+206: extern volatile uint8_t  g_drun29_iq_step_state;
+207: extern volatile float    g_drun29_id_step_target_ma;
+208: extern volatile float    g_drun29_iq_step_target_ma;
+209: extern volatile uint32_t g_drun29_id_step_t90_us;
+210: extern volatile uint32_t g_drun29_iq_step_t90_us;
+212: extern pid_config_t g_drun29_pid_id_cfg;
+213: extern pid_config_t g_drun29_pid_iq_cfg;
+
+=== foc_30_ramp.h (11) ===
+140: extern "C" {
+166: extern volatile float   g_zizeng_theta_rad;      /* 当前自增角度 (rad) */
+167: extern volatile float   g_zizeng_freq_hz;        /* 自增频率 (Hz)，Keil Watch 可调 */
+168: extern volatile float   g_zizeng_volt_v;         /* 自增电压幅值 (V)，Keil Watch 可调 */
+169: extern volatile float   g_zizeng_du;             /* U 相 duty (%) */
+170: extern volatile float   g_zizeng_dv;             /* V 相 duty (%) */
+171: extern volatile float   g_zizeng_dw;             /* W 相 duty (%) */
+172: extern volatile uint8_t g_zizeng_running;        /* 1 = 正在运行 */
+173: extern volatile int8_t  g_zizeng_drag_dir;       /* 拖动方向: +1/-1 = 偏移采样窗口内
+179: extern volatile float   g_foc_id_rotor_ma;
+180: extern volatile float   g_foc_iq_rotor_ma;
+
+=== foc_31_iqpi.h (9) ===
+159: extern "C" {
+223: extern volatile uint8_t g_iqpi_running;        /* 1 = 模式31 运行中 */
+224: extern volatile iqpi_step_t g_iqpi_step;       /* 模式31 当前/最后状态 (Watch 看枚举名) */
+225: extern volatile float   g_iqpi_iq_ref_ma;      /* iq 目标 (mA)，Watch 可实时修改 */
+226: extern volatile float   g_iqpi_iq_ref_ramp_ma; /* 斜坡后的实际 iq 参考 (mA) */
+227: extern volatile float   g_iqpi_iq_ramp_ma_s;   /* iq 斜率 (mA/s)，Watch 可调 */
+228: extern volatile float   g_iqpi_theta_rad;      /* 当前使用的转子电角度 (rad) */
+231: extern pid_config_t g_iqpi_pid_id_cfg;
+232: extern pid_config_t g_iqpi_pid_iq_cfg;
+
+=== foc_32_lockiq.h (5) ===
+145: extern "C" {
+202: extern volatile uint8_t g_lockiq_running;       /* 1 = 模式32 运行中 */
+203: extern volatile lockiq_step_t g_lockiq_step;    /* 当前/最后状态 (Watch 看枚举名) */
+204: extern volatile float   g_lockiq_align_volt_v;  /* 对齐电压幅值 (V)，Watch 可调
+206: extern volatile int32_t g_lockiq_off_deg;       /* 已注入 mode 31 的偏移 (deg) */
+
+=== foc_40_speed.h (28) ===
+104: extern "C" {
+197: extern volatile uint8_t  g_speed40_running;
+198: extern volatile uint8_t  g_speed40_state;
+199: extern volatile uint8_t  g_speed40_evt;
+200: extern volatile float    g_speed40_speed_target_rpm;
+201: extern volatile float    g_speed40_speed_ramp_rpm;
+202: extern volatile float    g_speed40_speed_meas_rpm;
+203: extern volatile float    g_speed40_speed_filt_rpm;
+204: extern volatile float    g_speed40_speed_disp_rpm;  /* 显示专用强滤波转速（α=0.05，
+207: extern volatile float    g_speed40_speed_err_rpm;
+208: extern volatile float    g_speed40_speed_out_ma;
+209: extern volatile int32_t  g_speed40_rotor_count;
+210: extern volatile int32_t  g_speed40_rotor_deg;
+211: extern volatile float    g_speed40_id_ref_ma;
+212: extern volatile float    g_speed40_iq_ref_ma;
+213: extern volatile float    g_speed40_id_ma;
+214: extern volatile float    g_speed40_iq_ma;
+215: extern volatile float    g_speed40_iq_filt_ma;
+216: extern volatile float    g_speed40_iq_filt_alpha;
+217: extern volatile float    g_speed40_vd;
+218: extern volatile float    g_speed40_vq;
+219: extern volatile uint8_t  g_speed40_vsat;
+220: extern volatile float    g_speed40_du;
+221: extern volatile float    g_speed40_dv;
+222: extern volatile float    g_speed40_dw;
+224: extern pid_config_t g_speed40_pid_speed_cfg;
+225: extern pid_config_t g_speed40_pid_id_cfg;
+226: extern pid_config_t g_speed40_pid_iq_cfg;
+
+=== foc_41_drun.h (53) ===
+131: extern "C" {
+174: extern volatile uint8_t  g_drun41_running;
+175: extern volatile uint8_t  g_drun41_state;
+176: extern volatile uint8_t  g_drun41_evt;
+177: extern volatile float    g_drun41_dlt_init_deg;
+178: extern volatile float    g_drun41_dlt_targ_deg;
+179: extern volatile uint32_t g_drun41_dlt_tr_ms;
+180: extern volatile float    g_drun41_dlt_now_deg;
+181: extern volatile float    g_drun41_speed_hz;
+182: extern volatile int32_t  g_drun41_field_deg;
+183: extern volatile int32_t  g_drun41_rotor_deg;
+184: extern volatile int32_t  g_drun41_diff_deg;
+185: extern volatile int32_t  g_drun41_rotor_count;
+186: extern volatile float    g_drun41_id_ma;
+187: extern volatile float    g_drun41_iq_ma;
+188: extern volatile float    g_drun41_iq_filt_ma;
+189: extern volatile float    g_drun41_iq_filt_alpha;
+190: extern volatile float    g_drun41_id_pp_ma;
+191: extern volatile float    g_drun41_iq_pp_ma;
+192: extern volatile float    g_drun41_id_mean_ma;
+193: extern volatile float    g_drun41_iq_mean_ma;
+194: extern volatile float    g_drun41_i_ref_ma;
+195: extern volatile float    g_drun41_id_ref_ma;
+196: extern volatile float    g_drun41_iq_ref_ma;
+197: extern volatile float    g_drun41_i_ramp_ma_s;
+198: extern volatile uint8_t  g_drun41_vsat;
+199: extern volatile float    g_drun41_ed_mean_ma;
+200: extern volatile float    g_drun41_eq_mean_ma;
+201: extern volatile float    g_drun41_ed_pp_ma;
+202: extern volatile float    g_drun41_eq_pp_ma;
+203: extern volatile float    g_drun41_du;
+204: extern volatile float    g_drun41_dv;
+205: extern volatile float    g_drun41_dw;
+206: extern volatile uint8_t  g_drun41_ff_enable;
+207: extern volatile float    g_drun41_ff_bemf_gain;
+208: extern volatile float    g_drun41_ff_cross_gain;
+209: extern volatile float    g_drun41_ff_res_gain;
+210: extern volatile float    g_drun41_omega_e_rad_s;
+211: extern volatile float    g_drun41_vd_pi_v;
+212: extern volatile float    g_drun41_vq_pi_v;
+213: extern volatile float    g_drun41_vd_ff_v;
+214: extern volatile float    g_drun41_vq_ff_v;
+215: extern volatile float    g_drun41_vmax_v;
+221: extern volatile uint32_t g_drun41_time_us;
+222: extern volatile float    g_drun41_step_frac_pct;
+223: extern volatile uint8_t  g_drun41_id_step_state;
+224: extern volatile uint8_t  g_drun41_iq_step_state;
+225: extern volatile float    g_drun41_id_step_target_ma;
+226: extern volatile float    g_drun41_iq_step_target_ma;
+227: extern volatile uint32_t g_drun41_id_step_t90_us;
+228: extern volatile uint32_t g_drun41_iq_step_t90_us;
+230: extern pid_config_t g_drun41_pid_id_cfg;
+231: extern pid_config_t g_drun41_pid_iq_cfg;
+
+=== foc_45_smo.h (33) ===
+181: extern "C" {
+237: extern volatile uint8_t  g_smo45_running;
+238: extern volatile uint8_t  g_smo45_state;
+239: extern volatile uint8_t  g_smo45_evt;
+240: extern volatile uint8_t  g_smo45_auto_ramp;
+241: extern volatile uint8_t  g_smo45_wave_mode;   /* VOFA 帧布局：0=16ch SMO 验收面板，
+244: extern volatile float    g_smo45_speed_target_rpm;
+245: extern volatile float    g_smo45_speed_ramp_rpm;
+246: extern volatile float    g_smo45_speed_meas_rpm;
+247: extern volatile float    g_smo45_speed_filt_rpm;
+248: extern volatile float    g_smo45_speed_disp_rpm;    /* 显示专用强滤波转速（α=0.05，
+251: extern volatile float    g_smo45_speed_err_rpm;
+252: extern volatile float    g_smo45_speed_out_ma;
+253: extern volatile int32_t  g_smo45_rotor_count;
+254: extern volatile int32_t  g_smo45_rotor_deg;
+255: extern volatile float    g_smo45_id_ref_ma;
+256: extern volatile float    g_smo45_iq_ref_ma;
+257: extern volatile float    g_smo45_id_ma;
+258: extern volatile float    g_smo45_iq_ma;
+259: extern volatile float    g_smo45_iq_filt_ma;
+260: extern volatile float    g_smo45_iq_filt_alpha;
+261: extern volatile float    g_smo45_vd;
+262: extern volatile float    g_smo45_vq;
+263: extern volatile uint8_t  g_smo45_vsat;
+264: extern volatile uint8_t  g_smo45_sensorless;  /* 无感切换开关（Step 4）：0=编码器角有感
+268: extern volatile float    g_smo45_ang_lead_ticks; /* 有感角度超前补偿拍数（默认 1.5，0=关）：
+270: extern volatile uint8_t  g_smo45_sl_active;   /* 无感锁存状态（只读观察）：1=当前 Park/速度
+272: extern volatile float    g_smo45_du;
+273: extern volatile float    g_smo45_dv;
+274: extern volatile float    g_smo45_dw;
+276: extern pid_config_t g_smo45_pid_speed_cfg;
+277: extern pid_config_t g_smo45_pid_id_cfg;
+278: extern pid_config_t g_smo45_pid_iq_cfg;
+
+=== foc_calib.h (5) ===
+25: extern "C" {
+48: extern volatile uint8_t g_calib_state;          /* 0=idle 1=skip 2=sampling 3=locked */
+49: extern volatile float   g_calib_iu_off_ma;      /* U 相残余零偏 (mA) */
+50: extern volatile float   g_calib_iv_off_ma;      /* V 相残余零偏 (mA) */
+51: extern volatile float   g_calib_iw_off_ma;      /* W 相残余零偏 (mA) */
+
+=== foc_core.h (39) ===
+26: extern "C" {
+51: extern volatile float    g_foc_theta_rad;        /* electrical angle (rad) */
+52: extern volatile float    g_foc_du;               /* U duty (%) */
+53: extern volatile float    g_foc_dv;               /* V duty (%) */
+54: extern volatile float    g_foc_dw;               /* W duty (%) */
+55: extern volatile float    g_foc_valpha;           /* stationary alpha voltage (V) */
+56: extern volatile float    g_foc_vbeta;            /* stationary beta voltage (V) */
+57: extern volatile uint8_t  g_foc_active;           /* 1 = FOC output enabled */
+59: extern volatile uint8_t  g_foc_mode;             /* FOC_MODE_xxx */
+60: extern volatile uint8_t  g_foc_phase;            /* 0=idle 1=hold 2=ramp/sync 3=run 4=align */
+61: extern volatile int32_t  g_foc_cur_sign;         /* current sign correction (+1/-1), Watch tunable */
+62: extern volatile int32_t  g_foc_enc_dir;          /* encoder direction for electrical angle (+1/-1), Watch tunable */
+64: extern volatile float    g_foc_id_ma;            /* d-axis feedback (mA) */
+65: extern volatile float    g_foc_iq_ma;            /* q-axis feedback (mA) */
+66: extern volatile float    g_foc_vd;               /* d-axis PI output (V) */
+67: extern volatile float    g_foc_vq;               /* q-axis PI output (V) */
+72: extern volatile float    g_foc_ialpha;           /* 静止系 ialpha (mA) */
+73: extern volatile float    g_foc_ibeta;            /* 静止系 ibeta  (mA) */
+74: extern volatile float    g_foc_iab_mag;          /* 静止系电流幅值 sqrt(ia²+ib²) (mA) */
+76: extern volatile uint8_t  g_foc_align_state;      /* 0=idle, 1=aligning, 2=running */
+77: extern volatile uint8_t  g_foc_fault;            /* 1 = over-current fault */
+80: extern volatile float    g_foc_oc_limit_a;
+81: extern volatile float    g_foc_fault_i_ma;
+82: extern volatile uint8_t  g_foc_fault_stage;      /* g_foc_phase at OC trip */
+83: extern volatile int16_t  g_foc_fault_iu_ma;      /* phase currents at OC trip (mA) */
+84: extern volatile int16_t  g_foc_fault_iv_ma;
+85: extern volatile int16_t  g_foc_fault_iw_ma;
+88: extern volatile float    g_foc_vmax_v;           /* current-loop max |v| (V) */
+89: extern volatile float    g_foc_vramp_v_s;        /* voltage envelope ramp (V/s) */
+90: extern volatile float    g_foc_cur_fb_alpha;     /* EMA weight on id/iq (1.0 = off) */
+91: extern volatile float    g_foc_vlim_v;           /* current voltage envelope (V) */
+94: extern volatile float    g_foc_openloop_freq_hz; /* electrical freq (Hz), Keil Watch editable */
+95: extern volatile float    g_foc_openloop_volt_v;  /* voltage amplitude (V), Keil Watch editable */
+99: extern volatile float    g_foc_if_rotor_rad;     /* rotor electrical angle, folded [0,2PI) (rad) */
+100: extern volatile float    g_foc_if_diff_rad;      /* encoder-elec angle - synthetic angle (rad) */
+101: extern volatile float    g_foc_mech_rad;         /* mechanical angle, folded [0,2PI) (rad) */
+102: extern volatile int32_t  g_foc_mech_deg;         /* mechanical angle [0,360) (deg, mode 0 观测) */
+103: extern volatile int32_t  g_foc_elec_deg;         /* electrical angle [0,360*POLE_PAIRS) (deg, mode 0 观测) */
+106: extern volatile int32_t  g_foc_align_offset;
+
+=== foc_curloop.h (30) ===
+29: extern "C" {
+35: extern volatile int32_t  g_foc_pi_off_180;      /* add 180deg to control angle to flip torque direction (0/1), Watch tunable */
+36: extern volatile float    g_foc_iq_ref_cmd_ma;   /* Iq target (mA), Keil Watch editable */
+37: extern volatile float    g_foc_iq_ref_ma;       /* ramped Iq setpoint actually used (mA) */
+38: extern volatile float    g_foc_iq_ramp_ma_s;    /* Iq soft-start ramp (mA/s) */
+39: extern volatile float    g_foc_iq_pi_ma;        /* actual RUN Iq reference from speed PI (mA) */
+40: extern volatile float    g_foc_run_target_rpm;  /* RUN speed PI target (rpm), Watch tunable */
+41: extern volatile float    g_foc_anchor_deg;      /* extra anchor angle (deg), sweep to find RUN frame */
+42: extern volatile float    g_foc_run_iq_sign;     /* RUN Iq sign (+-1), Watch tunable */
+45: extern volatile float    g_foc_if_freq_hz;   /* current I-F electrical frequency (Hz) */
+46: extern volatile float    g_foc_if_sweep_cHz; /* live diff sweep rate (cHz), 100ms window */
+47: extern volatile float    g_foc_if_hold_iq_ma; /* I-F hold Iq threshold (mA), Watch tunable */
+48: extern volatile float    g_foc_if_sync_band_rad; /* sync window band (rad), Watch tunable */
+49: extern volatile uint32_t g_foc_if_sync_win_cnt;  /* sync window length (samples @20k), Watch tunable */
+50: extern volatile uint32_t g_foc_if_sync_good_wins;/* consecutive good windows required, Watch tunable */
+51: extern volatile float    g_foc_if_lock_diff_rad; /* lock offset latched while aligned in hold (rad) */
+52: extern volatile float    g_foc_if_rel_diff_rad;  /* unwrapped diff relative to lock offset (rad) */
+53: extern volatile float    g_foc_if_win_min_rad;   /* current sync-window min of rel diff (rad) */
+54: extern volatile float    g_foc_if_win_max_rad;   /* current sync-window max of rel diff (rad) */
+55: extern volatile uint32_t g_foc_if_win_cnt;       /* samples collected in current window */
+56: extern volatile uint32_t g_foc_if_good_cnt;      /* consecutive good windows so far */
+57: extern volatile uint8_t  g_foc_if_sync;      /* 1 = synchronized, handed over to encoder */
+58: extern volatile uint8_t  g_foc_if_evt;       /* 1=hold done 2=handover 3=timeout */
+59: extern volatile int32_t  g_foc_if_evt_v1;
+60: extern volatile int32_t  g_foc_if_evt_v2;
+61: extern volatile int32_t  g_foc_if_evt_v3;
+62: extern volatile int32_t  g_foc_if_evt_v4;    /* diff sweep rate at timeout (cHz) */
+65: extern pid_config_t g_foc_pid_id_cfg;
+66: extern pid_config_t g_foc_pid_iq_cfg;
+67: extern pid_config_t g_foc_pid_spd_cfg;
+
+=== foc_obs.h (22) ===
+49: extern "C" {
+68: extern volatile iqpi_step_t g_iqpi_step_hist[FOC31_HISTORY_LEN]; /* 状态历史, [0]最旧 */
+69: extern volatile uint8_t g_iqpi_step_hist_cnt;  /* 历史有效条数 0..10 */
+70: extern volatile uint8_t g_iqpi_flip_cnt;       /* 本次运行 180° 框架自动翻转次数 */
+71: extern volatile int32_t  g_iqpi_enc_pos;       /* ISR 累积编码器计数镜像（看转向/速率） */
+72: extern volatile int32_t  g_iqpi_win_moved;     /* 最近完成的 500ms 窗口位移(counts,带符号) */
+73: extern volatile uint32_t g_iqpi_win_evals;     /* 已完成窗口评估次数(0=方向检查从未运行) */
+74: extern volatile int8_t   g_iqpi_cur_dir;       /* 最近窗口实测转向 +1/-1 */
+75: extern volatile int8_t   g_iqpi_expect_dir;    /* 预期转向 +1/-1 */
+76: extern volatile int8_t   g_iqpi_ref_dir;       /* 启动时捕获的拖动方向基准(mode30/32) */
+79: extern volatile uint8_t  g_iqpi_evt_flag;
+80: extern volatile uint8_t  g_iqpi_evt_seq;       /* 第几次翻转 (1,2,...) */
+81: extern volatile int32_t  g_iqpi_evt_pos;       /* 翻转时编码器计数 */
+82: extern volatile int32_t  g_iqpi_evt_iq_ma;     /* 翻转时 iq (mA) */
+83: extern volatile int32_t  g_iqpi_evt_vq_mv;     /* 翻转时 vq (mV) */
+84: extern volatile int32_t  g_iqpi_evt_off_deg;   /* 翻转后偏移基线 (deg) */
+89: extern volatile int32_t g_lockiq_win_moved;     /* 最近完成窗口的平均位置位移 (counts) */
+90: extern volatile uint32_t g_lockiq_win_evals;    /* 已完成窗口评估次数 */
+91: extern volatile int32_t g_lockiq_track_err_cnts; /* VERIFY 跟踪误差 (counts) */
+94: extern volatile uint8_t  g_lockiq_evt_flag;
+95: extern volatile uint8_t  g_lockiq_evt_code;     /* FOC32_EVT_xxx（定义见 foc_32_lockiq.h） */
+96: extern volatile int32_t  g_lockiq_evt_off_deg; /* 锁定的注入偏移 (deg) */
+
+=== foc_openloop.h (1) ===
+18: extern "C" {
+
+=== foc_pll.h (21) ===
+40: extern "C" {
+46: extern volatile float g_pll_omega_n;     /* PLL 自然频率 (rad/s)，默认 2π×200 ≈ 1257
+49: extern volatile float g_pll_zeta;        /* 阻尼比，默认 0.9（0.707~1 稳妥区） */
+50: extern volatile float g_pll_mag_min_v;   /* 弱信号冻结门限 (V)，默认 0.1 */
+61: extern volatile uint8_t g_pll_comp_en;       /* 补偿角开关，默认 0 */
+62: extern volatile float g_pll_comp_bias_deg;   /* 补偿偏置 (deg)，默认 0，Watch 微调 */
+63: extern volatile float g_pll_wout_lpf_alpha;  /* ω̂ 输出低通 α（10kHz），默认 0.0125
+67: extern volatile float g_pll_theta_comp_deg;  /* 补偿后转子角 (deg,[0,360)) */
+68: extern volatile float g_pll_theta_park_deg;  /* Park 用角 = θ_comp + ω̂·Ts（外推一拍，
+70: extern volatile float g_pll_omega_out_rpm;   /* 低通后转速估计 (rpm，带符号)，
+72: extern volatile float g_pll_comp_deg_out;    /* 当前补偿角 δ̂ (deg，含 bias) */
+77: extern volatile float g_pll_theta_rotor_deg; /* 转子电角估计 (deg,[0,360)) */
+78: extern volatile float g_pll_omega_hat_rpm;   /* 机械转速估计 (rpm，带符号) */
+79: extern volatile float g_pll_omega_hat_rad_s; /* 电角速度估计 (rad/s，带符号) */
+80: extern volatile float g_pll_theta_e_deg;     /* e 矢量相位锁定角 (deg,[0,360)) */
+81: extern volatile float g_pll_err_rad;         /* 归一化鉴相残差 ≈ 相位差 (rad) */
+89: extern volatile float g_pll_diag_theta_err_deg;     /* ISR 同拍：补偿后 Park 角 − 编码器电角
+92: extern volatile float g_pll_diag_theta_err_filt_deg;/* 上项 EMA 滤波（主循环，看均值） */
+93: extern volatile float g_pll_diag_err_filt_deg;      /* 鉴相残差 EMA 滤波 (deg)，
+95: extern volatile float g_pll_diag_smo_err_deg;       /* ISR 同拍 SMO atan2 角差 (deg)：
+98: extern volatile float g_pll_diag_filt_alpha;        /* 上两项 EMA 系数，默认 0.1 */
+
+=== foc_scope.h (2) ===
+17: extern "C" {
+21: extern volatile int32_t g_motor_scope;
+
+=== foc_smo.h (36) ===
+42: extern "C" {
+48: extern volatile float g_smo_model_r_ohm;    /* SMO 模型电阻 (Ω)，默认 0.1 */
+49: extern volatile float g_smo_model_l_h;      /* SMO 模型电感 (H)，默认 42.3µH */
+50: extern volatile float g_smo_model_psi_wb;   /* SMO 模型磁链 (Wb)，默认 0.00084 */
+51: extern volatile float g_smo_k_v;            /* 滑模增益 k (V)，默认 4.6 = 2×e_peak@2600rpm */
+52: extern volatile float g_smo_obs_gain;       /* k/φ，默认 1.45，硬上限 ≈1.592 */
+53: extern volatile float g_smo_lpf_alpha;      /* e_hat EMA 系数，默认 0.24（fc≈1kHz） */
+58: extern volatile float g_smo_e_alpha_hat_v;  /* e_hat α 分量 (V)，= LPF(z_α) */
+59: extern volatile float g_smo_e_beta_hat_v;   /* e_hat β 分量 (V)，= LPF(z_β) */
+60: extern volatile float g_smo_z_alpha_v;      /* 原始滑模项 z_α (V) */
+61: extern volatile float g_smo_z_beta_v;       /* 原始滑模项 z_β (V) */
+62: extern volatile float g_smo_ih_alpha_a;     /* 观测器电流 î_α (A) */
+63: extern volatile float g_smo_ih_beta_a;      /* 观测器电流 î_β (A) */
+68: extern volatile float g_smo_diag_e_mag_v;      /* |e_hat| (V) */
+69: extern volatile float g_smo_diag_e_expect_v;   /* 理论 |e| = |ω_e|·ψf (V) */
+70: extern volatile float g_smo_diag_e_ratio;      /* 实测/理论，理论 ≈ 1 − R/(k/φ) − LPF 损失 */
+71: extern volatile float g_smo_diag_theta_hat_deg;/* 由 atan2(e_β,e_α) 提取的电角 (deg,[0,360)) */
+72: extern volatile float g_smo_diag_theta_err_deg;/* theta_hat − 编码器电角 (deg,[-180,180))，
+74: extern volatile float g_smo_diag_theta_err_filt_deg;/* theta_err 的 EMA 滤波值 (deg)——看均值用；
+76: extern volatile float g_smo_diag_theta_err_filt_alpha;/* 上项 EMA 系数，默认 0.1（Watch 可调） */
+82: extern volatile float g_smo_diag_e_on_q_v;     /* e_hat 在编码器 q 轴投影 (V) */
+83: extern volatile float g_smo_diag_e_on_d_v;     /* e_hat 在编码器 d 轴投影 (V) */
+84: extern volatile float g_smo_diag_e_err_v;      /* 总误差矢量范数 (V) =
+92: extern volatile float g_smo_theory_alpha_v;    /* 理论 e_alpha (V) */
+93: extern volatile float g_smo_theory_beta_v;     /* 理论 e_beta (V) */
+106: extern volatile float g_smo_jdg_rpm_min;       /* 判定生效转速下限 (rpm)，默认 900
+109: extern volatile float g_smo_jdg_ratio_min;     /* C1 幅值比下限，默认 0.85 */
+110: extern volatile float g_smo_jdg_ratio_max;     /* C1 幅值比上限，默认 1.08
+113: extern volatile float g_smo_jdg_phase_min_deg; /* C2 相位下限 (deg)，默认 −45 */
+114: extern volatile float g_smo_jdg_phase_max_deg; /* C2 相位上限 (deg)，默认 +5 */
+115: extern volatile float g_smo_jdg_hold_ms;       /* 持续满足时长 (ms)，默认 1000 */
+116: extern volatile float g_smo_jdg_filt_alpha;    /* 判定级慢速 EMA 系数（幅值比/相位
+119: extern volatile uint8_t g_smo_emf_ok;          /* 判定结果：1=反电动势 OK */
+120: extern volatile uint8_t g_smo_jdg_fail;        /* 失败原因位掩码（不 OK 时看这里）：
+124: extern volatile float g_smo_jdg_ratio_filt;    /* 慢速幅值比（判定与打印用） */
+125: extern volatile float g_smo_jdg_phase_filt_deg;/* 慢速相位均值 (deg)，判定用；
+
+=== hall_sensor_3ch.h (6) ===
+80: extern volatile uint8_t g_scope_ha;     /* Hall A ��ƽ (0/1) */
+81: extern volatile uint8_t g_scope_hb;     /* Hall B ��ƽ (0/1) */
+82: extern volatile uint8_t g_scope_hc;     /* Hall C ��ƽ (0/1) */
+83: extern volatile uint8_t g_scope_step;   /* ��ǰ���ಽ (0-5) */
+84: extern volatile int16_t g_scope_rpm;    /* �˲���ת�� */
+85: extern volatile uint32_t g_hall_last_pulse_age_ms;  /* last Hall pulse age (ms) */
+
+=== pos_loop.h (1) ===
+8: extern "C" {
+
+=== speed_loop.h (7) ===
+11: extern "C" {
+15: extern volatile float g_i_ref_max_ma;
+18: extern pid_config_t g_spd_pid_cfg;
+21: extern volatile float g_scope_spd_ref;
+22: extern volatile float g_scope_spd_rpm;
+23: extern volatile float g_scope_spd_err;
+24: extern volatile float g_scope_spd_out;
+
+
+################ 3. 模式头文件宏定义 ################
+
+=== foc_24_dcal.h (17) ===
+100: #define FOC24_DBG   1
+102: #define FOC24_LOG(fmt, ...)  MAIN_D("[DCAL24] " fmt, ##__VA_ARGS__)
+104: #define FOC24_LOG(fmt, ...)  ((void)0)
+107: #define FOC24_ZERO_SKIP_SAMPLES  200u
+108: #define FOC24_ZERO_AVG_SAMPLES   4000u
+109: #define FOC24_BETA_MS            2000u
+110: #define FOC24_ALPHA_MS           2000u
+112: #define FOC24_STEP_IDLE       0u
+113: #define FOC24_STEP_ZERO       1u
+114: #define FOC24_STEP_BETA       2u
+115: #define FOC24_STEP_ALPHA      3u
+116: #define FOC24_STEP_DONE       4u
+117: #define FOC24_STEP_FAULT_OC   5u
+119: #define FOC24_EVT_ZERO_DONE   1u
+120: #define FOC24_EVT_BETA_DONE   2u
+121: #define FOC24_EVT_DONE        3u
+122: #define FOC24_EVT_OC          4u
+
+=== foc_25_calangle.h (16) ===
+178: #define FOC25_BETA_MS     2000u  /* 校准 BETA 吸附时长 */
+179: #define FOC25_ALPHA_MS    2000u  /* 校准 ALPHA 吸附时长 */
+180: #define FOC25_HOLD_MS     2000u  /* 目标角吸附时长 */
+181: #define FOC25_VERIFY_MS    500u  /* 吸稳校验窗时长 */
+186: #define FOC25_STEP_IDLE         0u  /* 未运行 */
+187: #define FOC25_STEP_CAL_BETA     1u  /* 校准：磁场 90°，2s */
+188: #define FOC25_STEP_CAL_ALPHA    2u  /* 校准：磁场 0°，2s，结束锁零点 */
+189: #define FOC25_STEP_BRAKE_WAIT   3u  /* 刹车 50/50/50，等输入改值 */
+190: #define FOC25_STEP_HOLD_ATTRACT 4u  /* 磁场指向目标角，吸附 2s */
+191: #define FOC25_STEP_HOLD_VERIFY  5u  /* 磁场保持，500ms 校验窗判吸稳 */
+192: #define FOC25_STEP_FAULT_OC     6u  /* 过流停机 */
+197: #define FOC25_EVT_BETA_DONE  1u
+198: #define FOC25_EVT_LOCKED     2u
+199: #define FOC25_EVT_DONE_OK    3u
+200: #define FOC25_EVT_DONE_FAIL  4u
+201: #define FOC25_EVT_OC         5u
+
+=== foc_26_olf.h (12) ===
+196: #define FOC26_BETA_MS     2000u  /* 校准 BETA 吸附时长 */
+197: #define FOC26_ALPHA_MS    2000u  /* 校准 ALPHA 吸附时长 */
+198: #define FOC26_PP_WIN_MS   5000u  /* id/iq 峰峰值统计窗口 */
+203: #define FOC26_STEP_IDLE       0u  /* 未运行 */
+204: #define FOC26_STEP_CAL_BETA   1u  /* 校准：磁场 90°，2s */
+205: #define FOC26_STEP_CAL_ALPHA  2u  /* 校准：磁场 0°，2s，结束锁零点 */
+206: #define FOC26_STEP_DRAG       3u  /* 磁场角自增拖动（实验主体） */
+207: #define FOC26_STEP_FAULT_OC   4u  /* 过流停机 */
+212: #define FOC26_EVT_BETA_DONE  1u
+213: #define FOC26_EVT_LOCKED     2u
+214: #define FOC26_EVT_OC         3u
+215: #define FOC26_EVT_RAMP_DONE  4u
+
+=== foc_27_dcl.h (14) ===
+178: #define FOC27_BETA_MS       2000u  /* 校准 BETA 吸附时长 */
+179: #define FOC27_ALPHA_MS      2000u  /* 校准 ALPHA 吸附时长 */
+180: #define FOC27_SPEED_WIN_MS  200u   /* 转速测量窗口 */
+181: #define FOC27_PP_WIN_MS     5000u  /* id/iq 峰峰值统计窗口 */
+187: #define FOC27_ENC_DELTA_MAX 32
+192: #define FOC27_STEP_IDLE       0u  /* 未运行 */
+193: #define FOC27_STEP_CAL_BETA   1u  /* 校准：磁场 90°，2s */
+194: #define FOC27_STEP_CAL_ALPHA  2u  /* 校准：磁场 0°，2s，结束锁零点 */
+195: #define FOC27_STEP_RUN        3u  /* 功角闭环拖动（磁场 = 转子 + delta） */
+196: #define FOC27_STEP_FAULT_OC   4u  /* 过流停机 */
+201: #define FOC27_EVT_BETA_DONE  1u
+202: #define FOC27_EVT_LOCKED     2u
+203: #define FOC27_EVT_RAMP_DONE  3u
+204: #define FOC27_EVT_OC         4u
+
+=== foc_28_dci.h (24) ===
+203: #define FOC28_BETA_MS       2000u  /* 校准 BETA 吸附时长 */
+204: #define FOC28_ALPHA_MS      2000u  /* 校准 ALPHA 吸附时长 */
+205: #define FOC28_SPEED_WIN_MS  200u   /* 转速测量窗口 */
+206: #define FOC28_PP_WIN_MS     5000u  /* id/iq 峰峰值统计窗口 */
+207: #define FOC28_MEAN_WIN_MS   3000u  /* id/iq 均值统计窗口 */
+208: #define FOC28_ERR_WIN_MS    5000u  /* 电流环误差统计窗口 */
+215: #define FOC28_PI_KP         0.5f   /* PI 比例增益 (V/A)。P-only 门槛 kp≈(3~7)×R≈0.5~1；
+218: #define FOC28_PI_KI         300.0f /* PI 积分增益（V/A/s）≈ kp×R/L（kp=0.5, L≈0.26mH 实测反推，
+220: #define FOC28_PI_UMAX_V     3.5f   /* PI 输出限幅 (V)，|vd/vq| ≤ UMAX（与 mode 31 同款；
+222: #define FOC28_ITERM_MAX_V   3.2f   /* 积分项限幅 (V)，必须 > 最大 BEMF 3.05V @ 891Hz 天花板 */
+223: #define FOC28_I_REF_MA      500.0f /* 电流矢量幅值参考 (mA) —— 调 I 阶段默认 ≈摩擦电流；
+225: #define FOC28_I_RAMP_MA_S   0.0f   /* I_ref 软启动斜率 (mA/s)。<=0 = 直通（阶跃激励，调 P 用）；
+233: #define FOC28_ENC_DELTA_MAX 32
+239: #define FOC28_STEP_IDLE       0u  /* 未运行 */
+240: #define FOC28_STEP_CALIB      1u  /* 零矢量电流零偏校准（foc_calib，~210ms） */
+241: #define FOC28_STEP_CAL_BETA   2u  /* 校准：磁场 90°，2s */
+242: #define FOC28_STEP_CAL_ALPHA  3u  /* 校准：磁场 0°，2s，结束锁零点 */
+243: #define FOC28_STEP_RUN        4u  /* 功角闭环拖动（磁场 = 转子 + delta） */
+244: #define FOC28_STEP_FAULT_OC   5u  /* 过流停机 */
+249: #define FOC28_EVT_CALIB_DONE  1u
+250: #define FOC28_EVT_BETA_DONE   2u
+251: #define FOC28_EVT_LOCKED      3u
+252: #define FOC28_EVT_RAMP_DONE   4u
+253: #define FOC28_EVT_OC          5u
+
+=== foc_29_drun.h (29) ===
+127: #define FOC29_DBG   1
+129: #define FOC29_LOG(fmt, ...)  MAIN_D("[DRUN29] " fmt, ##__VA_ARGS__)
+131: #define FOC29_LOG(fmt, ...)  ((void)0)
+134: #define FOC29_PI_KP             0.5f
+135: #define FOC29_PI_KI             300.0f
+136: #define FOC29_PI_UMAX_V         3.5f
+137: #define FOC29_ITERM_MAX_V       3.2f
+138: #define FOC29_IQ_FILT_ALPHA     0.10f
+139: #define FOC29_I_REF_MA          500.0f
+140: #define FOC29_I_RAMP_MA_S       0.0f
+141: #define FOC29_ENC_DELTA_MAX     32
+143: #define FOC29_SPEED_WIN_MS      200u
+144: #define FOC29_PP_WIN_MS         5000u
+145: #define FOC29_MEAN_WIN_MS       3000u
+146: #define FOC29_ERR_WIN_MS        5000u
+148: #define FOC29_STEP_IDLE         0u
+149: #define FOC29_STEP_RUN          1u
+150: #define FOC29_STEP_FAULT_OC     2u
+152: #define FOC29_EVT_RAMP_DONE     1u
+153: #define FOC29_EVT_OC            2u
+155: #define FOC29_STEP_DEADBAND_MA  50.0f
+156: #define FOC29_STEP_MIN_MA       100.0f
+157: #define FOC29_STEP_TIMEOUT_US   200000u
+158: #define FOC29_STEP_CONFIRM_TICK 3u
+159: #define FOC29_STEP_TIME_TIMEOUT 0xFFFFFFFFu
+161: #define FOC29_STEP_ST_IDLE      0u
+162: #define FOC29_STEP_ST_WAIT      1u
+163: #define FOC29_STEP_ST_DONE      2u
+164: #define FOC29_STEP_ST_TIMEOUT   3u
+
+=== foc_30_ramp.h (1) ===
+161: #define FOC30_VOLT_ON_Q_AXIS   1
+
+=== foc_31_iqpi.h (9) ===
+180: #define FOC31_PI_KP           0.27f     /* d/q 轴 PI 比例增益 */
+181: #define FOC31_PI_KI           630.0f    /* d/q 轴 PI 积分增益（零极点对消） */
+182: #define FOC31_PI_UMAX_V       3.5f      /* PI 输出限幅 (V)，|vd/vq| ≤ UMAX
+184: #define FOC31_INTEGRAL_MAX    3.0f      /* 积分项限幅：必须 > 运行时bemf(否则高速段
+188: #define FOC31_IQ_REF_MA       1500.0f
+189: #define FOC31_IQ_RAMP_MA_S    1000.0f
+194: #define FOC31_STALL_WIN_MS      500u            /* 检测窗口 (ms) */
+195: #define FOC31_STALL_MIN_CNTS    (ENCODER_CPR/20u) /* 窗口内位移低于此值算"没动" */
+196: #define FOC31_STALL_IQ_MIN_MA   300.0f          /* 电流低于此值不评估(斜坡初期不误报) */
+
+=== foc_32_lockiq.h (12) ===
+166: #define FOC32_BETA_MS        500u
+167: #define FOC32_WIN_MS         300u
+168: #define FOC32_TIMEOUT_MS     3000u
+169: #define FOC32_WIN_TOL_CNTS   4        /* 窗口位移容差 (counts)，约3.5°电角度 */
+170: #define FOC32_QUIET_NEED     2u       /* 连续静止窗口数 */
+171: #define FOC32_TRACK_TOL_CNTS 12       /* VERIFY 跟踪误差容差 (counts)，约10°电 */
+173: #define FOC32_BETA_CNT     ((uint32_t)FOC32_BETA_MS * FOC_ISR_HZ / 1000u)
+174: #define FOC32_WIN_CNT      ((uint32_t)FOC32_WIN_MS * FOC_ISR_HZ / 1000u)
+175: #define FOC32_TIMEOUT_CNT  ((uint32_t)FOC32_TIMEOUT_MS * FOC_ISR_HZ / 1000u)
+192: #define FOC32_EVT_LOCKED        1u   /* 锁定成功，应调 Foc_IqPi_Start() 交接 */
+193: #define FOC32_EVT_FAIL_TIMEOUT  2u   /* 等静止超时，应 Stop */
+194: #define FOC32_EVT_FAIL_TRACK    3u   /* 跟踪复测失败，应 Stop */
+
+=== foc_40_speed.h (22) ===
+107: #define FOC40_DBG   1
+109: #define FOC40_LOG(fmt, ...)  MAIN_D("[SPEED40] " fmt, ##__VA_ARGS__)
+111: #define FOC40_LOG(fmt, ...)  ((void)0)
+135: #define FOC40_PI_KP             0.1f
+136: #define FOC40_PI_KI             300.0f
+139: #define FOC40_PI_UMAX_V         6.2f
+140: #define FOC40_ITERM_MAX_V       6.0f
+141: #define FOC40_IQ_FILT_ALPHA     0.10f
+163: #define FOC40_SPD_KP_MA_PER_RPM       0.8f
+164: #define FOC40_SPD_KI_MA_PER_RPM_S     0.03f
+168: #define FOC40_SPD_IQ_LIMIT_MA         ((float)FOC_MOTOR_MAX_CURRENT_A \
+172: #define FOC40_SPEED_REF_LIMIT_RPM     ((float)FOC_MOTOR_MAX_SPEED_RPM)
+173: #define FOC40_ACCEL_LIMIT_RPM_S       ((float)FOC_MOTOR_MAX_SPEED_RPM \
+176: #define FOC40_SPD_WIN_MS              5u
+177: #define FOC40_SPD_WIN_US              (FOC40_SPD_WIN_MS * 1000u)
+178: #define FOC40_SPD_FILT_ALPHA          0.25f
+180: #define FOC40_SPD_DISP_ALPHA          0.05f
+189: #define FOC40_ENC_DELTA_MAX           36
+191: #define FOC40_STEP_IDLE               0u
+192: #define FOC40_STEP_RUN                1u
+193: #define FOC40_STEP_FAULT_OC           2u
+195: #define FOC40_EVT_OC                  1u
+
+=== foc_41_drun.h (30) ===
+134: #define FOC41_DBG   1
+136: #define FOC41_LOG(fmt, ...)  MAIN_D("[DRUN41] " fmt, ##__VA_ARGS__)
+138: #define FOC41_LOG(fmt, ...)  ((void)0)
+141: #define FOC41_PI_KP             0.5f
+142: #define FOC41_PI_KI             300.0f
+143: #define FOC41_PI_UMAX_V         3.5f
+144: #define FOC41_ITERM_MAX_V       3.2f
+145: #define FOC41_VMAX_DEFAULT_V    6.0f
+146: #define FOC41_IQ_FILT_ALPHA     0.10f
+147: #define FOC41_I_REF_MA          500.0f
+148: #define FOC41_I_RAMP_MA_S       0.0f
+149: #define FOC41_ENC_DELTA_MAX     32
+151: #define FOC41_SPEED_WIN_MS      200u
+152: #define FOC41_PP_WIN_MS         5000u
+153: #define FOC41_MEAN_WIN_MS       3000u
+154: #define FOC41_ERR_WIN_MS        5000u
+156: #define FOC41_STEP_IDLE         0u
+157: #define FOC41_STEP_RUN          1u
+158: #define FOC41_STEP_FAULT_OC     2u
+160: #define FOC41_EVT_RAMP_DONE     1u
+161: #define FOC41_EVT_OC            2u
+163: #define FOC41_STEP_DEADBAND_MA  50.0f
+164: #define FOC41_STEP_MIN_MA       100.0f
+165: #define FOC41_STEP_TIMEOUT_US   200000u
+166: #define FOC41_STEP_CONFIRM_TICK 3u
+167: #define FOC41_STEP_TIME_TIMEOUT 0xFFFFFFFFu
+169: #define FOC41_STEP_ST_IDLE      0u
+170: #define FOC41_STEP_ST_WAIT      1u
+171: #define FOC41_STEP_ST_DONE      2u
+172: #define FOC41_STEP_ST_TIMEOUT   3u
+
+=== foc_45_smo.h (24) ===
+184: #define FOC45_DBG   1
+186: #define FOC45_LOG(fmt, ...)  MAIN_D("[SMO45] " fmt, ##__VA_ARGS__)
+188: #define FOC45_LOG(fmt, ...)  ((void)0)
+195: #define FOC45_PI_KP             0.5f
+196: #define FOC45_PI_KI             300.0f
+197: #define FOC45_PI_UMAX_V         6.2f
+198: #define FOC45_ITERM_MAX_V       6.0f
+199: #define FOC45_IQ_FILT_ALPHA     0.10f
+202: #define FOC45_SPD_KP_MA_PER_RPM       1.8f
+203: #define FOC45_SPD_KI_MA_PER_RPM_S     0.2f
+204: #define FOC45_SPD_IQ_LIMIT_MA         ((float)FOC_MOTOR_MAX_CURRENT_A \
+208: #define FOC45_SPEED_REF_LIMIT_RPM     ((float)FOC_MOTOR_MAX_SPEED_RPM)
+209: #define FOC45_ACCEL_LIMIT_RPM_S       ((float)FOC_MOTOR_MAX_SPEED_RPM \
+212: #define FOC45_SPD_WIN_MS              5u
+213: #define FOC45_SPD_WIN_US              (FOC45_SPD_WIN_MS * 1000u)
+214: #define FOC45_SPD_FILT_ALPHA          0.25f
+216: #define FOC45_SPD_DISP_ALPHA          0.05f
+223: #define FOC45_ENC_DELTA_MAX           36
+228: #define FOC45_AUTO_RAMP_DEFAULT       1u
+229: #define FOC45_AUTO_RAMP_SECS          3u
+231: #define FOC45_STEP_IDLE               0u
+232: #define FOC45_STEP_RUN                1u
+233: #define FOC45_STEP_FAULT_OC           2u
+235: #define FOC45_EVT_OC                  1u
+
+=== foc_obs.h (1) ===
+63: #define FOC31_HISTORY_LEN  10u
+
+
+################ 4. main.c VOFA 派发 ################
+173: *   VOFA 通道 -- 20ch（本 mode 走通用布局），填充见 Foc_Common_VofaFill
+197: *   [!] 本表是通用布局的副本（权威定义 = main.c 里 Foc_Common_VofaFill 上方那张
+213: static int Foc_Common_VofaFill(int32_t *cur)
+380: * 【架构】每个模式实现自己的 Foc_Xxx_VofaFill(cur)，返回**通道数**；
+387: *     通用/mode 0 → 本文件下方 Foc_Common_VofaFill（20ch，见其注释）
+395: int32_t cur[32];
+396: int     n = 0;
+401: if      (g_smo45_running)     { n = Foc_Smo45_VofaFill(cur); }
+402: else if (g_speed40_running)   { n = Foc_Speed_VofaFill(cur); }   /* 18ch */
+403: else if (g_dcal24_running)    { n = 0; }   /* mode24 待迁移 */
+404: else if (g_drun29_running)    { n = Foc_Drun_VofaFill(cur); }    /* 19ch */
+405: else if (g_drun41_running)    { n = Foc_Drun41_VofaFill(cur); }  /* 21ch */
+406: else if (g_dci_running)       { n = Foc_Dci_VofaFill(cur); }     /* 17ch */
+407: else if (g_dcl_running)       { n = Foc_Dcl_VofaFill(cur); }     /* 17ch */
+408: else if (g_olf_running)       { n = Foc_Olf_VofaFill(cur); }     /* 16ch */
+409: else if (g_calang_running)    { n = 0; }   /* mode25 无专属标志，用通用 */
+410: else if (g_cal_running)       { n = 0; }   /* mode20 无专属标志，用通用 */
+411: else if (g_zizeng_running)    { n = Foc_Ramp_VofaFill(cur); }    /* 15ch */
+412: else if (g_lockiq_running)    { n = Foc_LockIq_VofaFill(cur); }  /* 16ch */
+413: else if (g_iqpi_running)      { n = Foc_IqPi_VofaFill(cur); }    /* 16ch */
+414: else                          { n = 0; }   /* mode 0 及空闲态 */
+417: n = Foc_Common_VofaFill(cur);    /* 通用/mode 0 布局，20ch */
+422: Usart3_Vofa_SendScaled(cur, (uint8_t)n, USART3_VOFA_SCALE_MILLI);
+
+
+################ 5. ws 目录清单 ################
+Bemf.c                       654 行
+Bemf.h                       179 行
+I.c                          962 行
+I.h                          290 行
+cur_loop.c                   121 行
+cur_loop.h                   69 行
+dev_comm_runner.c            291 行
+dev_comm_runner.h            91 行
+dev_commutation.c            198 行
+dev_commutation.h            64 行
+foc.c                        218 行
+foc.h                        96 行
+foc_20_cal.c                 171 行
+foc_20_cal.h                 207 行
+foc_23_align.c               152 行
+foc_23_align.h               137 行
+foc_24_dcal.c                240 行
+foc_24_dcal.h                154 行
+foc_25_calangle.c            403 行
+foc_25_calangle.h            242 行
+foc_26_olf.c                 400 行
+foc_26_olf.h                 265 行
+foc_27_dcl.c                 416 行
+foc_27_dcl.h                 254 行
+foc_28_dci.c                 651 行
+foc_28_dci.h                 320 行
+foc_29_drun.c                671 行
+foc_29_drun.h                226 行
+foc_30_ramp.c                403 行
+foc_30_ramp.h                216 行
+foc_31_iqpi.c                448 行
+foc_31_iqpi.h                259 行
+foc_32_lockiq.c              411 行
+foc_32_lockiq.h              230 行
+foc_40_speed.c               477 行
+foc_40_speed.h               240 行
+foc_41_drun.c                737 行
+foc_41_drun.h                244 行
+foc_45_smo.c                 623 行
+foc_45_smo.h                 292 行
+foc_calib.c                  115 行
+foc_calib.h                  70 行
+foc_core.c                   401 行
+foc_core.h                   196 行
+foc_curloop.c                510 行
+foc_curloop.h                89 行
+foc_math.c                   231 行
+foc_math.h                   72 行
+foc_obs.c                    707 行
+foc_obs.h                    120 行
+foc_openloop.c               58 行
+foc_openloop.h               33 行
+foc_pll.c                    229 行
+foc_pll.h                    117 行
+foc_scope.c                  239 行
+foc_scope.h                  31 行
+foc_smo.c                    298 行
+foc_smo.h                    144 行
+hall_sensor_3ch.c            600 行
+hall_sensor_3ch.h            88 行
+motor_config.h               139 行
+pos_loop.c                   15 行
+pos_loop.h                   22 行
+speed_loop.c                 83 行
+speed_loop.h                 41 行

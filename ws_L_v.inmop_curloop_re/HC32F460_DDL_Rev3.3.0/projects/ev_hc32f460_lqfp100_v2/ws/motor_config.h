@@ -1,7 +1,7 @@
 /**
  *******************************************************************************
  * @file  motor_config.h
- * @brief 电机控制参数主配置（精简版 — 仅保留模式23和30）
+ * @brief 电机控制参数主配置（FOC 实验模式 + mode 30 共用）
  *******************************************************************************
  */
 
@@ -33,7 +33,7 @@
 #define MOTOR_HALL_ENABLE   0
 
 /* ============================================================================
- * 环拓扑配置（精简版 — 模式23和30不需要速度环/电流环）
+ * 环拓扑配置（历史遗留：现行各 FOC 模式自持实现环路，这些宏已无引用）
  * ==========================================================================*/
 #define MOTOR_LOOP_POSITION_ENABLE   0
 #define MOTOR_LOOP_SPEED_ENABLE      0
@@ -89,19 +89,18 @@
 #define MOTOR_SCOPE_CHG_VQ_V           0.3f
 
 /* ============================================================================
- * FOC 参数（模式23 对齐校准 / 模式30 自增拖动）
+ * FOC 参数（对齐/吸附电压 + 电机规格 + 保护阈值）
  * ==========================================================================*/
 #define MOTOR_FOC_ENABLE        1
 #define FOC_POLE_PAIRS          10
 #define FOC_VBUS_V              12.0f
 #define FOC_DEADTIME_NS         500u
 
-/* 对齐校准（comm_mode 23） */
+/* 静止对齐电压（各模式的对齐/吸附电压初值都用它）：
+ *   mode 25 g_calang_volt_v、mode 32 g_lockiq_align_volt_v（mode 20 复用后者）
+ * 原 mode 23 的时序宏（BETA/STABLE/TIMEOUT/HOLD_MS）随该模式于 2026-09-26 删除；
+ * 现行各模式用自己的时序宏（如 mode 20 的 CAL_BETA_TICKS / mode 24 的 FOC24_BETA_MS）。 */
 #define FOC_ALIGN_VOLT_V        0.4f
-#define FOC_ALIGN_BETA_MS       1000
-#define FOC_ALIGN_STABLE_MS     300
-#define FOC_ALIGN_TIMEOUT_MS    3000
-#define FOC_ALIGN_HOLD_MS       2000
 
 /* 过流阈值：必须在电流传感器量程内（±10A 传感器 → 阈值 ≤9A，留 10% 余量），
  * 否则削顶后保护失明（ADC 削顶点 = (3300-1650)/132mV/A = ±12.5A）。
@@ -115,7 +114,7 @@
 #define FOC_PI_KI               240.0f
 #define FOC_PI_UMAX_V           1.0f
 
-/* 以下宏仅用于编译 FOC 代码（模式23和30不需要 I-F/电流环） */
+/* 以下宏仅用于编译 FOC 代码（历史遗留，见上方环拓扑说明） */
 #define FOC_OPENLOOP_FREQ_HZ    5.0f
 #define FOC_OPENLOOP_VOLT_V     0.9f
 #define FOC_OPENLOOP_VOLT_MAX   1.5f

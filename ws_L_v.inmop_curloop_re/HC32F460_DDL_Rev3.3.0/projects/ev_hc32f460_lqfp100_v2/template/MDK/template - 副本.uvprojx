@@ -1009,11 +1009,6 @@
               <FilePath>..\..\ws\foc_20_cal.c</FilePath>
             </File>
             <File>
-              <FileName>foc_23_align.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_23_align.c</FilePath>
-            </File>
-            <File>
               <FileName>foc_24_dcal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_24_dcal.c</FilePath>
@@ -2078,11 +2073,6 @@
               <FileName>foc_20_cal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_20_cal.c</FilePath>
-            </File>
-            <File>
-              <FileName>foc_23_align.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ws\foc_23_align.c</FilePath>
             </File>
             <File>
               <FileName>foc_24_dcal.c</FileName>

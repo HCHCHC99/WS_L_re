@@ -103,7 +103,7 @@ extern volatile int32_t  g_lockiq_evt_off_deg; /* 锁定的注入偏移 (deg) */
  * 重新开始记录） */
 void Foc_Obs_IqpiHistClear(void);
 
-/* 记录一条 mode 31 状态变化（Iqpi_SetStep 每次换状态时调用；
+/* 记录一条 mode 31 状态变化（IqPi_SetStep 每次换状态时调用；
  * hist 满后自动挤掉最旧的一条，连续相同状态不会重复记录——
  * 去重由调用方保证，本函数只管如实记录） */
 void Foc_Obs_IqpiRecordStep(iqpi_step_t s);

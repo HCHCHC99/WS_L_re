@@ -8,7 +8,6 @@
  *                         公共助手（GetDq/EMA/电压包络/编码器电角度）
  *          foc_openloop.h 模式21 开环 V/f
  *          foc_curloop.h  模式22 编码器 FOC 电流环（I-F 启动 + RUN）
- *          foc_23_align.h    模式23 静止电角度对齐校准
  *          foc_20_cal.h      模式20 编码器零点校准（BETA 2s + ALPHA 2s -> 锁 offset）
  *          foc_25_calangle.h 模式25 手动角度吸附（自动校准 -> 刹车等待输入 -> 吸附+校验）
  *          foc_26_olf.h      模式26 开环 VF 负载角实验（校准 -> 磁场自增拖动 -> delta/失步观测）
@@ -35,7 +34,6 @@
 #include "foc_core.h"
 #include "foc_openloop.h"
 #include "foc_curloop.h"
-#include "foc_23_align.h"
 #include "foc_20_cal.h"
 #include "foc_25_calangle.h"
 #include "foc_26_olf.h"
@@ -80,7 +78,7 @@ void Foc_Init(void);
  *                        : (g_drun41_running ? Foc_Drun41_Step
  *                        : (g_speed40_running ? Foc_Speed_Step
  *                        : (g_smo45_running ? Foc_Smo45_Step
- *                        : Foc_Align_Step)))))
+ *                        : 无（不输出）)))))))))
  *   FOC_MODE_CURLOOP  -> Foc_CurLoop_Step（内部再按状态机分派）
  *   g_zizeng_running  -> Foc_Ramp_Step
  *   g_lockiq_running  -> Foc_LockIqPi_Step（锁定后由 main.c 交接 mode 31）

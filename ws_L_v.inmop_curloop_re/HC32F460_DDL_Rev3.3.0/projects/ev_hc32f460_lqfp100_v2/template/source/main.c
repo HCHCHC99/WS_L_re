@@ -39,8 +39,18 @@ extern volatile uint8_t  g_scope_step;
 
 /*=============================================================================
  * Keil Watch 可调变量
+ *   comm_mode 取值总览（每个 mode 的详表见该模式头文件顶部那张卡）
+ *     0   空闲 / 静止观测态（通用 VOFA 20ch）      20  编码器零点校准
+ *     24  仅校准（零偏 + 零点）                     25  手动角度吸附
+ *     26  开环 VF 负载角实验                        27  功角闭环拖动
+ *     28  校准 + 功角参考电流闭环                   29  纯电流环（复用 24 校准）
+ *     30  磁场角度自增拖动                          31  编码器 PI 电流环（id 恒 0）
+ *     32  自锁偏移 + 交接 31                        40  编码器 FOC 速度/电流双闭环
+ *     41  纯电流环 + dq 前馈                        45  SMO+PLL 无感 FOC 速度/电流双闭环
+ *   1~11 为 CommRunner 六步方波模式，见 dev_comm_runner.h
+ *   注：23（老版静止对齐）已于 2026-09-26 整模式删除，见 md_record 记录。
  *=============================================================================*/
-volatile int   comm_mode        = 0;     /* 0=Stop, 23=FOC_Align, 30=ZIZENG, 31=IQ_PI, 32=LOCK_IQ_PI */
+volatile int   comm_mode        = 0;
 volatile float g_comm_duty_pct  = 80.0f;
 
 /*=============================================================================
@@ -67,9 +77,6 @@ volatile float g_comm_duty_pct  = 80.0f;
 #define NOISY_MODE_FOC_OBS     (8)
 
 volatile int check_noisy_mode = NOISY_MODE_FULL;
-
-/* FOC 对齐参数（Keil Watch 可调） */
-extern volatile float g_foc_align_volt_v;
 
 /* ZIZENG 参数（Keil Watch 可调） */
 extern volatile float g_zizeng_freq_hz;
@@ -113,41 +120,93 @@ static volatile uint8_t s_noisy_foc_obs_enabled = 1U;
 
 static void Noisy_Apply(int requested, int *prev_comm_mode);
 
-/*=============================================================================
- * Foc_Common_VofaFill — 通用 / mode 0 专属 VOFA 布局（20 通道）
- *
- * 【通道表】（单位换算：传"毫单位"，SendScaled 内部 ×0.001）
- *   ch0~2  三相电流 (mA → A)                     g_i_iu/iv/iw_ma
- *   ch3~5  三相零偏，已校准值 (kcounts)           g_i_calib_zero_u/v/w ÷1000
- *          ⚠ 原始量是 ADC counts(0~4095)，不 ÷1000 会被 0.001 缩放显示成
- *            0.002 量级而丢精度；此处折算为 kcounts（约 2.0）
- *   ch6    静止系 ialpha (mA → A)                 g_foc_ialpha×1000
- *   ch7    静止系 ibeta  (mA → A)                 g_foc_ibeta×1000
- *   ch8    控制系 id 反馈 (mA → A)                g_foc_id_ma
- *   ch9    控制系 iq 反馈 (mA → A)                g_foc_iq_ma
- *   ch10   控制系 vd 输出 (mV → V)                g_foc_vd×1000
- *   ch11   控制系 vq 输出 (mV → V)                g_foc_vq×1000
- *   ch12   静止系电流幅值 (mA → A)                g_foc_iab_mag×1000
- *   ch13   转子电角度 (deg，0~360×极对数)         g_foc_elec_deg
- *   ch14   转子机械角度 (deg，0~360)              g_foc_mech_deg
- *   ch15   对齐零点 (counts)                      g_foc_align_offset
- *   ch16   故障标志 (0/1)                         g_foc_fault
- *   ch17   **ZIZENG 自增电压幅值 (mV → V)**        g_zizeng_volt_v×1000
- *          ⚠ 本通道为 mode 30 服务的兼容保留项（30/31 迁出通用布局前需要它）
- *   ch18   **ZIZENG 磁场角 (mrad → rad)**         g_zizeng_theta_rad×1000
- *          ⚠ 同上，兼容保留
- *   ch19   OC 阈值 (mA → A)                       g_foc_oc_limit_a×1000
- *
- * 【本布局的设计意图】mode 0 是"静止观测态"，主要用来查**电流测量质量**：
- *   - ch0~2 + ch12：看零漂/温漂/噪声（幅值 ch12 是总噪声的单一指标）
- *   - ch3~5：直接给出零偏基准，与 ch0~2 对比可判断零偏是否漂了
- *   - ch13/14：捏转子可实时看角度跟随（验证 mode 24 校准是否仍有效）
- *   - ch17/18：为尚未迁出本布局的 mode 30/31 保留；迁移完成后可换成
- *              其它诊断量（如 vmax/vramp）
- *
- * ⚠ 修改通道数：只改末尾 return 值即可（当前 20）。
- *   硬上限 USART3_VOFA_MAX_CHANNELS(24)，见 Adp/Usart3_Vofa.h。
- * =============================================================================*/
+/*
+ * ==============================================================================
+ *   模式速览卡   MODE 0    空闲 / 静止观测态（通用 VOFA 布局）
+ *   本卡是本模式唯一事实源；代码内注释与本卡冲突时，以本卡为准
+ * ==============================================================================
+ *   入口   comm_mode = 0
+ *   前置   无（上电默认就是它）
+ *   结束   写任何 mode 号即离开
+ *   标记   [!] 易错点   (*) 主判据   [可调] Watch 可写   [只读] 仅观察
+ * ------------------------------------------------------------------------------
+ *   [可调] Watch 变量 -- 改值即时生效，复位后回宏默认
+ * ------------------------------------------------------------------------------
+ *       变量                        当前值  单位     含义
+ *       --------------------------- ------- -------- ---------------------------
+ *       comm_mode                   0       -        写模式号即切模式
+ *       check_noisy_mode            0       -        噪声排查开关，见下方取值表
+ *   [!] check_noisy_mode 非 0 会先强制 comm_mode=0；0 完整 / 1 关电流 ADC / 2 关
+ *       PWM / 3 停 Timer0 / 4 关 SysTick / 5 停 Timer6 / 6 关 VOFA / 7
+ *       停编码器更新 / 8 停 Foc_Obs
+ *       g_comm_duty_pct             80.0    %        开环模式占空比（本态不用）
+ * ------------------------------------------------------------------------------
+ *   [只读] 关键观察变量
+ * ------------------------------------------------------------------------------
+ *       变量                           含义
+ *       ------------------------------ -----------------------------------------
+ *   (*) g_foc_iab_mag                  静止系电流幅值 (mA)；总噪声的单一指标
+ *       g_i_iu_ma                      U 相电流 (mA)
+ *       g_i_iv_ma                      V 相电流 (mA)
+ *       g_i_iw_ma                      W 相电流 (mA)
+ *   (*) g_i_calib_zero_u               U 相零偏 (ADC counts，约 2000)
+ *   (*) g_i_calib_zero_v               V 相零偏 (ADC counts)
+ *   (*) g_i_calib_zero_w               W 相零偏 (ADC counts)
+ *   [!] 零偏与 ch0~2 对比：零偏漂了电流就偏，可判零漂/温漂；三相应基本相等。
+ *       g_foc_ialpha                   静止系 ialpha 电流 (mA)
+ *       g_foc_ibeta                    静止系 ibeta 电流 (mA)
+ *       g_foc_id_ma                    控制系 d 轴电流反馈 (mA)
+ *       g_foc_iq_ma                    控制系 q 轴电流反馈 (mA)
+ *       g_foc_vd                       控制系 d 轴电压输出 (V)
+ *       g_foc_vq                       控制系 q 轴电压输出 (V)
+ *       g_foc_elec_deg                 转子电角度 (deg，0~360 倍极对数)
+ *       g_foc_mech_deg                 转子机械角度 (deg)；手捏转子看是否跟随
+ *       g_foc_align_offset             对齐零点 (counts)
+ *       g_foc_fault                    故障标志 (0/1)
+ *       g_foc_oc_limit_a               过流阈值 (A)
+ *   [!] g_zizeng_volt_v                mode 30 的量；通用布局里只作兼容保留
+ *   [!] g_zizeng_theta_rad             mode 30 的量；通用布局里只作兼容保留
+ * ------------------------------------------------------------------------------
+ *   VOFA 通道 -- 20ch（本 mode 走通用布局），填充见 Foc_Common_VofaFill
+ * ------------------------------------------------------------------------------
+ *       通道  含义                   单位     备注
+ *       ----- ---------------------- -------- ----------------------------------
+ *       ch0   U 相电流               A
+ *       ch1   V 相电流               A
+ *       ch2   W 相电流               A
+ *   (*) ch3   U 相零偏               kcounts  ADC counts/1000，约 2.0
+ *   (*) ch4   V 相零偏               kcounts
+ *   (*) ch5   W 相零偏               kcounts
+ *       ch6   静止系 ialpha          A
+ *       ch7   静止系 ibeta           A
+ *       ch8   控制系 id 反馈         A
+ *       ch9   控制系 iq 反馈         A
+ *       ch10  控制系 vd 输出         V
+ *       ch11  控制系 vq 输出         V
+ *   (*) ch12  静止系电流幅值         A        噪声单一指标
+ *       ch13  转子电角度             deg      0~360 倍极对数
+ *       ch14  转子机械角度           deg      0~360
+ *       ch15  对齐零点               counts
+ *       ch16  故障标志               0/1
+ *   [!] ch17  ZIZENG 电压幅值        V        为 mode 30 兼容保留
+ *   [!] ch18  ZIZENG 磁场角          rad      兼容保留
+ *       ch19  OC 阈值                A
+ *   [!] 本表是通用布局的副本（权威定义 = main.c 里 Foc_Common_VofaFill 上方那张
+ *       MODE 0 卡）；改通用通道时 MODE 0/20/23/24/25 五张卡要同步改。
+ * ------------------------------------------------------------------------------
+ *   判据与坑
+ * ------------------------------------------------------------------------------
+ *   (*) 本态是静止观测态，主要用来查电流测量质量：ch12 是总噪声的单一指标。
+ *   (*) ch3~5 与 ch0~2 对比：零偏漂了电流就会偏，可判零漂/温漂。
+ *   (*) 手捏转子慢转，看 ch13/ch14 是否平滑跟随，可验证 mode 24
+ *       校准是否仍然有效。
+ *   [!] SendScaled 会统一乘 0.001，零偏必须除 1000 折算成 kcounts，否则显示成
+ *       0.002 量级丢精度。
+ *   [!] VOFA+ 上位机通道数配成 20；本布局同时被没有专属填充的 mode 20/23/24/25
+ *       复用。
+ *   [!] ch17/ch18 是为 mode 30 保留的兼容项，迁出后可换别的诊断量。
+ * ==============================================================================
+ */
 static int Foc_Common_VofaFill(int32_t *cur)
 {
     cur[0]  = (int32_t)(g_i_iu_ma);                   /* ch0 U 相电流 */
@@ -179,7 +238,7 @@ static int Foc_Common_VofaFill(int32_t *cur)
 int main(void)
 	{
     Hardware_Init();
-    MAIN_DBG("System started (MINIMAL: mode23/30 only)");
+    MAIN_DBG("System started");
 
     /* ---- USART3 + VOFA+ ---- */
     {
@@ -201,7 +260,7 @@ int main(void)
     };
     CommRunner_Init(&runner_cfg);
 
-    /* ---- 电流采样（模式23和30需要电流监视） ---- */
+    /* ---- 电流采样（FOC 各模式与 mode 30 都要电流监视） ---- */
     I_Init();
     tickTimer_DelayMs(2000);    /* 等传感器基准/VDDA 冷启动暂态稳定后再校零 */
     I_Calibrate();              /* 内部已切 FOC 模式 + 50/50/50 零矢量并保持 */
@@ -318,11 +377,13 @@ int main(void)
          * 【架构】每个模式实现自己的 Foc_Xxx_VofaFill(cur)，返回**通道数**；
          *   返回 0 表示该模式无专属布局（回落到本文件的通用布局）。
          *   **通道含义的唯一事实源 = 各模式 .h 顶部的【模式速览卡】**：
-         *     mode 20/23/24/25 → 无专属布局（用通用）
-         *     mode 26/27/28/29/30/31/32/41 → 暂用通用（阶段 2 逐步迁移）
-         *     mode 40 → foc_40_speed.h（18ch）
-         *     mode 45 → foc_45_smo.h（16ch，g_smo45_wave_mode 三种布局）
+         *     mode 20  14ch     mode 24  16ch     mode 25  16ch
+         *     mode 26  16ch     mode 27  17ch     mode 28  17ch
+         *     mode 29  19ch     mode 30  15ch     mode 31  16ch
+         *     mode 32  16ch     mode 40  18ch     mode 41  21ch
+         *     mode 45  16/8/16ch（随 g_smo45_wave_mode）
          *     通用/mode 0 → 本文件下方 Foc_Common_VofaFill（20ch，见其注释）
+         *   只有六步方波模式（comm_mode 1~11）与空闲态才回落到通用布局。
          *
          * ⚠ 各模式通道数**可以不同**（A 方案）：切模式时 VOFA+ 需同步改通道数。
          * ⚠ 通道数硬上限 = USART3_VOFA_MAX_CHANNELS(24)，见 Adp/Usart3_Vofa.h。
@@ -336,16 +397,16 @@ int main(void)
             /* ---- 模式自持 VOFA：每个模式一行，语义彻底独立 ----
              * ⚠ 顺序有意义：g_dci_running 同时标记 mode 24/28/29 系，
              *   必须先把已拆出的独立模块（24/29/41）判掉，最后才轮到 28。 */
-            if      (g_smo45_running)     { n = Foc_Smo45_VofaFill(cur); }
+            if      (g_smo45_running)     { n = Foc_Smo45_VofaFill(cur); }   /* 16/8/16ch */
             else if (g_speed40_running)   { n = Foc_Speed_VofaFill(cur); }   /* 18ch */
-            else if (g_dcal24_running)    { n = 0; }   /* mode24 待迁移 */
+            else if (g_dcal24_running)    { n = Foc_Dcal_VofaFill(cur); }    /* 16ch */
             else if (g_drun29_running)    { n = Foc_Drun_VofaFill(cur); }    /* 19ch */
             else if (g_drun41_running)    { n = Foc_Drun41_VofaFill(cur); }  /* 21ch */
             else if (g_dci_running)       { n = Foc_Dci_VofaFill(cur); }     /* 17ch */
             else if (g_dcl_running)       { n = Foc_Dcl_VofaFill(cur); }     /* 17ch */
             else if (g_olf_running)       { n = Foc_Olf_VofaFill(cur); }     /* 16ch */
-            else if (g_calang_running)    { n = 0; }   /* mode25 无专属标志，用通用 */
-            else if (g_cal_running)       { n = 0; }   /* mode20 无专属标志，用通用 */
+            else if (g_calang_running)    { n = Foc_CalAngle_VofaFill(cur); }/* 16ch */
+            else if (g_cal_running)       { n = Foc_Cal_VofaFill(cur); }     /* 14ch */
             else if (g_zizeng_running)    { n = Foc_Ramp_VofaFill(cur); }    /* 15ch */
             else if (g_lockiq_running)    { n = Foc_LockIq_VofaFill(cur); }  /* 16ch */
             else if (g_iqpi_running)      { n = Foc_IqPi_VofaFill(cur); }    /* 16ch */

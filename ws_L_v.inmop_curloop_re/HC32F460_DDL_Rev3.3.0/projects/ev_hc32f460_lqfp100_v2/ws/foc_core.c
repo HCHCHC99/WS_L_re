@@ -94,7 +94,7 @@ static uint16_t s_oc_cnt = 0u;
 /* 内部状态机 */
 static foc_state_t s_state = FOC_STATE_IDLE;
 
-/* 对齐零点（模式23 记录 / 模式22 I-F 交接沿用） */
+/* 对齐零点（模式20/24 锁定时写入） */
 static int32_t s_align_offset = 0;
 
 /* EMA 滤波器状态 */

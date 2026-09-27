@@ -17,7 +17,6 @@
 #include "foc_core.h"
 #include "foc_30_ramp.h"
 #include "foc_32_lockiq.h"
-#include "foc_23_align.h"
 #include "foc_20_cal.h"
 #include "foc_25_calangle.h"
 #include "foc_26_olf.h"
@@ -602,34 +601,6 @@ void Foc_Obs_Task(void)
                        (int)(g_drun41_vq_ff_v * 1000.0f),
                        (int)g_drun41_vsat,
                        (unsigned)g_drun41_ff_enable);
-        }
-    }
-
-    /* ---- 对齐校准事件打印 ---- */
-    if (g_foc_align_evt != 0u) {
-        uint8_t evt = g_foc_align_evt;
-        g_foc_align_evt = 0u;
-        switch (evt) {
-        case 1u:
-            OBS_DBG("[ALIGN] start volt=%d mV", (int)g_foc_align_evt_v1);
-            break;
-        case 2u:
-            OBS_DBG("[ALIGN] beta done -> alpha");
-            break;
-        case 3u:
-            OBS_DBG("[ALIGN] locked offset=%d id=%d iq=%d",
-                    (int)g_foc_align_evt_v1, (int)g_foc_align_evt_v2,
-                    (int)g_foc_align_evt_v3);
-            break;
-        case 4u:
-            OBS_DBG("[ALIGN] done offset=%d", (int)g_foc_align_evt_v1);
-            break;
-        case 5u:
-            OBS_DBG("[ALIGN] FAULT code=%d i=%d mA",
-                    (int)g_foc_align_evt_v1, (int)g_foc_align_evt_v2);
-            break;
-        default:
-            break;
         }
     }
 

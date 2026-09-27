@@ -112,7 +112,7 @@ static float    s_speed_ramp_rpm;
 static float    s_speed_filt_rpm;
 static float    s_speed_disp_rpm;
 
-static void Speed40_ResetLoopState(void)
+static void Speed_ResetLoopState(void)
 {
     s_rotor_count = 0;
     s_encoder_prev_hw = 0u;
@@ -130,7 +130,7 @@ static void Speed40_ResetLoopState(void)
     s_speed_disp_init = 0u;
 }
 
-static void Speed40_ClearObservables(void)
+static void Speed_ClearObservables(void)
 {
     g_speed40_evt = 0u;
     g_speed40_speed_ramp_rpm = 0.0f;
@@ -154,7 +154,7 @@ static void Speed40_ClearObservables(void)
     g_speed40_dw = 50.0f;
 }
 
-static void Speed40_ClearCurrentFeedback(void)
+static void Speed_ClearCurrentFeedback(void)
 {
     g_speed40_id_ma = 0.0f;
     g_speed40_iq_ma = 0.0f;
@@ -169,7 +169,7 @@ static void Speed40_ClearCurrentFeedback(void)
     g_foc_vq = 0.0f;
 }
 
-static stc_i_data_t Speed40_CorrectedData(const stc_i_data_t *pData)
+static stc_i_data_t Speed_CorrectedData(const stc_i_data_t *pData)
 {
     stc_i_data_t data = *pData;
     data.i16IU_mA = (int16_t)((float)pData->i16IU_mA - s_zero_u_ma);
@@ -178,7 +178,7 @@ static stc_i_data_t Speed40_CorrectedData(const stc_i_data_t *pData)
     return data;
 }
 
-static float Speed40_LimitSpeedRPM(float rpm)
+static float Speed_LimitSpeedRPM(float rpm)
 {
     if (rpm > FOC40_SPEED_REF_LIMIT_RPM) {
         rpm = FOC40_SPEED_REF_LIMIT_RPM;
@@ -189,7 +189,7 @@ static float Speed40_LimitSpeedRPM(float rpm)
     return rpm;
 }
 
-static void Speed40_UpdateSpeed(int32_t corrected_delta)
+static void Speed_UpdateSpeed(int32_t corrected_delta)
 {
     float raw_rpm;
 
@@ -224,14 +224,14 @@ static void Speed40_UpdateSpeed(int32_t corrected_delta)
     s_speed_win_tick = 0u;
 }
 
-static void Speed40_UpdateOuterLoop(void)
+static void Speed_UpdateOuterLoop(void)
 {
     float target_rpm;
     float ramp_step;
     float speed_error;
     float speed_out;
 
-    target_rpm = Speed40_LimitSpeedRPM(g_speed40_speed_target_rpm);
+    target_rpm = Speed_LimitSpeedRPM(g_speed40_speed_target_rpm);
     ramp_step = FOC40_ACCEL_LIMIT_RPM_S
               * ((float)FOC40_SPD_WIN_MS * 0.001f);
     if (s_speed_ramp_rpm < target_rpm) {
@@ -262,7 +262,7 @@ void Foc_Speed_InitPids(void)
 
 void Foc_Speed_SetTargetRPM(float target_rpm)
 {
-    g_speed40_speed_target_rpm = Speed40_LimitSpeedRPM(target_rpm);
+    g_speed40_speed_target_rpm = Speed_LimitSpeedRPM(target_rpm);
 }
 
 void Foc_Speed_Start(void)
@@ -279,8 +279,8 @@ void Foc_Speed_Start(void)
     }
 
     Foc_Core_ClearFault();
-    Speed40_ResetLoopState();
-    Speed40_ClearObservables();
+    Speed_ResetLoopState();
+    Speed_ClearObservables();
     s_zero_u_ma = calibration.zero_u_ma;
     s_zero_v_ma = calibration.zero_v_ma;
     s_zero_w_ma = calibration.zero_w_ma;
@@ -331,7 +331,7 @@ void Foc_Speed_Stop(void)
         }
         FOC40_LOG("stopped");
     }
-    Speed40_ClearCurrentFeedback();
+    Speed_ClearCurrentFeedback();
 }
 
 void Foc_Speed_Step(const stc_i_data_t *pData)
@@ -347,7 +347,7 @@ void Foc_Speed_Step(const stc_i_data_t *pData)
         g_speed40_evt = FOC40_EVT_OC;
         g_speed40_running = 0u;
         Foc_Core_FaultStop(1u);
-        Speed40_ClearCurrentFeedback();
+        Speed_ClearCurrentFeedback();
         return;
     }
 
@@ -373,8 +373,8 @@ void Foc_Speed_Step(const stc_i_data_t *pData)
     s_rotor_count = Foc_Core_ModPos(s_rotor_count + corrected_delta,
                                     (int32_t)ENCODER_CPR);
     g_speed40_rotor_count = s_rotor_count;
-    Speed40_UpdateSpeed(corrected_delta);
-    Speed40_UpdateOuterLoop();
+    Speed_UpdateSpeed(corrected_delta);
+    Speed_UpdateOuterLoop();
 
     rotor_rad = (float)s_rotor_count
               * (FOC_MATH_2PI * (float)FOC_POLE_PAIRS / (float)ENCODER_CPR);
@@ -382,7 +382,7 @@ void Foc_Speed_Step(const stc_i_data_t *pData)
                * FOC_MATH_2PI;
     if (rotor_rad < 0.0f) rotor_rad += FOC_MATH_2PI;
 
-    data = Speed40_CorrectedData(pData);
+    data = Speed_CorrectedData(pData);
     Foc_Core_GetDq(&data, rotor_rad, &id, &iq);
     g_speed40_id_ma = id * 1000.0f;
     g_speed40_iq_ma = iq * 1000.0f;

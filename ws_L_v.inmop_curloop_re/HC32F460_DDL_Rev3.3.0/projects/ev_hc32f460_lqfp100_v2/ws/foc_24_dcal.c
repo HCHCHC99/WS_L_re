@@ -11,6 +11,7 @@
  */
 
 #include "foc_24_dcal.h"
+#include "I.h"                 /* g_i_iu/iv/iw_ma（VOFA 自持布局用） */
 #include "foc_math.h"
 #include "tmr4_pwm.h"
 #include "encoder.h"
@@ -39,7 +40,7 @@ static int64_t  s_zero_sum_v;
 static int64_t  s_zero_sum_w;
 static uint32_t s_phase_tick;
 
-static void Dcal24_ClearRunState(void)
+static void Dcal_ClearRunState(void)
 {
     g_dcal24_running = 0u;
     g_dcal24_state   = FOC24_STEP_IDLE;
@@ -61,7 +62,7 @@ static void Dcal24_ClearRunState(void)
     s_phase_tick = 0u;
 }
 
-static void Dcal24_ZeroVector(void)
+static void Dcal_ZeroVector(void)
 {
     g_foc_du = 50.0f;
     g_foc_dv = 50.0f;
@@ -69,7 +70,7 @@ static void Dcal24_ZeroVector(void)
     TMR4_PWM_SetDuty3Phase(50.0f, 50.0f, 50.0f);
 }
 
-static stc_i_data_t Dcal24_CorrectedData(const stc_i_data_t *pData)
+static stc_i_data_t Dcal_CorrectedData(const stc_i_data_t *pData)
 {
     stc_i_data_t data = *pData;
     data.i16IU_mA = (int16_t)((float)pData->i16IU_mA - s_result.zero_u_ma);
@@ -78,9 +79,9 @@ static stc_i_data_t Dcal24_CorrectedData(const stc_i_data_t *pData)
     return data;
 }
 
-static void Dcal24_OutputField(const stc_i_data_t *pData, float field_angle)
+static void Dcal_OutputField(const stc_i_data_t *pData, float field_angle)
 {
-    stc_i_data_t data = Dcal24_CorrectedData(pData);
+    stc_i_data_t data = Dcal_CorrectedData(pData);
     float valpha = g_dcal24_volt_v * Foc_Math_Cos(field_angle);
     float vbeta  = g_dcal24_volt_v * Foc_Math_Sin(field_angle);
     float du, dv, dw, id, iq, theta;
@@ -107,7 +108,7 @@ static void Dcal24_OutputField(const stc_i_data_t *pData, float field_angle)
     g_foc_iq_ma = iq * 1000.0f;
 }
 
-static void Dcal24_StopOutput(void)
+static void Dcal_StopOutput(void)
 {
     if (g_foc_active) {
         g_foc_active = 0u;
@@ -120,7 +121,7 @@ static void Dcal24_StopOutput(void)
 void Foc_Dcal_Start(void)
 {
     Foc_Core_ClearFault();
-    Dcal24_ClearRunState();
+    Dcal_ClearRunState();
 
     g_foc_mode        = FOC_MODE_ALIGN;
     g_foc_phase       = 4u;
@@ -136,7 +137,7 @@ void Foc_Dcal_Start(void)
 
     g_dcal24_running = 1u;
     g_dcal24_state   = FOC24_STEP_ZERO;
-    Dcal24_ZeroVector();
+    Dcal_ZeroVector();
     Foc_Core_PwmStart();
     FOC24_LOG("start zero=%ums beta=%ums alpha=%ums volt=%dmV",
                (unsigned)FOC24_ZERO_TOTAL * 1000u / (unsigned)FOC_ISR_HZ,
@@ -151,7 +152,7 @@ void Foc_Dcal_Stop(void)
     }
 
     g_dcal24_running = 0u;
-    Dcal24_StopOutput();
+    Dcal_StopOutput();
     FOC24_LOG("stopped");
 }
 
@@ -179,7 +180,7 @@ void Foc_Dcal_Step(const stc_i_data_t *pData)
 
     switch (g_dcal24_state) {
     case FOC24_STEP_ZERO:
-        Dcal24_ZeroVector();
+        Dcal_ZeroVector();
         if (s_zero_tick >= FOC24_ZERO_SKIP_SAMPLES) {
             s_zero_sum_u += pData->i16IU_mA;
             s_zero_sum_v += pData->i16IV_mA;
@@ -202,7 +203,7 @@ void Foc_Dcal_Step(const stc_i_data_t *pData)
         break;
 
     case FOC24_STEP_BETA:
-        Dcal24_OutputField(pData, FOC_MATH_HALF_PI);
+        Dcal_OutputField(pData, FOC_MATH_HALF_PI);
         if (++s_phase_tick >= ((uint32_t)FOC24_BETA_MS * FOC_ISR_HZ / 1000u)) {
             g_dcal24_beta_hw = TMRA_GetCountValue(CM_TMRA_1);
             s_phase_tick = 0u;
@@ -212,7 +213,7 @@ void Foc_Dcal_Step(const stc_i_data_t *pData)
         break;
 
     case FOC24_STEP_ALPHA:
-        Dcal24_OutputField(pData, 0.0f);
+        Dcal_OutputField(pData, 0.0f);
         if (++s_phase_tick >= ((uint32_t)FOC24_ALPHA_MS * FOC_ISR_HZ / 1000u)) {
             g_dcal24_alpha_hw = TMRA_GetCountValue(CM_TMRA_1);
             g_dcal24_moved = (int16_t)(g_dcal24_alpha_hw - g_dcal24_beta_hw);
@@ -226,7 +227,7 @@ void Foc_Dcal_Step(const stc_i_data_t *pData)
             Foc_Core_SetAlignOffset(g_dcal24_offset);
             g_dcal24_state = FOC24_STEP_DONE;
             g_dcal24_running = 0u;
-            Dcal24_StopOutput();
+            Dcal_StopOutput();
         }
         break;
 
@@ -236,4 +237,29 @@ void Foc_Dcal_Step(const stc_i_data_t *pData)
     default:
         break;
     }
+}
+
+/*===========================================================================
+ * 模式自持 VOFA：固定 16ch 布局，通道含义见 foc_24_dcal.h 顶部速览卡
+ *（唯一事实源）。单位换算：传"毫单位"，SendScaled 内部 ×0.001。
+ *===========================================================================*/
+int Foc_Dcal_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);            /* ch0 U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);            /* ch1 V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);            /* ch2 W 相电流 */
+    cur[3]  = (int32_t)(g_foc_id_ma);          /* ch3 控制系 id 反馈 (mA -> A) */
+    cur[4]  = (int32_t)(g_foc_iq_ma);          /* ch4 控制系 iq 反馈 */
+    cur[5]  = (int32_t)(g_dcal24_state);       /* ch5 状态 1 零偏/2 BETA/3 ALPHA/4 完成/5 OC */
+    cur[6]  = (int32_t)(g_dcal24_evt);         /* ch6 事件 1 零偏锁定/2 BETA完成/3 完成/4 OC */
+    cur[7]  = (int32_t)(g_dcal24_beta_hw);     /* ch7 BETA 结束计数 (counts) */
+    cur[8]  = (int32_t)(g_dcal24_alpha_hw);    /* ch8 ALPHA 结束计数 (counts) */
+    cur[9]  = (int32_t)(g_dcal24_moved);       /* ch9 BETA->ALPHA 位移 (counts, 期望 +/-102) */
+    cur[10] = (int32_t)(g_dcal24_offset);      /* ch10 本次锁定的零点 (counts) */
+    cur[11] = (int32_t)(g_dcal24_zero_u_ma);   /* ch11 U 相电流零偏 (mA -> A) */
+    cur[12] = (int32_t)(g_dcal24_zero_v_ma);   /* ch12 V 相电流零偏 */
+    cur[13] = (int32_t)(g_dcal24_zero_w_ma);   /* ch13 W 相电流零偏 */
+    cur[14] = (int32_t)(g_foc_align_offset);   /* ch14 已生效的共享零点 (counts) */
+    cur[15] = (int32_t)(g_foc_fault);          /* ch15 故障标志 0/1 */
+    return 16;
 }

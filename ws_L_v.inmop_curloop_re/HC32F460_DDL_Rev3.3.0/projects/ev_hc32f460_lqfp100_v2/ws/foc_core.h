@@ -32,7 +32,7 @@ extern "C" {
 #define FOC_MODE_NONE      0u   /* FOC stopped */
 #define FOC_MODE_OPENLOOP  1u   /* comm_mode 21: open-loop V/f */
 #define FOC_MODE_CURLOOP   2u   /* comm_mode 22: encoder FOC current loop */
-#define FOC_MODE_ALIGN     3u   /* comm_mode 23: standstill electrical alignment */
+#define FOC_MODE_ALIGN     3u   /* comm_mode 20/24/25/26/27/28/29/40/41/45 共用的对齐分发路径 */
 
 /*=============================================================================
  * FOC 内部状态机（模式22 I-F 启动/RUN 使用；故障与停止时回到 IDLE）
@@ -102,7 +102,7 @@ extern volatile float    g_foc_mech_rad;         /* mechanical angle, folded [0,
 extern volatile int32_t  g_foc_mech_deg;         /* mechanical angle [0,360) (deg, mode 0 观测) */
 extern volatile int32_t  g_foc_elec_deg;         /* electrical angle [0,360*POLE_PAIRS) (deg, mode 0 观测) */
 
-/* 对齐电零点：模式23 记录，模式22 I-F 交接沿用（编码器 electrical-zero count） */
+/* 对齐电零点：模式20/24 锁定时写入（编码器 electrical-zero count） */
 extern volatile int32_t  g_foc_align_offset;
 
 /*******************************************************************************

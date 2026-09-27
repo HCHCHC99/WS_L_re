@@ -18,6 +18,7 @@
  */
 
 #include "foc_20_cal.h"
+#include "I.h"                 /* g_i_iu/iv/iw_ma（VOFA 自持布局用） */
 #include "foc_math.h"
 #include "foc_32_lockiq.h"     /* g_lockiq_align_volt_v（复用 mode 32 电压） */
 #include "tmr4_pwm.h"
@@ -143,7 +144,7 @@ void Foc_Cal_Step(const stc_i_data_t *pData)
         g_cal_evt         = CAL_EVT_LOCKED;
         g_cal_running     = 0u;
         g_foc_align_state = 0u;
-        g_foc_active      = 0u;      /* 停发波：防止 ISR 回退到 Foc_Align_Step */
+        g_foc_active      = 0u;      /* 停发波：ISR 不会再进本模式的 Step */
         Foc_Core_PwmStop();          /* EmergencyStop + duty 清零 */
         Foc_Core_SetStateMachine(FOC_STATE_IDLE);
         /* g_foc_mode 保持 ALIGN：obs 处理事件时经 CommRunner STOP 统一清理 */
@@ -167,4 +168,27 @@ void Foc_Cal_Stop(void)
         }
         CAL_DBG("stopped");
     }
+}
+
+/*===========================================================================
+ * 模式自持 VOFA：固定 14ch 布局，通道含义见 foc_20_cal.h 顶部速览卡
+ *（唯一事实源）。单位换算：传"毫单位"，SendScaled 内部 ×0.001。
+ *===========================================================================*/
+int Foc_Cal_VofaFill(int32_t *cur)
+{
+    cur[0]  = (int32_t)(g_i_iu_ma);           /* ch0 U 相电流 (mA -> A) */
+    cur[1]  = (int32_t)(g_i_iv_ma);           /* ch1 V 相电流 */
+    cur[2]  = (int32_t)(g_i_iw_ma);           /* ch2 W 相电流 */
+    cur[3]  = (int32_t)(g_foc_id_ma);         /* ch3 控制系 id 反馈 (mA -> A) */
+    cur[4]  = (int32_t)(g_foc_iq_ma);         /* ch4 控制系 iq 反馈 */
+    cur[5]  = (int32_t)(g_cal_phase);         /* ch5 阶段 0 BETA/1 ALPHA/2 DONE/3 OC */
+    cur[6]  = (int32_t)(g_cal_evt);           /* ch6 事件 1 BETA_DONE/2 LOCKED/3 OC */
+    cur[7]  = (int32_t)(g_cal_beta_hw);       /* ch7 BETA 结束计数 (counts) */
+    cur[8]  = (int32_t)(g_cal_alpha_hw);      /* ch8 ALPHA 结束计数 (counts) */
+    cur[9]  = (int32_t)(g_cal_moved);         /* ch9 BETA->ALPHA 位移 (counts, 期望 +/-102) */
+    cur[10] = (int32_t)(g_cal_offset);        /* ch10 本次锁定的零点 (counts) */
+    cur[11] = (int32_t)(g_foc_align_offset);  /* ch11 已生效的共享零点 (counts) */
+    cur[12] = (int32_t)(g_foc_elec_deg);      /* ch12 转子电角度 (deg) */
+    cur[13] = (int32_t)(g_foc_fault);         /* ch13 故障标志 0/1 */
+    return 14;
 }

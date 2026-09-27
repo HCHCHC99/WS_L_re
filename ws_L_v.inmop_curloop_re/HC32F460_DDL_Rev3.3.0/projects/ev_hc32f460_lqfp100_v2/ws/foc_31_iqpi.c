@@ -97,10 +97,10 @@ static uint8_t  s_stall_flag    = 0;
 static uint8_t  s_loop_started  = 0;   /* 闭环真正启动标志（首拍重对方向基准） */
 
 /*******************************************************************************
- * Iqpi_SetStep - 更新当前状态（状态变化时调用观察模块记录历史一条）
+ * IqPi_SetStep - 更新当前状态（状态变化时调用观察模块记录历史一条）
  *   历史缓冲本体与记录逻辑在 foc_obs.c（g_iqpi_step_hist，[0]最旧）
  ******************************************************************************/
-static void Iqpi_SetStep(iqpi_step_t s)
+static void IqPi_SetStep(iqpi_step_t s)
 {
     if (s == g_iqpi_step) {
         return;
@@ -125,7 +125,7 @@ void Foc_IqPi_Start(void)
 {
     if (!Foc_Ramp_GetOffsetRad(&s_zizeng_off_rad)) {
         FOC31_DBG("ERROR: ZIZENG offset not locked, run mode 30 first");
-        Iqpi_SetStep(FOC31_STEP_ERR_NO_OFFSET);   /* 不清历史，Watch 可查 */
+        IqPi_SetStep(FOC31_STEP_ERR_NO_OFFSET);   /* 不清历史，Watch 可查 */
         return;
     }
 
@@ -136,7 +136,7 @@ void Foc_IqPi_Start(void)
 
     /* 新的一次运行：清空历史重新记录（历史缓冲在 foc_obs.c） */
     Foc_Obs_IqpiHistClear();
-    Iqpi_SetStep(FOC31_STEP_PWM_ZERO_VECTOR);
+    IqPi_SetStep(FOC31_STEP_PWM_ZERO_VECTOR);
 
     s_enc_initialized = 0;
     s_enc_pos = 0;
@@ -216,7 +216,7 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
     if (Foc_Core_OverCurrent(pData)) {
         Foc_Core_FaultStop(1u);
         g_iqpi_running = 0;
-        Iqpi_SetStep(FOC31_STEP_FAULT_OC);   /* 停机后保持，Watch 可查 */
+        IqPi_SetStep(FOC31_STEP_FAULT_OC);   /* 停机后保持，Watch 可查 */
         return;
     }
 
@@ -246,7 +246,7 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
         g_foc_iq_ma = 0.0f;
         g_foc_vd = 0.0f;    /* 校准窗口 PI 未运行, 清掉上次运行残值 */
         g_foc_vq = 0.0f;
-        Iqpi_SetStep(FOC31_STEP_PWM_ZERO_VECTOR);
+        IqPi_SetStep(FOC31_STEP_PWM_ZERO_VECTOR);
         return;
     }
 
@@ -339,9 +339,9 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
             float vd_lim = 0.98f * g_iqpi_pid_id_cfg.output_max;
             if ((vq >= vq_lim) || (vq <= -vq_lim) ||
                 (vd >= vd_lim) || (vd <= -vd_lim)) {
-                Iqpi_SetStep(FOC31_STEP_RUNNING_VQ_SAT);
+                IqPi_SetStep(FOC31_STEP_RUNNING_VQ_SAT);
             } else {
-                Iqpi_SetStep(FOC31_STEP_CLOSED_LOOP);
+                IqPi_SetStep(FOC31_STEP_CLOSED_LOOP);
             }
         }
 
@@ -382,7 +382,7 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
                                     s_zizeng_off_rad -= FOC_MATH_2PI;
                                 }
                                 g_iqpi_flip_cnt++;
-                                Iqpi_SetStep(FOC31_STEP_DIR_FLIPPED);
+                                IqPi_SetStep(FOC31_STEP_DIR_FLIPPED);
                                 /* 翻转事件快照: main.c 检测 flag 后打印一次 */
                                 g_iqpi_evt_seq    = g_iqpi_flip_cnt;
                                 g_iqpi_evt_pos    = s_enc_pos;
@@ -396,7 +396,7 @@ void Foc_IqPi_Step(const stc_i_data_t *pData)
                     }
                 }
                 if (s_stall_flag) {
-                    Iqpi_SetStep(FOC31_STEP_RUNNING_STALL);
+                    IqPi_SetStep(FOC31_STEP_RUNNING_STALL);
                 }
             }
             /* 电流未建立(斜坡初期/参考为0): 本拍暂停累积, 已累积进度保留 */

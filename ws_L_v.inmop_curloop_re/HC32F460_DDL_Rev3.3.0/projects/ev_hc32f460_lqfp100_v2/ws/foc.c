@@ -14,7 +14,6 @@
  *          foc_core.c     共享状态/观测量、过流保护、PWM 启停、公共助手
  *          foc_openloop.c 模式21 开环 V/f
  *          foc_curloop.c  模式22 电流环（I-F 启动 + 同步交接 + RUN）
- *          foc_23_align.c    模式23 对齐校准
  *          foc_20_cal.c      模式20 编码器零点校准（BETA 2s + ALPHA 2s -> 锁 offset）
  *          foc_27_dcl.c      模式27 功角闭环拖动（磁场 = 转子 + delta，delta 爬坡）
  *          foc_28_dci.c      模式28 功角参考电流闭环（复刻27 + foc_calib 零偏窗）
@@ -162,10 +161,12 @@ void Foc_Isr(const stc_i_data_t *pData)
     }
 
     if (g_foc_mode == FOC_MODE_ALIGN) {
-        /* mode 20 校准优先（g_cal_running 托管），mode 25 次之
-         * （g_calang_running 托管），mode 26 再次（g_olf_running 托管），
-         * mode 27 再次之（g_dcl_running 托管），随后 mode 24/28/29/41
-         * 各自使用独立 running 标志，否则 mode 23 对齐。 */
+        /* 各模式按 running 标志认领本支路：mode 20/25/26/27 依次，
+         * 随后 24/28/29/40/41/45 各用独立标志。
+         * 注：原 mode 23 是这里最后的 else 兜底（Foc_Align_Step），
+         *     已于 2026-09-26 整模式删除；现在没有人认领就什么都不做 ——
+         *     这也顺手消除了"Start 先置 g_foc_mode 后置 running 标志"
+         *     那一拍误跑对齐输出的窗口。 */
         if (g_cal_running) {
             Foc_Cal_Step(pData);
         } else if (g_calang_running) {
@@ -186,9 +187,8 @@ void Foc_Isr(const stc_i_data_t *pData)
             Foc_Speed_Step(pData);
         } else if (g_smo45_running) {
             Foc_Smo45_Step(pData);
-        } else {
-            Foc_Align_Step(pData);
         }
+        /* else：无模式认领 —— 不做任何输出（原 mode 23 兜底已随该模式删除） */
         return;
     }
 
