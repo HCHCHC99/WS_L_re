@@ -2,12 +2,13 @@
 import fs from 'node:fs';
 
 const ROOT = 'D:/WS_L_re/ws_L_v.inmop_curloop_re/HC32F460_DDL_Rev3.3.0/projects/ev_hc32f460_lqfp100_v2';
-const files = [
-  'ws/foc_20_cal.c', 'ws/foc_24_dcal.c', 'ws/foc_25_calangle.c',
-  'ws/foc_20_cal.h', 'ws/foc_24_dcal.h', 'ws/foc_25_calangle.h',
-  'ws/foc_core.c', 'ws/foc_core.h', 'ws/foc.c', 'ws/foc_obs.c', 'ws/dev_comm_runner.c',
-  'ws/dev_comm_runner.h', 'ws/motor_config.h', 'template/source/main.c',
-];
+// 自动遍历，避免新加文件漏检（原来硬编码列表漏过 foc_52_ldlq.c）
+const files = [];
+for (const dir of ['ws', 'template/source']) {
+  for (const f of fs.readdirSync(`${ROOT}/${dir}`).sort()) {
+    if (/\.(c|h)$/.test(f)) files.push(`${dir}/${f}`);
+  }
+}
 let bad = 0;
 for (const f of files) {
   let s = fs.readFileSync(`${ROOT}/${f}`, 'utf8');

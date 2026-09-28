@@ -21,7 +21,7 @@ export function dispWidth(s) {
   for (const ch of s) w += isWide(ch.codePointAt(0)) ? 2 : 1;
   return w;
 }
-const AMBIGUOUS = /[\u2010-\u2027\u2030-\u205E\u2190-\u21FF\u2200-\u22FF\u2460-\u24FF\u25A0-\u27BF\u00A1-\u00FF\u2B00-\u2BFF\uFE0F\u200B-\u200F]/;
+const AMBIGUOUS = /[\u0370-\u03FF\u2010-\u2027\u2030-\u205E\u2190-\u21FF\u2200-\u22FF\u2460-\u24FF\u25A0-\u27BF\u00A1-\u00FF\u2B00-\u2BFF\uFE0F\u200B-\u200F]/;
 export function widthHazards(s) {
   const bad = [];
   for (const ch of String(s)) {

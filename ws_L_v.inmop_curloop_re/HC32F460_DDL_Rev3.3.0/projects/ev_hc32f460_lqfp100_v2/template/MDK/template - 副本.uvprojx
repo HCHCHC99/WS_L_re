@@ -1009,6 +1009,16 @@
               <FilePath>..\..\ws\foc_20_cal.c</FilePath>
             </File>
             <File>
+              <FileName>foc_51_rs.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_51_rs.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_52_ldlq.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_52_ldlq.c</FilePath>
+            </File>
+            <File>
               <FileName>foc_24_dcal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_24_dcal.c</FilePath>
@@ -2073,6 +2083,16 @@
               <FileName>foc_20_cal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_20_cal.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_51_rs.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_51_rs.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_52_ldlq.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_52_ldlq.c</FilePath>
             </File>
             <File>
               <FileName>foc_24_dcal.c</FileName>

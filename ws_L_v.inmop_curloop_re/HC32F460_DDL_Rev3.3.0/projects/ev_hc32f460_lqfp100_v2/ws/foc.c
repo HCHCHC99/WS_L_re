@@ -18,6 +18,7 @@
  *          foc_27_dcl.c      模式27 功角闭环拖动（磁场 = 转子 + delta，delta 爬坡）
  *          foc_28_dci.c      模式28 功角参考电流闭环（复刻27 + foc_calib 零偏窗）
  *          foc_30_ramp.c   模式30 ZIZENG 自增拖动
+ *          foc_51_rs.c     模式51 定子电阻辨识（静止直流注入）
  *          foc_31_iqpi.c    模式31 PI 电流环（ZIZENG 偏移 + 编码器角度）
  *          foc_32_lockiq.c 模式32 自锁偏移 + 自动交接 mode 31
  *          foc_scope.c    MotorScope RTT 遥测
@@ -187,6 +188,10 @@ void Foc_Isr(const stc_i_data_t *pData)
             Foc_Speed_Step(pData);
         } else if (g_smo45_running) {
             Foc_Smo45_Step(pData);
+        } else if (g_rs51_running) {
+            Foc_RsId_Step(pData);
+        } else if (g_ldlq52_running) {
+            Foc_LdLqId_Step(pData);
         }
         /* else：无模式认领 —— 不做任何输出（原 mode 23 兜底已随该模式删除） */
         return;

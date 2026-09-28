@@ -1,0 +1,340 @@
+{
+  "mode": 51,
+  "title": "定子电阻辨识（静止直流注入 + 多电平最小二乘）",
+  "entry": "comm_mode = 51（Watch 直接写）",
+  "pre": "无。不需要 mode 24 校准、不需要编码器零点（矢量固定在静止 alpha 轴）",
+  "end": "自动：测完关 PWM、state=DONE；不写 Flash、不改任何配置宏",
+  "files": {
+    "h": "foc_51_rs.h",
+    "c": "foc_51_rs.c"
+  },
+  "watch": [
+    {
+      "mk": "",
+      "name": "g_rs51_i_max_a",
+      "val": "3.0",
+      "unit": "A",
+      "desc": "最大注入电流（硬上限 5.0）"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_i_min_a",
+      "val": "1.0",
+      "unit": "A",
+      "desc": "最低档目标电流（档位下限）"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_vdead_prior_v",
+      "val": "0.15",
+      "unit": "V",
+      "desc": "死区电压先验：探测扣偏置 + 规划档位"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_v_hard_max_v",
+      "val": "1.5",
+      "unit": "V",
+      "desc": "单档电压硬上限"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_points",
+      "val": "6",
+      "unit": "-",
+      "desc": "档位数 3~10"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_settle_ms",
+      "val": "100",
+      "unit": "ms",
+      "desc": "每档稳定等待"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_avg_ms",
+      "val": "100",
+      "unit": "ms",
+      "desc": "每档平均窗口"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_precond_ms",
+      "val": "300",
+      "unit": "ms",
+      "desc": "预置注入时长（先稳转子）"
+    },
+    {
+      "mk": "(*)",
+      "note": "上八行为本轮可调项；全程约 1.9s（零偏 200ms + 预置 300ms + 探测 200ms + 6 档 x 200ms）。"
+    },
+    {
+      "mk": "[!]",
+      "note": "g_rs51_vdead_prior_v 很关键：用来从探测电流里扣掉死区偏置再算 R（旧版漏了这步，R 高估 2.2 倍，电流冲到 5.4A）。它同时决定每档电压规划。"
+    },
+    {
+      "mk": "[!]",
+      "note": "注入会产生力矩趋势：能用夹具夹紧转子最好；靠编码器位移（ch10 与 g_rs51_moved_cnts）判断数据是否可信。"
+    },
+    {
+      "mk": "[!]",
+      "note": "i_max 必须小于 FOC_OC_LIMIT_A(9A) 并留余量；除它之外还有两道护栏：预置档按 0.9 逐次降档、扫描档按实测电流比例下调 v_scale（触发次数看 g_rs51_scale_hits）。"
+    }
+  ],
+  "obs": [
+    {
+      "mk": "(*)",
+      "name": "g_rs51_meas_ohm",
+      "desc": "R_eff（拟合斜率）---- 主结果，ohm"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_rs51_ratio",
+      "desc": "R_eff / FOC_MOTOR_RS_OHM ---- 与商家参数直接对比"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_rs51_vdead_v",
+      "desc": "V_dead（拟合截距）= 死区等效电压 (V)"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_rs51_r2",
+      "desc": "拟合优度；>= 0.99 才算合格"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_state",
+      "desc": "0 IDLE / 1 零偏窗 / 2 预置 / 3 探测 / 4 扫描 / 5 拟合 / 6 DONE / 7 OC"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_evt",
+      "desc": "1 OC / 2 拟合OK / 3 拟合差(R2<0.99) / 4 测不到电流"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_running",
+      "desc": "1 = 本轮有效（DONE 后仍为 1，便于回看）"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_v_now_v",
+      "desc": "当前注入电压 (V)"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_i_now_a",
+      "desc": "当前电流矢量幅值 (A)"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_elapsed_ms",
+      "desc": "累计注入时间 (ms)"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_pts_done",
+      "desc": "已完成档位数（RTT 进度打印靠它）"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_rs51_v_scale",
+      "desc": "运行时电压缩放；<1 说明护栏降过档"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_rs51_scale_hits",
+      "desc": "电流护栏触发次数；>0 说明探测值偏大"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_rs51_moved_cnts",
+      "desc": "全程编码器位移；> 8 counts 判数据可疑"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_pts_v",
+      "desc": "各档电压数组（画 v-i 直线用）"
+    },
+    {
+      "mk": "",
+      "name": "g_rs51_pts_i",
+      "desc": "各档电流数组"
+    }
+  ],
+  "vofa": {
+    "n": 12,
+    "fn": "Foc_RsId_VofaFill",
+    "shared": false,
+    "rows": [
+      {
+        "mk": "",
+        "ch": "ch0",
+        "what": "状态码",
+        "unit": "-",
+        "desc": "见状态机表"
+      },
+      {
+        "mk": "",
+        "ch": "ch1",
+        "what": "注入电压",
+        "unit": "V",
+        "desc": "当前档位"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch2",
+        "what": "电流矢量幅值",
+        "unit": "A",
+        "desc": "应与注入电压同增"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch3",
+        "what": "R_eff 估计",
+        "unit": "ohm",
+        "desc": "拟合完成后为定值"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch4",
+        "what": "V_dead 估计",
+        "unit": "V",
+        "desc": "理论约 0.12V"
+      },
+      {
+        "mk": "",
+        "ch": "ch5",
+        "what": "R 平方",
+        "unit": "x1000",
+        "desc": ">=990 合格"
+      },
+      {
+        "mk": "",
+        "ch": "ch6",
+        "what": "已完成档位",
+        "unit": "-",
+        "desc": "0..points"
+      },
+      {
+        "mk": "",
+        "ch": "ch7",
+        "what": "U 相电流",
+        "unit": "A",
+        "desc": "原始反馈"
+      },
+      {
+        "mk": "",
+        "ch": "ch8",
+        "what": "V 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch9",
+        "what": "W 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "[!]",
+        "ch": "ch10",
+        "what": "编码器位移",
+        "unit": "counts",
+        "desc": "> 8 则数据可疑"
+      },
+      {
+        "mk": "",
+        "ch": "ch11",
+        "what": "累计注入时间",
+        "unit": "ms",
+        "desc": "全程约 1400"
+      }
+    ]
+  },
+  "notes": [
+    {
+      "mk": "(*)",
+      "text": "原理：转子静止 => 无 BEMF、稳态无 di/dt => |v| = R_eff x |i| + V_dead。斜率 = R_eff（环路真正看到的电阻：相阻 + 2xRdson + 采样电阻 + 走线），截距 = 死区+管压降等效电压。"
+    },
+    {
+      "mk": "(*)",
+      "text": "为什么必须多电平：死区等效电压约 Vbus x Td/Ts = 12V x 500ns / 50us = 0.12V，而 2A 时 R x i 只有 0.2~0.3V ---- 单点测量里死区占四成，必然测歪。"
+    },
+    {
+      "mk": "(*)",
+      "text": "流程：零矢量 200ms 采三相零偏（自己扣，不依赖 mode 24）-> 预置注入 0.3V/300ms 让转子与夹具先稳 -> 探测 0.3V 得 i_probe -> R_guess = (0.3 - Vdead先验)/i_probe -> 按目标电流 1A..i_max 分 6 档，电压 = i x R_guess + Vdead先验 -> 逐档 100ms 稳定 + 100ms 平均 -> 最小二乘。"
+    },
+    {
+      "mk": "[!]",
+      "text": "本模式只输出观测量：不写 Flash、不改 motor_config.h。用途是与商家参数对比、验证辨识思路本身。"
+    },
+    {
+      "mk": "[!]",
+      "text": "R2 < 0.99 或 moved_cnts > 8 时结果不可信：前者多为电流零偏漂了（重跑一次零偏窗）、后者是转子被推动（夹紧后重测）。"
+    },
+    {
+      "mk": "[!]",
+      "text": "本模式测到的是 R_eff（含桥臂压降），不是电机本体的 Rs。要分离本体 Rs 需用示波器差分测电机端子线电压（Rs = V_line/(2i)），见 md_record/电机参数辨识方案_Rs_磁链_LdLq.md。"
+    },
+    {
+      "mk": "(*)",
+      "text": "RTT 输出（开关 FOC_RS51_DBG，定义在 foc_51_rs.h；打印点在 foc_obs 事件段，ISR 内不打印，符合 RTT 打印规范）：进入时打一行配置；每完成一档打 pt+v/i；护栏触发时打 current clamp；结束时打 R(mohm)/Vdead(mV)/R2(x10000)/ratio(x1000)/位移/耗时/clamp 次数/v_scale + 全部原始点，并对 R2<0.99 或位移>8 各追一行 warn。"
+    },
+    {
+      "mk": "[!]",
+      "text": "2026-09-27 三处实测教训（都已修）：1. 探测算 R 时忘了扣死区偏置，0.3V/1.345A 得 0.222ohm 而真值约 0.1ohm，导致档位电压算高一倍、电流冲到 5.4A（超 i_max 3A）；2. 档位原先按电压等分，最低档 0.166V 里 87% 被死区吃掉、只剩 21mV 有效驱动，是个既无信息又对截距有最大杠杆的病态点（两次实测 R2 都卡在 0.9896、残差逐点相同）；改成按目标电流规划后 R2 升到 0.9983、残差从 +/-32mV 降到 +/-4mV；3. 电流护栏若比瞬时值会被开关纹波误触发（实测误触发 7 次，把后两档电压砍掉 8~13%），改用 EMA 滤波值（FOC51_GUARD_EMA，tau 约 1ms）后纹波衰减百倍、持续过流仍能判出。"
+    },
+    {
+      "mk": "(*)",
+      "text": "三轮实测（同一台电机、同一套硬件）：R_eff = 99.7 / 98.4 / 97.9 mohm，V_dead = 144.5 / 144.7 / 160.2 mV，R2 = 0.9896 / 0.9896 / 0.9983，moved = 10 / 8 / 2 counts。第三轮（现行算法）的 V_dead 与理论值 (4/3)x(Td/Ts)xVbus = 160.0 mV 吻合到 0.2%，反推死区 501ns（配置 500ns）；R_eff/手册 = 0.98，即商家 0.1ohm 得到验证。"
+    }
+  ],
+  "evidence": {
+    "g_rs51_i_max_a": "foc_51_rs.c:40",
+    "g_rs51_i_min_a": "foc_51_rs.c:41",
+    "g_rs51_vdead_prior_v": "foc_51_rs.c:42",
+    "g_rs51_v_hard_max_v": "foc_51_rs.c:43",
+    "g_rs51_points": "foc_51_rs.c:44",
+    "g_rs51_settle_ms": "foc_51_rs.c:45",
+    "g_rs51_avg_ms": "foc_51_rs.c:46",
+    "g_rs51_precond_ms": "foc_51_rs.c:47",
+    "g_rs51_pts_done": "foc_51_rs.c:64",
+    "g_rs51_v_scale": "foc_51_rs.c:65",
+    "g_rs51_scale_hits": "foc_51_rs.c:66",
+    "FOC51_OC_SCALE": "foc_51_rs.h:161",
+    "FOC51_GUARD_EMA": "foc_51_rs.h:162",
+    "FOC51_STEP_PRECOND": "foc_51_rs.h:169",
+    "RS51_DBG": "foc_51_rs.h:148",
+    "g_rs51_running": "foc_51_rs.c:52",
+    "g_rs51_state": "foc_51_rs.c:53",
+    "g_rs51_evt": "foc_51_rs.c:54",
+    "g_rs51_meas_ohm": "foc_51_rs.c:56",
+    "g_rs51_vdead_v": "foc_51_rs.c:57",
+    "g_rs51_r2": "foc_51_rs.c:58",
+    "g_rs51_ratio": "foc_51_rs.c:59",
+    "g_rs51_v_now_v": "foc_51_rs.c:60",
+    "g_rs51_i_now_a": "foc_51_rs.c:61",
+    "g_rs51_moved_cnts": "foc_51_rs.c:62",
+    "g_rs51_elapsed_ms": "foc_51_rs.c:63",
+    "g_rs51_pts_v": "foc_51_rs.c:68",
+    "g_rs51_pts_i": "foc_51_rs.c:69",
+    "Foc_RsId_Start": "foc_51_rs.c:186",
+    "Foc_RsId_Step": "foc_51_rs.c:276",
+    "Foc_RsId_Stop": "foc_51_rs.c:259",
+    "Foc_RsId_VofaFill": "foc_51_rs.c:469",
+    "FOC_MOTOR_RS_OHM": "motor_config.h:73",
+    "Foc_Svpwm": "foc_math.c:151",
+    "Foc_Core_OverCurrent": "foc_core.c:208",
+    "Foc_Core_PwmStart": "foc_core.c:260",
+    "Foc_Core_FaultStop": "foc_core.c:244",
+    "g_foc_cur_sign": "foc_core.c:32",
+    "Foc_Clarke": "foc_math.c:95",
+    "g_i_iu_ma": "I.h:214",
+    "TMRA_GetCountValue": "hc32_ll_tmra.h:514",
+    "TMR4_PWM_SetDuty3Phase": "tmr4_pwm.h:107"
+  }
+}

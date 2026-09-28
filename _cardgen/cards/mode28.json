@@ -4,113 +4,407 @@
   "entry": "comm_mode = 28",
   "pre": "无（自带零偏窗 + BETA 2s + ALPHA 2s）",
   "end": "持续运行；仅过流自动回 mode 0",
-  "files": { "h": "foc_28_dci.h", "c": "foc_28_dci.c" },
+  "files": {
+    "h": "foc_28_dci.h",
+    "c": "foc_28_dci.c"
+  },
   "watch": [
-    { "mk": "", "name": "g_dci_i_ref_ma", "val": "500", "unit": "mA", "desc": "电流矢量幅值参考=力矩旋钮" },
-    { "mk": "", "name": "g_dci_i_ramp_ma_s", "val": "0", "unit": "mA/s", "desc": "软启动斜率；<=0 直通阶跃" },
-    { "mk": "", "name": "g_dci_dlt_init_deg", "val": "90", "unit": "deg", "desc": "爬坡起点（Start 不复位）" },
-    { "mk": "", "name": "g_dci_dlt_targ_deg", "val": "90", "unit": "deg", "desc": "爬坡终点（90 = id_ref 0）" },
-    { "mk": "", "name": "g_dci_dlt_tr_ms", "val": "0", "unit": "ms", "desc": "过渡时间；0 = 立即到位" },
-    { "mk": "(*)", "note": "上三行默认 90/90/0 = 阶跃激励：进 RUN 第一拍 iq_ref 即满值，P 强弱一眼可见。" },
-    { "mk": "", "name": "g_dci_volt_v", "val": "0.6", "unit": "V", "desc": "校准吸附电压（Start 复位）" },
-    { "mk": "", "name": "g_dci_pid_id_cfg.kp", "val": "0.5", "unit": "V/A", "desc": "d 轴 P（调参主旋钮）" },
-    { "mk": "", "name": "g_dci_pid_iq_cfg.kp", "val": "0.5", "unit": "V/A", "desc": "q 轴 P；两轴必须同步改" },
-    { "mk": "(*)", "note": "kp 扫参 0.5 -> 1.0 -> 2.0：判据 = 快速接近目标且不超过（不振铃）。" },
-    { "mk": "", "name": "g_dci_pid_id_cfg.ki", "val": "0", "unit": "V/A/s", "desc": "d 轴 I；P 合格后置 300" },
-    { "mk": "", "name": "g_dci_pid_iq_cfg.ki", "val": "0", "unit": "V/A/s", "desc": "q 轴 I；P 合格后置 300" },
-    { "mk": "", "name": "g_dci_pid_id_cfg.i_valid", "val": "0", "unit": "-", "desc": "0=纯 P；1=开 I（配 ki）" },
-    { "mk": "", "name": "g_dci_pid_iq_cfg.i_valid", "val": "0", "unit": "-", "desc": "同上；两轴一起改" },
-    { "mk": "[!]", "note": "kp 过小实测（0.05）电机纹丝不动：P 环输出 kp x 误差 克服不了铜阻压降；P-only 门槛约 (3~7) x R = 0.5~1 V/A。" }
+    {
+      "mk": "",
+      "name": "g_dci_i_ref_ma",
+      "val": "500",
+      "unit": "mA",
+      "desc": "电流矢量幅值参考=力矩旋钮"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_i_ramp_ma_s",
+      "val": "0",
+      "unit": "mA/s",
+      "desc": "软启动斜率；<=0 直通阶跃"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_dlt_init_deg",
+      "val": "90",
+      "unit": "deg",
+      "desc": "爬坡起点（Start 不复位）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_dlt_targ_deg",
+      "val": "90",
+      "unit": "deg",
+      "desc": "爬坡终点（90 = id_ref 0）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_dlt_tr_ms",
+      "val": "0",
+      "unit": "ms",
+      "desc": "过渡时间；0 = 立即到位"
+    },
+    {
+      "mk": "(*)",
+      "note": "上三行默认 90/90/0 = 阶跃激励：进 RUN 第一拍 iq_ref 即满值，P 强弱一眼可见。"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_volt_v",
+      "val": "0.6",
+      "unit": "V",
+      "desc": "校准吸附电压（Start 复位）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_pid_id_cfg.kp",
+      "val": "0.5",
+      "unit": "V/A",
+      "desc": "d 轴 P（调参主旋钮）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_pid_iq_cfg.kp",
+      "val": "0.5",
+      "unit": "V/A",
+      "desc": "q 轴 P；两轴必须同步改"
+    },
+    {
+      "mk": "(*)",
+      "note": "kp 扫参 0.5 -> 1.0 -> 2.0：判据 = 快速接近目标且不超过（不振铃）。"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_pid_id_cfg.ki",
+      "val": "0",
+      "unit": "V/A/s",
+      "desc": "d 轴 I；P 合格后置 300"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_pid_iq_cfg.ki",
+      "val": "0",
+      "unit": "V/A/s",
+      "desc": "q 轴 I；P 合格后置 300"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_pid_id_cfg.i_valid",
+      "val": "0",
+      "unit": "-",
+      "desc": "0=纯 P；1=开 I（配 ki）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_pid_iq_cfg.i_valid",
+      "val": "0",
+      "unit": "-",
+      "desc": "同上；两轴一起改"
+    },
+    {
+      "mk": "[!]",
+      "note": "kp 过小实测（0.05）电机纹丝不动：P 环输出 kp x 误差 克服不了铜阻压降；P-only 门槛约 (3~7) x R = 0.5~1 V/A。"
+    }
   ],
   "obs": [
-    { "mk": "(*)", "name": "g_dci_eq_mean_ma", "desc": "q 误差均值 = P-only 稳态落差（ch11）" },
-    { "mk": "(*)", "name": "g_dci_eq_pp_ma", "desc": "q 误差峰峰值；增大 = 振铃（ch15）" },
-    { "mk": "", "name": "g_dci_ed_mean_ma", "desc": "d 轴误差均值（同上 5s 窗口）" },
-    { "mk": "", "name": "g_dci_ed_pp_ma", "desc": "d 轴误差峰峰值" },
-    { "mk": "", "name": "g_dci_iq_ma", "desc": "q 轴反馈（零偏校正后 = 环反馈）" },
-    { "mk": "", "name": "g_dci_id_ma", "desc": "d 轴反馈（零偏校正后）" },
-    { "mk": "", "name": "g_dci_iq_ref_ma", "desc": "q 轴参考实时值（= I_ref x sin delta）" },
-    { "mk": "", "name": "g_dci_id_ref_ma", "desc": "d 轴参考实时值（不恒为 0）" },
-    { "mk": "", "name": "g_dci_iq_mean_ma", "desc": "iq 3s 均值（慢速水平线）" },
-    { "mk": "", "name": "g_dci_id_mean_ma", "desc": "id 3s 均值" },
-    { "mk": "[!]", "name": "g_dci_vsat", "desc": "=1 时输出顶到 UMAX 3.5V，调参数据作废" },
-    { "mk": "", "name": "g_dci_dlt_now_deg", "desc": "当前 delta 指令（爬坡中实时）" },
-    { "mk": "", "name": "g_dci_diff_deg", "desc": "参考功角 = 磁场角 - 转子角，恒等于 delta 指令" },
-    { "mk": "[!]", "note": "ch4/ch5 两条曲线基本重合：磁场角 = 转子角 + delta 是算出来的，不是独立测量，别拿 ch5 当跟踪误差。" },
-    { "mk": "", "name": "g_dci_speed_hz", "desc": "实测电频率（200ms 窗，带符号）" },
-    { "mk": "", "name": "g_dci_field_deg", "desc": "参考磁场电角 (deg)，= 转子角 + delta" },
-    { "mk": "", "name": "g_dci_rotor_deg", "desc": "转子电角 (deg，已扣零点)" },
-    { "mk": "", "name": "g_dci_state", "desc": "0 空闲 1 零偏 2 BETA 3 ALPHA 4 RUN 5 过流" },
-    { "mk": "", "name": "g_dci_evt", "desc": "1 零偏完 2 BETA 3 锁定 4 爬坡完 5 过流" },
-    { "mk": "", "name": "g_dci_offset", "desc": "校准锁零点（编码器绝对帧 counts）" },
-    { "mk": "", "name": "g_dci_enc_pos", "desc": "编码器相对计数镜像（毛刺排查）" },
-    { "mk": "", "name": "g_dci_running", "desc": "运行标志（1 = 已起转）" },
-    { "mk": "", "note": "三相零偏 g_calib_iu_off_ma / g_calib_iv_off_ma / g_calib_iw_off_ma 由零偏窗锁定，[DCI] 事件一并打印。" }
+    {
+      "mk": "(*)",
+      "name": "g_dci_eq_mean_ma",
+      "desc": "q 误差均值 = P-only 稳态落差（ch11）"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_dci_eq_pp_ma",
+      "desc": "q 误差峰峰值；增大 = 振铃（ch15）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_ed_mean_ma",
+      "desc": "d 轴误差均值（同上 5s 窗口）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_ed_pp_ma",
+      "desc": "d 轴误差峰峰值"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_iq_ma",
+      "desc": "q 轴反馈（零偏校正后 = 环反馈）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_id_ma",
+      "desc": "d 轴反馈（零偏校正后）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_iq_ref_ma",
+      "desc": "q 轴参考实时值（= I_ref x sin delta）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_id_ref_ma",
+      "desc": "d 轴参考实时值（不恒为 0）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_iq_mean_ma",
+      "desc": "iq 3s 均值（慢速水平线）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_id_mean_ma",
+      "desc": "id 3s 均值"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_dci_vsat",
+      "desc": "=1 时输出顶到 UMAX 3.5V，调参数据作废"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_dlt_now_deg",
+      "desc": "当前 delta 指令（爬坡中实时）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_diff_deg",
+      "desc": "参考功角 = 磁场角 - 转子角，恒等于 delta 指令"
+    },
+    {
+      "mk": "[!]",
+      "note": "ch4/ch5 两条曲线基本重合：磁场角 = 转子角 + delta 是算出来的，不是独立测量，别拿 ch5 当跟踪误差。"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_speed_hz",
+      "desc": "实测电频率（200ms 窗，带符号）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_field_deg",
+      "desc": "参考磁场电角 (deg)，= 转子角 + delta"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_rotor_deg",
+      "desc": "转子电角 (deg，已扣零点)"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_state",
+      "desc": "0 空闲 1 零偏 2 BETA 3 ALPHA 4 RUN 5 过流"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_evt",
+      "desc": "1 零偏完 2 BETA 3 锁定 4 爬坡完 5 过流"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_offset",
+      "desc": "校准锁零点（编码器绝对帧 counts）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_enc_pos",
+      "desc": "编码器相对计数镜像（毛刺排查）"
+    },
+    {
+      "mk": "",
+      "name": "g_dci_running",
+      "desc": "运行标志（1 = 已起转）"
+    },
+    {
+      "mk": "",
+      "note": "三相零偏 g_calib_iu_off_ma / g_calib_iv_off_ma / g_calib_iw_off_ma 由零偏窗锁定，[DCI] 事件一并打印。"
+    }
   ],
   "vofa": {
     "n": 17,
     "fn": "Foc_Dci_VofaFill",
     "shared": false,
     "rows": [
-      { "mk": "", "ch": "ch0", "what": "U 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch1", "what": "V 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch2", "what": "W 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch3", "what": "实测电频率", "unit": "Hz", "desc": "" },
-      { "mk": "", "ch": "ch4", "what": "delta 指令", "unit": "deg", "desc": "爬坡中实时" },
-      { "mk": "", "ch": "ch5", "what": "参考功角", "unit": "deg", "desc": "恒等于 ch4（非独立测量）" },
-      { "mk": "", "ch": "ch6", "what": "iq 反馈", "unit": "A", "desc": "环反馈" },
-      { "mk": "", "ch": "ch7", "what": "id 反馈", "unit": "A", "desc": "环反馈" },
-      { "mk": "", "ch": "ch8", "what": "iq 参考", "unit": "A", "desc": "= I_ref x sin delta" },
-      { "mk": "", "ch": "ch9", "what": "id 参考", "unit": "A", "desc": "不恒为 0（= I_ref x cos delta）" },
-      { "mk": "", "ch": "ch10", "what": "电流矢量幅值参考", "unit": "A", "desc": "= g_dci_i_ref_ma" },
-      { "mk": "(*)", "ch": "ch11", "what": "q 误差均值", "unit": "A", "desc": "P 调参主判据（5s 窗口）" },
-      { "mk": "", "ch": "ch12", "what": "d 误差均值", "unit": "A", "desc": "5s 窗口刷新" },
-      { "mk": "", "ch": "ch13", "what": "iq 3s 均值", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch14", "what": "id 3s 均值", "unit": "A", "desc": "" },
-      { "mk": "(*)", "ch": "ch15", "what": "q 误差峰峰值", "unit": "A", "desc": "增大 = 振铃，数据作废" },
-      { "mk": "", "ch": "ch16", "what": "状态", "unit": "-", "desc": "0 空闲 1 零偏 2 BETA 3 ALPHA 4 RUN 5 OC" }
+      {
+        "mk": "",
+        "ch": "ch0",
+        "what": "U 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch1",
+        "what": "V 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch2",
+        "what": "W 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch3",
+        "what": "实测电频率",
+        "unit": "Hz",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch4",
+        "what": "delta 指令",
+        "unit": "deg",
+        "desc": "爬坡中实时"
+      },
+      {
+        "mk": "",
+        "ch": "ch5",
+        "what": "参考功角",
+        "unit": "deg",
+        "desc": "恒等于 ch4（非独立测量）"
+      },
+      {
+        "mk": "",
+        "ch": "ch6",
+        "what": "iq 反馈",
+        "unit": "A",
+        "desc": "环反馈"
+      },
+      {
+        "mk": "",
+        "ch": "ch7",
+        "what": "id 反馈",
+        "unit": "A",
+        "desc": "环反馈"
+      },
+      {
+        "mk": "",
+        "ch": "ch8",
+        "what": "iq 参考",
+        "unit": "A",
+        "desc": "= I_ref x sin delta"
+      },
+      {
+        "mk": "",
+        "ch": "ch9",
+        "what": "id 参考",
+        "unit": "A",
+        "desc": "不恒为 0（= I_ref x cos delta）"
+      },
+      {
+        "mk": "",
+        "ch": "ch10",
+        "what": "电流矢量幅值参考",
+        "unit": "A",
+        "desc": "= g_dci_i_ref_ma"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch11",
+        "what": "q 误差均值",
+        "unit": "A",
+        "desc": "P 调参主判据（5s 窗口）"
+      },
+      {
+        "mk": "",
+        "ch": "ch12",
+        "what": "d 误差均值",
+        "unit": "A",
+        "desc": "5s 窗口刷新"
+      },
+      {
+        "mk": "",
+        "ch": "ch13",
+        "what": "iq 3s 均值",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch14",
+        "what": "id 3s 均值",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch15",
+        "what": "q 误差峰峰值",
+        "unit": "A",
+        "desc": "增大 = 振铃，数据作废"
+      },
+      {
+        "mk": "",
+        "ch": "ch16",
+        "what": "状态",
+        "unit": "-",
+        "desc": "0 空闲 1 零偏 2 BETA 3 ALPHA 4 RUN 5 OC"
+      }
     ]
   },
   "notes": [
-    { "mk": "(*)", "text": "主判据：kp 扫 0.5 -> 1.0 -> 2.0，看 ch11（q 误差均值）快速收敛且 ch15（误差峰峰值）不发散 = 合格。" },
-    { "mk": "[!]", "text": "P-only 稳态落差 = R x i_ref/(kp+R) 是理论必然（kp=0.5 只到约 77%），不是故障；置 i_valid=1 且 ki=300 后 eq_mean -> 0。" },
-    { "mk": "[!]", "text": "ch9（id 参考）不恒为 0：id_ref = I_ref x cos delta，只有 delta=90 deg 才是经典 id=0 FOC，别误判。" },
-    { "mk": "[!]", "text": "g_dci_vsat=1（|vd/vq| 顶到 UMAX 3.5V）时调参数据作废；VOFA+ 通道数必须同步改成 17。" },
-    { "mk": "(*)", "text": "已验收：delta=90 deg 时 idMean=69mA，约等于理论交叉耦合 omega x Ls x iq/R，零偏清除生效。" },
-    { "mk": "[!]", "text": "本模式是一体化：校准 BETA/ALPHA 期间转子会动，捏转子的时机难掌握；拆分后推荐 mode 24 校准 -> mode 29 跑电流环。" }
+    {
+      "mk": "(*)",
+      "text": "主判据：kp 扫 0.5 -> 1.0 -> 2.0，看 ch11（q 误差均值）快速收敛且 ch15（误差峰峰值）不发散 = 合格。"
+    },
+    {
+      "mk": "[!]",
+      "text": "P-only 稳态落差 = R x i_ref/(kp+R) 是理论必然（kp=0.5 只到约 77%），不是故障；置 i_valid=1 且 ki=300 后 eq_mean -> 0。"
+    },
+    {
+      "mk": "[!]",
+      "text": "ch9（id 参考）不恒为 0：id_ref = I_ref x cos delta，只有 delta=90 deg 才是经典 id=0 FOC，别误判。"
+    },
+    {
+      "mk": "[!]",
+      "text": "g_dci_vsat=1（|vd/vq| 顶到 UMAX 3.5V）时调参数据作废；VOFA+ 通道数必须同步改成 17。"
+    },
+    {
+      "mk": "(*)",
+      "text": "已验收：delta=90 deg 时 idMean=69mA，约等于理论交叉耦合 omega x Ls x iq/R，零偏清除生效。"
+    },
+    {
+      "mk": "[!]",
+      "text": "本模式是一体化：校准 BETA/ALPHA 期间转子会动，捏转子的时机难掌握；拆分后推荐 mode 24 校准 -> mode 29 跑电流环。"
+    }
   ],
   "evidence": {
-    "g_dci_running": "foc_28_dci.h:215",
-    "g_dci_state": "foc_28_dci.h:216",
-    "g_dci_evt": "foc_28_dci.h:217",
-    "g_dci_offset": "foc_28_dci.h:218",
-    "g_dci_dlt_now_deg": "foc_28_dci.h:219",
-    "g_dci_speed_hz": "foc_28_dci.h:220",
-    "g_dci_field_deg": "foc_28_dci.h:221",
-    "g_dci_rotor_deg": "foc_28_dci.h:222",
-    "g_dci_diff_deg": "foc_28_dci.h:223",
-    "g_dci_id_ma": "foc_28_dci.h:224",
-    "g_dci_iq_ma": "foc_28_dci.h:225",
-    "g_dci_id_pp_ma": "foc_28_dci.h:226",
-    "g_dci_iq_pp_ma": "foc_28_dci.h:227",
-    "g_dci_id_mean_ma": "foc_28_dci.h:228",
-    "g_dci_iq_mean_ma": "foc_28_dci.h:229",
-    "g_dci_i_ref_ma": "foc_28_dci.h:230",
-    "g_dci_id_ref_ma": "foc_28_dci.h:231",
-    "g_dci_iq_ref_ma": "foc_28_dci.h:232",
-    "g_dci_i_ramp_ma_s": "foc_28_dci.h:233",
-    "g_dci_vsat": "foc_28_dci.h:234",
-    "g_dci_ed_mean_ma": "foc_28_dci.h:235",
-    "g_dci_eq_mean_ma": "foc_28_dci.h:236",
-    "g_dci_ed_pp_ma": "foc_28_dci.h:237",
-    "g_dci_eq_pp_ma": "foc_28_dci.h:238",
-    "g_dci_pid_id_cfg": "foc_28_dci.h:239",
-    "g_dci_pid_iq_cfg": "foc_28_dci.h:240",
-    "g_dci_enc_pos": "foc_28_dci.h:241",
-    "g_dci_dlt_init_deg": "foc_28_dci.h:211",
-    "g_dci_dlt_targ_deg": "foc_28_dci.h:212",
-    "g_dci_dlt_tr_ms": "foc_28_dci.h:213",
-    "g_dci_volt_v": "foc_28_dci.h:214",
+    "g_dci_running": "foc_28_dci.h:262",
+    "g_dci_state": "foc_28_dci.h:263",
+    "g_dci_evt": "foc_28_dci.h:264",
+    "g_dci_offset": "foc_28_dci.h:265",
+    "g_dci_dlt_now_deg": "foc_28_dci.h:266",
+    "g_dci_speed_hz": "foc_28_dci.h:267",
+    "g_dci_field_deg": "foc_28_dci.h:268",
+    "g_dci_rotor_deg": "foc_28_dci.h:269",
+    "g_dci_diff_deg": "foc_28_dci.h:270",
+    "g_dci_id_ma": "foc_28_dci.h:271",
+    "g_dci_iq_ma": "foc_28_dci.h:272",
+    "g_dci_id_pp_ma": "foc_28_dci.h:273",
+    "g_dci_iq_pp_ma": "foc_28_dci.h:274",
+    "g_dci_id_mean_ma": "foc_28_dci.h:275",
+    "g_dci_iq_mean_ma": "foc_28_dci.h:276",
+    "g_dci_i_ref_ma": "foc_28_dci.h:277",
+    "g_dci_id_ref_ma": "foc_28_dci.h:278",
+    "g_dci_iq_ref_ma": "foc_28_dci.h:279",
+    "g_dci_i_ramp_ma_s": "foc_28_dci.h:280",
+    "g_dci_vsat": "foc_28_dci.h:281",
+    "g_dci_ed_mean_ma": "foc_28_dci.h:282",
+    "g_dci_eq_mean_ma": "foc_28_dci.h:283",
+    "g_dci_ed_pp_ma": "foc_28_dci.h:284",
+    "g_dci_eq_pp_ma": "foc_28_dci.h:285",
+    "g_dci_pid_id_cfg": "foc_28_dci.h:286",
+    "g_dci_pid_iq_cfg": "foc_28_dci.h:287",
+    "g_dci_enc_pos": "foc_28_dci.h:288",
+    "g_dci_dlt_init_deg": "foc_28_dci.h:258",
+    "g_dci_dlt_targ_deg": "foc_28_dci.h:259",
+    "g_dci_dlt_tr_ms": "foc_28_dci.h:260",
+    "g_dci_volt_v": "foc_28_dci.h:261",
     "g_calib_iu_off_ma": "foc_calib.h:49",
     "g_calib_iv_off_ma": "foc_calib.h:50",
     "g_calib_iw_off_ma": "foc_calib.h:51",

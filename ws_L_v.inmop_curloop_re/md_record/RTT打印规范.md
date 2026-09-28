@@ -54,6 +54,8 @@
 | foc_obs.h | `FOC_OBS_DBG` | `OBS_DBG` |
 | foc_zizeng.h | `FOC_ZIZENG_DBG` | — |
 | hall_sensor_3ch.h | `HALL_SENSOR3_DBG` | — |
+| foc_51_rs.h | `FOC_RS51_DBG` | `RS51_DBG`（[RS51] 前缀，打印在 foc_obs 事件段，ISR 内不打印） |
+| foc_52_ldlq.h | `FOC_LDLQ52_DBG` | `LDLQ52_DBG`（[LDLQ52] 前缀，打印在 foc_obs 事件段，ISR 内不打印） |
 | main.c（无独立 .h，定义在文件顶部） | `DEBUG_MAIN` | `MAIN_DBG` |
 
 新增模块时按第 1 节模板添加，并同步更新本表。

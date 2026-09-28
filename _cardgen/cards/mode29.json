@@ -4,127 +4,445 @@
   "entry": "comm_mode = 29",
   "pre": "必须先跑 mode 24 校准；无校准 Start 直接拒绝启动",
   "end": "持续运行；仅过流自动回 mode 0",
-  "files": { "h": "foc_29_drun.h", "c": "foc_29_drun.c" },
+  "files": {
+    "h": "foc_29_drun.h",
+    "c": "foc_29_drun.c"
+  },
   "watch": [
-    { "mk": "", "name": "g_drun29_i_ref_ma", "val": "500", "unit": "mA", "desc": "电流矢量幅值参考=力矩旋钮" },
-    { "mk": "", "name": "g_drun29_i_ramp_ma_s", "val": "0", "unit": "mA/s", "desc": "软启动斜率；<=0 直通阶跃" },
-    { "mk": "", "name": "g_drun29_dlt_init_deg", "val": "90", "unit": "deg", "desc": "爬坡起点（Start 不复位）" },
-    { "mk": "", "name": "g_drun29_dlt_targ_deg", "val": "90", "unit": "deg", "desc": "爬坡终点（90 = id_ref 0）" },
-    { "mk": "", "name": "g_drun29_dlt_tr_ms", "val": "0", "unit": "ms", "desc": "过渡时间；0 = 立即到位" },
-    { "mk": "(*)", "note": "上三行默认 90/90/0 = 阶跃激励（当前已配好）：进 RUN 第一拍 iq_ref 即满值。" },
-    { "mk": "", "name": "g_drun29_iq_filt_alpha", "val": "0.10", "unit": "-", "desc": "ch16 显示滤波；PI 不用它" },
-    { "mk": "", "name": "g_drun29_step_frac_pct", "val": "75", "unit": "%", "desc": "阶跃判据百分比（Start 复位）" },
-    { "mk": "", "name": "g_drun29_pid_iq_cfg.kp", "val": "0.5", "unit": "V/A", "desc": "q 轴 P（调参主旋钮）" },
-    { "mk": "", "name": "g_drun29_pid_id_cfg.kp", "val": "0.5", "unit": "V/A", "desc": "d 轴 P；两轴必须同步改" },
-    { "mk": "(*)", "note": "捏死转子（BEMF=0 纯 R+L 对象）下调 P：快速爬到平台且平台上方不振铃，kp 扫 0.5 -> 1.0 -> 2.0。" },
-    { "mk": "", "name": "g_drun29_pid_iq_cfg.ki", "val": "300", "unit": "V/A/s", "desc": "q 轴 I（约 kp x R/L）" },
-    { "mk": "", "name": "g_drun29_pid_id_cfg.ki", "val": "300", "unit": "V/A/s", "desc": "d 轴 I；两轴一起改" },
-    { "mk": "", "name": "g_drun29_pid_iq_cfg.i_valid", "val": "1", "unit": "-", "desc": "1=开 I；置 0 = 纯 P 重调" },
-    { "mk": "", "name": "g_drun29_pid_id_cfg.i_valid", "val": "1", "unit": "-", "desc": "同上；两轴一起改" },
-    { "mk": "[!]", "note": "kp 过小实测（0.05）电机纹丝不动：P 环输出 kp x 误差 克服不了铜阻压降；P-only 门槛约 (3~7) x R = 0.5~1 V/A。" }
+    {
+      "mk": "",
+      "name": "g_drun29_i_ref_ma",
+      "val": "500",
+      "unit": "mA",
+      "desc": "电流矢量幅值参考=力矩旋钮"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_i_ramp_ma_s",
+      "val": "0",
+      "unit": "mA/s",
+      "desc": "软启动斜率；<=0 直通阶跃"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_dlt_init_deg",
+      "val": "90",
+      "unit": "deg",
+      "desc": "爬坡起点（Start 不复位）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_dlt_targ_deg",
+      "val": "90",
+      "unit": "deg",
+      "desc": "爬坡终点（90 = id_ref 0）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_dlt_tr_ms",
+      "val": "0",
+      "unit": "ms",
+      "desc": "过渡时间；0 = 立即到位"
+    },
+    {
+      "mk": "(*)",
+      "note": "上三行默认 90/90/0 = 阶跃激励（当前已配好）：进 RUN 第一拍 iq_ref 即满值。"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_iq_filt_alpha",
+      "val": "0.10",
+      "unit": "-",
+      "desc": "ch16 显示滤波；PI 不用它"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_step_frac_pct",
+      "val": "75",
+      "unit": "%",
+      "desc": "阶跃判据百分比（Start 复位）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_pid_iq_cfg.kp",
+      "val": "0.5",
+      "unit": "V/A",
+      "desc": "q 轴 P（调参主旋钮）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_pid_id_cfg.kp",
+      "val": "0.5",
+      "unit": "V/A",
+      "desc": "d 轴 P；两轴必须同步改"
+    },
+    {
+      "mk": "(*)",
+      "note": "捏死转子（BEMF=0 纯 R+L 对象）下调 P：快速爬到平台且平台上方不振铃，kp 扫 0.5 -> 1.0 -> 2.0。"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_pid_iq_cfg.ki",
+      "val": "300",
+      "unit": "V/A/s",
+      "desc": "q 轴 I（约 kp x R/L）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_pid_id_cfg.ki",
+      "val": "300",
+      "unit": "V/A/s",
+      "desc": "d 轴 I；两轴一起改"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_pid_iq_cfg.i_valid",
+      "val": "1",
+      "unit": "-",
+      "desc": "1=开 I；置 0 = 纯 P 重调"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_pid_id_cfg.i_valid",
+      "val": "1",
+      "unit": "-",
+      "desc": "同上；两轴一起改"
+    },
+    {
+      "mk": "[!]",
+      "note": "kp 过小实测（0.05）电机纹丝不动：P 环输出 kp x 误差 克服不了铜阻压降；P-only 门槛约 (3~7) x R = 0.5~1 V/A。"
+    }
   ],
   "obs": [
-    { "mk": "(*)", "name": "g_drun29_eq_mean_ma", "desc": "q 误差均值 = 稳态落差（ch11，5s 窗口）" },
-    { "mk": "(*)", "name": "g_drun29_iq_pp_ma", "desc": "iq 反馈 5s 峰峰值（ch15）；振铃判据" },
-    { "mk": "", "name": "g_drun29_eq_pp_ma", "desc": "q 误差峰峰值（5s 窗口，不在 VOFA 里）" },
-    { "mk": "(*)", "name": "g_drun29_iq_step_t90_us", "desc": "阶跃到 90% 的耗时 (us)；超时 = 0xFFFFFFFF" },
-    { "mk": "", "name": "g_drun29_iq_step_state", "desc": "阶跃测量状态 0 IDLE 1 WAIT 2 DONE 3 TIMEOUT" },
-    { "mk": "", "name": "g_drun29_iq_step_target_ma", "desc": "阶跃测量锁定的目标参考 (mA)" },
-    { "mk": "", "name": "g_drun29_ed_mean_ma", "desc": "d 轴误差均值（5s 窗口）" },
-    { "mk": "", "name": "g_drun29_ed_pp_ma", "desc": "d 轴误差峰峰值" },
-    { "mk": "", "name": "g_drun29_iq_ma", "desc": "q 轴反馈（零偏校正后 = 环反馈）" },
-    { "mk": "", "name": "g_drun29_id_ma", "desc": "d 轴反馈（零偏校正后）" },
-    { "mk": "", "name": "g_drun29_iq_ref_ma", "desc": "q 轴参考实时值（= I_ref x sin delta）" },
-    { "mk": "", "name": "g_drun29_id_ref_ma", "desc": "d 轴参考实时值（不恒为 0）" },
-    { "mk": "", "name": "g_drun29_iq_mean_ma", "desc": "iq 3s 均值（慢速水平线）" },
-    { "mk": "", "name": "g_drun29_id_mean_ma", "desc": "id 3s 均值" },
-    { "mk": "[!]", "name": "g_drun29_vsat", "desc": "=1 时输出顶到 UMAX 3.5V，处理数据作废" },
-    { "mk": "", "name": "g_drun29_iq_filt_ma", "desc": "显示用滤波 iq；PI 吃 ch5 原始 iq" },
-    { "mk": "", "name": "g_drun29_speed_hz", "desc": "实测电频率（200ms 窗，带符号）" },
-    { "mk": "", "name": "g_drun29_diff_deg", "desc": "参考功角 = delta 指令（非独立测量）" },
-    { "mk": "", "name": "g_drun29_rotor_count", "desc": "编码器累计相对计数（增量）" },
-    { "mk": "", "name": "g_drun29_time_us", "desc": "进模式后运行时长 (us)" },
-    { "mk": "", "name": "g_drun29_state", "desc": "0 空闲 / 1 运行 / 2 过流" },
-    { "mk": "", "name": "g_drun29_evt", "desc": "1 爬坡完成 / 2 过流" },
-    { "mk": "", "name": "g_drun29_running", "desc": "运行标志（1 = 正在运行）" },
-    { "mk": "", "name": "g_foc_elec_deg", "desc": "mode 0 下实时转子电角，捏转子对位看它" }
+    {
+      "mk": "(*)",
+      "name": "g_drun29_eq_mean_ma",
+      "desc": "q 误差均值 = 稳态落差（ch11，5s 窗口）"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_drun29_iq_pp_ma",
+      "desc": "iq 反馈 5s 峰峰值（ch15）；振铃判据"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_eq_pp_ma",
+      "desc": "q 误差峰峰值（5s 窗口，不在 VOFA 里）"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_drun29_iq_step_t90_us",
+      "desc": "阶跃到 90% 的耗时 (us)；超时 = 0xFFFFFFFF"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_iq_step_state",
+      "desc": "阶跃测量状态 0 IDLE 1 WAIT 2 DONE 3 TIMEOUT"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_iq_step_target_ma",
+      "desc": "阶跃测量锁定的目标参考 (mA)"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_ed_mean_ma",
+      "desc": "d 轴误差均值（5s 窗口）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_ed_pp_ma",
+      "desc": "d 轴误差峰峰值"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_iq_ma",
+      "desc": "q 轴反馈（零偏校正后 = 环反馈）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_id_ma",
+      "desc": "d 轴反馈（零偏校正后）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_iq_ref_ma",
+      "desc": "q 轴参考实时值（= I_ref x sin delta）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_id_ref_ma",
+      "desc": "d 轴参考实时值（不恒为 0）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_iq_mean_ma",
+      "desc": "iq 3s 均值（慢速水平线）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_id_mean_ma",
+      "desc": "id 3s 均值"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_drun29_vsat",
+      "desc": "=1 时输出顶到 UMAX 3.5V，处理数据作废"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_iq_filt_ma",
+      "desc": "显示用滤波 iq；PI 吃 ch5 原始 iq"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_speed_hz",
+      "desc": "实测电频率（200ms 窗，带符号）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_diff_deg",
+      "desc": "参考功角 = delta 指令（非独立测量）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_rotor_count",
+      "desc": "编码器累计相对计数（增量）"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_time_us",
+      "desc": "进模式后运行时长 (us)"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_state",
+      "desc": "0 空闲 / 1 运行 / 2 过流"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_evt",
+      "desc": "1 爬坡完成 / 2 过流"
+    },
+    {
+      "mk": "",
+      "name": "g_drun29_running",
+      "desc": "运行标志（1 = 正在运行）"
+    },
+    {
+      "mk": "",
+      "name": "g_foc_elec_deg",
+      "desc": "mode 0 下实时转子电角，捏转子对位看它"
+    }
   ],
   "vofa": {
     "n": 19,
     "fn": "Foc_Drun_VofaFill",
     "shared": false,
     "rows": [
-      { "mk": "", "ch": "ch0", "what": "U 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch1", "what": "V 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch2", "what": "W 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch3", "what": "静止系 ialpha", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch4", "what": "静止系 ibeta", "unit": "A", "desc": "" },
-      { "mk": "(*)", "ch": "ch5", "what": "iq 反馈", "unit": "A", "desc": "环反馈（PI 用的原始 iq）" },
-      { "mk": "", "ch": "ch6", "what": "id 反馈", "unit": "A", "desc": "环反馈" },
-      { "mk": "(*)", "ch": "ch7", "what": "iq 参考", "unit": "A", "desc": "= I_ref x sin delta" },
-      { "mk": "", "ch": "ch8", "what": "id 参考", "unit": "A", "desc": "不恒为 0（= I_ref x cos delta）" },
-      { "mk": "", "ch": "ch9", "what": "vq 输出", "unit": "V", "desc": "贴 3.5V = 撞电压墙" },
-      { "mk": "", "ch": "ch10", "what": "vd 输出", "unit": "V", "desc": "" },
-      { "mk": "(*)", "ch": "ch11", "what": "q 误差均值", "unit": "A", "desc": "P 调参主判据（5s 窗口）" },
-      { "mk": "", "ch": "ch12", "what": "d 误差均值", "unit": "A", "desc": "5s 窗口刷新" },
-      { "mk": "", "ch": "ch13", "what": "iq 3s 均值", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch14", "what": "id 3s 均值", "unit": "A", "desc": "" },
-      { "mk": "(*)", "ch": "ch15", "what": "iq 反馈峰峰值", "unit": "A", "desc": "5s 窗口；iq 反馈 pp，非误差 pp" },
-      { "mk": "", "ch": "ch16", "what": "滤波 iq", "unit": "A", "desc": "显示用；PI 不吃它" },
-      { "mk": "", "ch": "ch17", "what": "delta 功角", "unit": "deg", "desc": "= 指令值（非独立测量）" },
-      { "mk": "", "ch": "ch18", "what": "实测电频率", "unit": "Hz", "desc": "" }
+      {
+        "mk": "",
+        "ch": "ch0",
+        "what": "U 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch1",
+        "what": "V 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch2",
+        "what": "W 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch3",
+        "what": "静止系 ialpha",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch4",
+        "what": "静止系 ibeta",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch5",
+        "what": "iq 反馈",
+        "unit": "A",
+        "desc": "环反馈（PI 用的原始 iq）"
+      },
+      {
+        "mk": "",
+        "ch": "ch6",
+        "what": "id 反馈",
+        "unit": "A",
+        "desc": "环反馈"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch7",
+        "what": "iq 参考",
+        "unit": "A",
+        "desc": "= I_ref x sin delta"
+      },
+      {
+        "mk": "",
+        "ch": "ch8",
+        "what": "id 参考",
+        "unit": "A",
+        "desc": "不恒为 0（= I_ref x cos delta）"
+      },
+      {
+        "mk": "",
+        "ch": "ch9",
+        "what": "vq 输出",
+        "unit": "V",
+        "desc": "贴 3.5V = 撞电压墙"
+      },
+      {
+        "mk": "",
+        "ch": "ch10",
+        "what": "vd 输出",
+        "unit": "V",
+        "desc": ""
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch11",
+        "what": "q 误差均值",
+        "unit": "A",
+        "desc": "P 调参主判据（5s 窗口）"
+      },
+      {
+        "mk": "",
+        "ch": "ch12",
+        "what": "d 误差均值",
+        "unit": "A",
+        "desc": "5s 窗口刷新"
+      },
+      {
+        "mk": "",
+        "ch": "ch13",
+        "what": "iq 3s 均值",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch14",
+        "what": "id 3s 均值",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch15",
+        "what": "iq 反馈峰峰值",
+        "unit": "A",
+        "desc": "5s 窗口；iq 反馈 pp，非误差 pp"
+      },
+      {
+        "mk": "",
+        "ch": "ch16",
+        "what": "滤波 iq",
+        "unit": "A",
+        "desc": "显示用；PI 不吃它"
+      },
+      {
+        "mk": "",
+        "ch": "ch17",
+        "what": "delta 功角",
+        "unit": "deg",
+        "desc": "= 指令值（非独立测量）"
+      },
+      {
+        "mk": "",
+        "ch": "ch18",
+        "what": "实测电频率",
+        "unit": "Hz",
+        "desc": ""
+      }
     ]
   },
   "notes": [
-    { "mk": "(*)", "text": "标准流程：comm_mode=24 等 RTT 打印 cal-only done -> mode 0 捏死转子（BEMF=0，纯 R+L 对象）-> comm_mode=29 直接进电流环。" },
-    { "mk": "(*)", "text": "Start 会重锚定编码器帧：读 TMRA_1 当前计数重建相对帧，校准后转子被捏动多少都被吸收，第一拍磁场方向即对准当前转子位置。" },
-    { "mk": "[!]", "text": "本模式默认已是 PI（i_valid=1、ki=300）；要纯 P 判据需把 i_valid 置 0。P-only 稳态落差 = kp/(kp+R) x i_ref（kp=0.5 只到约 77%）属理论必然，不是故障。" },
-    { "mk": "(*)", "text": "自带阶跃测量：进模式后首次 |参考| >= 100mA 时武装，之后改参考不重启；t90_us 超时值 = 0xFFFFFFFF。" },
-    { "mk": "[!]", "text": "VOFA 帧率约 90fps 远慢于电气时间常数，上升沿看不见：看平台高度 + 平台上方振铃 + ch11/ch15 统计；VOFA+ 通道数必须同步改成 19。" },
-    { "mk": "[!]", "text": "ch8（id 参考）不恒为 0，只有 delta=90 deg 才为 0，与 mode 40 不同；ch16 只是显示滤波；g_drun29_vsat=1（顶到 UMAX 3.5V）时数据作废。" }
+    {
+      "mk": "(*)",
+      "text": "标准流程：comm_mode=24 等 RTT 打印 cal-only done -> mode 0 捏死转子（BEMF=0，纯 R+L 对象）-> comm_mode=29 直接进电流环。"
+    },
+    {
+      "mk": "(*)",
+      "text": "Start 会重锚定编码器帧：读 TMRA_1 当前计数重建相对帧，校准后转子被捏动多少都被吸收，第一拍磁场方向即对准当前转子位置。"
+    },
+    {
+      "mk": "[!]",
+      "text": "本模式默认已是 PI（i_valid=1、ki=300）；要纯 P 判据需把 i_valid 置 0。P-only 稳态落差 = kp/(kp+R) x i_ref（kp=0.5 只到约 77%）属理论必然，不是故障。"
+    },
+    {
+      "mk": "(*)",
+      "text": "自带阶跃测量：进模式后首次 |参考| >= 100mA 时武装，之后改参考不重启；t90_us 超时值 = 0xFFFFFFFF。"
+    },
+    {
+      "mk": "[!]",
+      "text": "VOFA 帧率约 90fps 远慢于电气时间常数，上升沿看不见：看平台高度 + 平台上方振铃 + ch11/ch15 统计；VOFA+ 通道数必须同步改成 19。"
+    },
+    {
+      "mk": "[!]",
+      "text": "ch8（id 参考）不恒为 0，只有 delta=90 deg 才为 0，与 mode 40 不同；ch16 只是显示滤波；g_drun29_vsat=1（顶到 UMAX 3.5V）时数据作废。"
+    }
   ],
   "evidence": {
-    "g_drun29_running": "foc_29_drun.h:117",
-    "g_drun29_state": "foc_29_drun.h:118",
-    "g_drun29_evt": "foc_29_drun.h:119",
-    "g_drun29_dlt_init_deg": "foc_29_drun.h:120",
-    "g_drun29_dlt_targ_deg": "foc_29_drun.h:121",
-    "g_drun29_dlt_tr_ms": "foc_29_drun.h:122",
-    "g_drun29_dlt_now_deg": "foc_29_drun.h:123",
-    "g_drun29_speed_hz": "foc_29_drun.h:124",
-    "g_drun29_field_deg": "foc_29_drun.h:125",
-    "g_drun29_rotor_deg": "foc_29_drun.h:126",
-    "g_drun29_diff_deg": "foc_29_drun.h:127",
-    "g_drun29_rotor_count": "foc_29_drun.h:128",
-    "g_drun29_id_ma": "foc_29_drun.h:129",
-    "g_drun29_iq_ma": "foc_29_drun.h:130",
-    "g_drun29_iq_filt_ma": "foc_29_drun.h:131",
-    "g_drun29_iq_filt_alpha": "foc_29_drun.h:132",
-    "g_drun29_id_pp_ma": "foc_29_drun.h:133",
-    "g_drun29_iq_pp_ma": "foc_29_drun.h:134",
-    "g_drun29_id_mean_ma": "foc_29_drun.h:135",
-    "g_drun29_iq_mean_ma": "foc_29_drun.h:136",
-    "g_drun29_i_ref_ma": "foc_29_drun.h:137",
-    "g_drun29_id_ref_ma": "foc_29_drun.h:138",
-    "g_drun29_iq_ref_ma": "foc_29_drun.h:139",
-    "g_drun29_i_ramp_ma_s": "foc_29_drun.h:140",
-    "g_drun29_vsat": "foc_29_drun.h:141",
-    "g_drun29_ed_mean_ma": "foc_29_drun.h:142",
-    "g_drun29_eq_mean_ma": "foc_29_drun.h:143",
-    "g_drun29_ed_pp_ma": "foc_29_drun.h:144",
-    "g_drun29_eq_pp_ma": "foc_29_drun.h:145",
-    "g_drun29_time_us": "foc_29_drun.h:154",
-    "g_drun29_step_frac_pct": "foc_29_drun.h:155",
-    "g_drun29_id_step_state": "foc_29_drun.h:156",
-    "g_drun29_iq_step_state": "foc_29_drun.h:157",
-    "g_drun29_id_step_target_ma": "foc_29_drun.h:158",
-    "g_drun29_iq_step_target_ma": "foc_29_drun.h:159",
-    "g_drun29_id_step_t90_us": "foc_29_drun.h:160",
-    "g_drun29_iq_step_t90_us": "foc_29_drun.h:161",
-    "g_drun29_pid_id_cfg": "foc_29_drun.h:163",
-    "g_drun29_pid_iq_cfg": "foc_29_drun.h:164",
+    "g_drun29_running": "foc_29_drun.h:168",
+    "g_drun29_state": "foc_29_drun.h:169",
+    "g_drun29_evt": "foc_29_drun.h:170",
+    "g_drun29_dlt_init_deg": "foc_29_drun.h:171",
+    "g_drun29_dlt_targ_deg": "foc_29_drun.h:172",
+    "g_drun29_dlt_tr_ms": "foc_29_drun.h:173",
+    "g_drun29_dlt_now_deg": "foc_29_drun.h:174",
+    "g_drun29_speed_hz": "foc_29_drun.h:175",
+    "g_drun29_field_deg": "foc_29_drun.h:176",
+    "g_drun29_rotor_deg": "foc_29_drun.h:177",
+    "g_drun29_diff_deg": "foc_29_drun.h:178",
+    "g_drun29_rotor_count": "foc_29_drun.h:179",
+    "g_drun29_id_ma": "foc_29_drun.h:180",
+    "g_drun29_iq_ma": "foc_29_drun.h:181",
+    "g_drun29_iq_filt_ma": "foc_29_drun.h:182",
+    "g_drun29_iq_filt_alpha": "foc_29_drun.h:183",
+    "g_drun29_id_pp_ma": "foc_29_drun.h:184",
+    "g_drun29_iq_pp_ma": "foc_29_drun.h:185",
+    "g_drun29_id_mean_ma": "foc_29_drun.h:186",
+    "g_drun29_iq_mean_ma": "foc_29_drun.h:187",
+    "g_drun29_i_ref_ma": "foc_29_drun.h:188",
+    "g_drun29_id_ref_ma": "foc_29_drun.h:189",
+    "g_drun29_iq_ref_ma": "foc_29_drun.h:190",
+    "g_drun29_i_ramp_ma_s": "foc_29_drun.h:191",
+    "g_drun29_vsat": "foc_29_drun.h:192",
+    "g_drun29_ed_mean_ma": "foc_29_drun.h:193",
+    "g_drun29_eq_mean_ma": "foc_29_drun.h:194",
+    "g_drun29_ed_pp_ma": "foc_29_drun.h:195",
+    "g_drun29_eq_pp_ma": "foc_29_drun.h:196",
+    "g_drun29_time_us": "foc_29_drun.h:207",
+    "g_drun29_step_frac_pct": "foc_29_drun.h:208",
+    "g_drun29_id_step_state": "foc_29_drun.h:209",
+    "g_drun29_iq_step_state": "foc_29_drun.h:210",
+    "g_drun29_id_step_target_ma": "foc_29_drun.h:211",
+    "g_drun29_iq_step_target_ma": "foc_29_drun.h:212",
+    "g_drun29_id_step_t90_us": "foc_29_drun.h:213",
+    "g_drun29_iq_step_t90_us": "foc_29_drun.h:214",
+    "g_drun29_pid_id_cfg": "foc_29_drun.h:216",
+    "g_drun29_pid_iq_cfg": "foc_29_drun.h:217",
     "g_foc_elec_deg": "foc_core.h:103",
-    "Foc_Dcal_GetResult": "foc_24_dcal.h:109",
+    "Foc_Dcal_GetResult": "foc_24_dcal.h:146",
     "Foc_Drun_VofaFill": "foc_29_drun.c:648"
   }
 }

@@ -1,0 +1,462 @@
+{
+  "mode": 52,
+  "title": "d/q 轴电感辨识（直流偏置方波 + 单极性电流纹波）",
+  "entry": "comm_mode = 52（Watch 直接写）",
+  "pre": "必须先跑 mode 24（要编码器电气零点才能把矢量锁在 d/q 轴上）；d 轴测量不产生力矩，q 轴测量期间有一个与偏置电流成正比的恒定力矩（约 0.009 N.m @0.7A）",
+  "end": "自动：d 轴 -> 200ms 零矢量 -> q 轴 -> 关 PWM、state 回 IDLE；不写 Flash、不改任何配置宏",
+  "files": {
+    "h": "foc_52_ldlq.h",
+    "c": "foc_52_ldlq.c"
+  },
+  "watch": [
+    {
+      "mk": "",
+      "name": "g_ldlq52_di_target_a",
+      "val": "1.0",
+      "unit": "A",
+      "desc": "目标纹波峰峰值（硬上限 2.0；自适应方波幅值按它定）"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_bias_a",
+      "val": "0.7",
+      "unit": "A",
+      "desc": "直流偏置电流，**必须大于纹波半幅**，否则电流过零、方法失效"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_v_min_v",
+      "val": "0.3",
+      "unit": "V",
+      "desc": "自适应方波幅值下限"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_v_max_v",
+      "val": "3.0",
+      "unit": "V",
+      "desc": "自适应方波幅值上限（探测一次不够就升到它再探）"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_cycles",
+      "val": "32",
+      "unit": "-",
+      "desc": "正式测量周期数（1 周期 = 200us；会取整到偏置周期的整数倍）"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_do_q",
+      "val": "1",
+      "unit": "-",
+      "desc": "1 = 测 d 再测 q；0 = 只测 d（省 200ms 间隔）"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_r_used_ohm",
+      "val": "0.098",
+      "unit": "ohm",
+      "desc": "反推 V_dead 用的 R，填 mode 51 实测值"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_wave_en",
+      "val": "0",
+      "unit": "-",
+      "desc": "1 = 抓取并打印原始波形（9 行，排查用）；默认 0，日志保持精简"
+    },
+    {
+      "mk": "(*)",
+      "note": "上七行为本轮可调项；全程约 0.5s（零偏窗 200ms + 每轴约 20ms + 间隔 200ms）。"
+    },
+    {
+      "mk": "[!]",
+      "note": "bias 是这套方法成立的前提：电流必须**始终同号**，才让死区等效电压在两极性平台上同号、从而在平台内采样差里精确抵消。启动护栏会自动把 bias 抬到 1.3 倍纹波半幅 + 0.05A，所以调小 di_target 时 bias 也会跟着变小。"
+    },
+    {
+      "mk": "[!]",
+      "note": "注入幅值不要随手加大：3V 加在 42uH 上、100us 平台内会摆 7A。默认 0.5V 探测后自适应到约 0.42V（对应纹波峰峰值 1A、峰值电流 0.5A）；若实测 L 是 260uH，自适应会升到约 2.6V。"
+    },
+    {
+      "mk": "[!]",
+      "note": "必须先跑 mode 24。offset 不对 => 锁的不是 d/q 轴，两个数都是混轴结果（表现：Ld/Lq 差别很大且每次不一样）。"
+    }
+  ],
+  "obs": [
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_ld_uh",
+      "desc": "Ld ---- 主结果 (uH)"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_lq_uh",
+      "desc": "Lq ---- 主结果 (uH)"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_ratio",
+      "desc": "Lq/Ld ---- 约 1 = 表贴(SPM)，> 1.15 = 凸极(IPM)，MTPA 才有意义"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_ratio_vs_vendor",
+      "desc": "Ld / FOC_MOTOR_LS_UH ---- 直接判定手册 42.3uH 还是此前推的 260uH"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_i_bias_ma",
+      "desc": "实测偏置电流 (mA) ---- 必须大于纹波半幅，否则数据无效"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_vdead_v",
+      "desc": "由 V_bias - R x |I_bias| 反推的死区电压 (V) ---- 与 mode 51 的 160mV 互证"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_vbias_v",
+      "desc": "当前指令偏置电压 (V) ---- 偏置不够时模式自己每次抬 0.1V 再探"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_probe_seq",
+      "desc": "探测完成次数（每次变化 foc_obs 打一行 probe，含两套一致性）"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_l_probe_uh",
+      "desc": "探测档纹波反推的电感 (uH) ---- 落在 [3, 3000] 之外判 evt=7 并停止抬偏置"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_l_env_uh",
+      "desc": "平台均值法反推的电感 (uH) ---- 最终结果用这个（每平台取两点平均，相邻平台均值求差）"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_l_pair_uh",
+      "desc": "单点差分法反推的电感 (uH) ---- 对照用；易被快速交替干扰污染（实测会偏小约一半）"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_de_ma",
+      "desc": "相邻平台均值之差 (mA) ---- 结果的原始量；L = Vsq x 平台时长 / 它"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_dp_ma",
+      "desc": "平台内两点之差 (mA) ---- 单点差分法的原始量（对照）"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_de_cons_pct",
+      "desc": "平台均值差的符号一致性 (%) ---- 平台均值法的有效性判据"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_cons_pct",
+      "desc": "单点差分法的一致性 (%) ---- 仅供对照"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_dcnt",
+      "desc": "参与统计的平台数"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_wave",
+      "desc": "波形抓取缓冲 (mA, 64 点)：正式测量窗开头自动抓一窗，RTT 打印 + Keil Watch 可看"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_wave_sgn",
+      "desc": "抓取窗内每拍的平台极性 (+1/-1)，用于对齐电压与电流"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_wave_arm",
+      "desc": "写 1 请求抓取（记满自动清 0）；一般不用手写，正式测量会自动抓"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_path_cnts",
+      "desc": "测量窗内编码器路径累计 (counts) ---- 转子是否在动的真正判据"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_v_inj_v",
+      "desc": "自适应后的方波幅值 Vsq (V)"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_state",
+      "desc": "0 IDLE / 1 零偏窗 / 2 探测 / 3 正式测量 / 4 间隔 / 5 OC"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_ldlq52_evt",
+      "desc": "1 完成 / 2 过流 / 3 纹波太小 / 4 偏置没建立 / 5 转子在动 / 6 采样配对异常（4/5/6 都不更新结果）"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_axis",
+      "desc": "0 = d 轴，1 = q 轴（当前/最后测的轴）"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_running",
+      "desc": "1 = 本轮有效（DONE 后仍为 1，便于回看；切模式时 Stop）"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_ldlq52_moved_d_cnts",
+      "desc": "d 轴测量期间的净位移 (counts，已解回绕)"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_ldlq52_moved_q_cnts",
+      "desc": "q 轴测量期间的净位移 (counts，已解回绕) ---- d 轴就不该动"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_moved_cnts",
+      "desc": "全程净位移 (counts，已解回绕)"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_elapsed_ms",
+      "desc": "累计耗时 (ms)"
+    }
+  ],
+  "vofa": {
+    "n": 12,
+    "fn": "Foc_LdLqId_VofaFill",
+    "shared": false,
+    "rows": [
+      {
+        "mk": "",
+        "ch": "ch0",
+        "what": "状态码",
+        "unit": "-",
+        "desc": "见状态机"
+      },
+      {
+        "mk": "",
+        "ch": "ch1",
+        "what": "当前轴",
+        "unit": "-",
+        "desc": "0=d 1=q"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch2",
+        "what": "方波幅值",
+        "unit": "V",
+        "desc": "自适应结果"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch3",
+        "what": "纹波峰峰值",
+        "unit": "A",
+        "desc": "应贴住 di_target"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch4",
+        "what": "Ld",
+        "unit": "uH",
+        "desc": "主结果"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch5",
+        "what": "Lq",
+        "unit": "uH",
+        "desc": "主结果"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch6",
+        "what": "Lq/Ld",
+        "unit": "x1000",
+        "desc": "约 1000 = 表贴"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch7",
+        "what": "偏置电流",
+        "unit": "A",
+        "desc": "须大于 ch3 的一半"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch8",
+        "what": "离散度",
+        "unit": "%",
+        "desc": "< 5 合格"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch9",
+        "what": "配对一致性",
+        "unit": "%",
+        "desc": "必须约 100"
+      },
+      {
+        "mk": "[!]",
+        "ch": "ch10",
+        "what": "编码器位移",
+        "unit": "counts",
+        "desc": "> 8 则数据可疑"
+      },
+      {
+        "mk": "",
+        "ch": "ch11",
+        "what": "耗时",
+        "unit": "ms",
+        "desc": "全程约 500"
+      }
+    ]
+  },
+  "notes": [
+    {
+      "mk": "(*)",
+      "text": "原理：把电压矢量锁在 d 轴（theta = 转子电角度）或 q 轴（+90 度）上，命令 v = V_bias + sgn x Vsq，其中 V_bias = R x I_bias + V_dead先验 让被测轴有一个直流偏置电流 I_bias，方波幅值只要小于 I_bias x R 就不会把电流推过零。每 2 个采样周期翻转一次 sgn（电压平台 100us = 5kHz 方波），每个平台内采 2 点（平台内 25us / 75us），两点之差就是 |di| = Vsq x (1/fs) / L。"
+    },
+    {
+      "mk": "(*)",
+      "text": "为什么必须做成单极性（本模式的核心）：若用无偏置的 +/-Vsq，电流每周期两次过零，死区等效电压在采样窗内**变号**，采样差里就混进与死区有关的几何误差。用 10ns 步长的波形仿真（_cardgen/sim_mode52.mjs、sim_mode52_est.mjs）量化：R=0.098、Vdead=0.16、L=42.3uH 时无偏置方案系统性偏小 8~13%，且随幅值非单调、无法用简单修正项补掉。改成单极性后，V_bias 里的 (R x I_bias + V_dead) 与平台内的 R x i 项一起精确抵消，仿真残差 < 1%（L = 20~260uH 全范围、Vsq = 0.3~2.6V）。"
+    },
+    {
+      "mk": "[!]",
+      "text": "半周期必须取 2 个采样周期，不能取 1：本板 ADC 在三角波谷点触发采样，而占空比影子寄存器在峰点装载，两者相差 25us。若半周期取 1 拍（平台 50us），采样点正好落在每个平台正中间 = 电流三角波的中点，采样差退化成约 0，会误报『没有纹波』。取 2 拍后每平台内采到 2 点（25us / 75us 处），差才是有效信号。"
+    },
+    {
+      "mk": "[!]",
+      "text": "偏置电流必须大于纹波半幅（|I_bias| > di_target/2）：这就是单极性的定义。启动时护栏会把 g_ldlq52_bias_a 抬到 1.3 x 半幅 + 0.05A；运行中若实测 |I_bias| 仍不大于半幅，会置 evt = 4 (BIAS_FAIL) 并且**不更新结果**，RTT 打印 bias not established。看到它就小幅抬高 g_ldlq52_bias_a 重跑。"
+    },
+    {
+      "mk": "[!]",
+      "text": "机械：d 轴注入不产生转矩（id 不产生转矩、且 iq = 0）；q 轴注入期间有一个与偏置电流成正比的恒定力矩（约 kt x 0.7A = 0.009N.m），**建议夹紧转子**。偏置每 16 个周期翻一次号，使净冲量抵消、未夹紧时也不至于被推着连续转；用 moved_cnts 判断（> 8 counts 判可疑）。"
+    },
+    {
+      "mk": "(*)",
+      "text": "判据：ratio_vs_vendor 约 1 => 手册 42.3uH 可信，且与 mode 40 电流环整定自洽（kp=0.1 / ki=300 => ki/kp = 3000 => L = R x kp/ki = 0.098/3000 = 33uH）；若约 6 => 此前由 R=0.15ohm 反推的 260uH 成立，电流环需要重新整定。d_scatter_pct < 5% 且 moved_cnts 在 +/-8 以内才认这两个数。"
+    },
+    {
+      "mk": "(*)",
+      "text": "副产物 V_dead：稳态下 v 的平均值 = V_bias - V_dead，且等于 R x I_bias，故 V_dead = V_bias - R x |I_bias|。这条与 mode 51 拟合出的 160mV 互相印证：两者接近说明 R 与死区模型都对上了（本式误差主要取决于 R 的准确度）。"
+    },
+    {
+      "mk": "[!]",
+      "text": "本模式只输出观测量：不写 Flash、不改 motor_config.h。用途是与商家参数对比、验证辨识思路本身。测到 260uH 也不会自动改环路，需要人工决定。"
+    },
+    {
+      "mk": "(*)",
+      "text": "RTT 输出（开关 FOC_LDLQ52_DBG）：每次成功跑完共 6~9 行 -- start（含 do_q，确认本轮会不会测 q）；每个轴的 probe 两行（配置/偏置 + cons/path/env/pair）；d done 一行（do_q=0/1 都会打，d 轴结果位置固定）；done 一行（Ld/Lq/Lq/Ld/vs_vendor/vdead）；last axis 一行；moved 一行。失败时只多打一条原因行（OC / bias not established / rotor moving / pair mismatch / implausible / no ripple）。原始波形默认不打印，要看就把 g_ldlq52_wave_en 写 1。"
+    },
+    {
+      "mk": "[!]",
+      "text": "相位免疫的关键规则：平台长度正好是 2 个采样周期 => 每个平台内有两对相邻采样；翻转是按 ISR 次数计的，一旦某次写入错过峰点影子装载，采样相位就永久错开一拍，此时两对里必有一对跨过三角波顶点、其 |di| 被抵消一部分（实测均值只剩 0.72 倍、离散度 52%）。干净的那一对必然是两者中较大的那个，所以每个平台取 max(|di|) 即可，与相位无关（10ns 步长仿真：任意相位下误差 0.00%、离散度 0.00%；对照方案\"相邻两对斜率差做闸门\"会把顶点两侧的对全部误杀、有效样本归零，已弃用）。phase_ratio 顺带给出相位诊断。"
+    },
+    {
+      "mk": "[!]",
+      "text": "三条有效性判据（任一不过就不更新结果，只留过程量供排查）：1) cons_pct >= 85（采样配对正确）；2) |I_bias| > 纹波半幅（单极性成立）；3) 测量窗内编码器路径 path_cnts <= 64（转子基本不动）。另 path_cnts > 8 时追一行 warn。注意净位移 moved_cnts 会随 16 位计数器回绕（曾把 -206 打成 65330），所以判\"转子是否在动\"要看路径累计而不是净位移。"
+    },
+    {
+      "mk": "[!]",
+      "text": "偏置电流是自适应建立的，不依赖 R/V_dead 先验的准确性：每次探测后检查实测 |I_bias| 是否 >= 1.5 x 纹波半幅，不够就把偏置电压抬 FOC52_VBIAS_STEP_V(0.1V) 重探，直到够用或到 1.5V 上限。2026-09-27 两次上机就是因为实测偏置小于指令值（先验偏差）而导致电流过零、cons 只有 67.8% -- 这条环路就是为它加的。日志里每次探测都会打一行 probe#，直接看 bias / ripple/2 / cons / other 四个数。"
+    },
+    {
+      "mk": "[!]",
+      "text": "evt=7 (IMPLAUSIBLE)：探测档纹波反推的电感不在 [3, 3000] uH 就立刻停手、不再抬偏置电压。2026-09-27 实测教训：波形异常时\"纹波半幅\"被高估到 1.4A（应为 0.59A），偏置自适应就一路把偏置电压抬到上限、d 轴电流冲到 3A。看到 evt=7 请先看打印出来的波形串（下面那条），确认采样结构再谈标定。"
+    },
+    {
+      "mk": "(*)",
+      "text": "波形抓取（排查采样结构用）：正式测量窗开头自动抓 64 拍被测轴电流与平台极性，RTT 打出 8 个数一行 + 一行 +/- 极性串。重复采样（相邻数相同）、相位错拍（极性串与电流拐点错位）、开关纹波、直流瞬态在这两行上一眼可见 -- 比反复推断\"波形应该是什么样\"可靠得多。"
+    },
+    {
+      "mk": "(*)",
+      "text": "结果算法 = 平台均值法：平台长度正好是 2 个采样周期，把平台内两点取平均（这一步把采样序列里约 +/-0.5A 的快速交替干扰抵消掉 -- 相邻两点符号相反），再取相邻平台均值之差 |dE|，则 L = Vsq x 平台时长 / |dE|。2026-09-27 的抓取波形显示：单点差分法里\"跨平台边界那一跳\"比平台内斜坡大 ~2 倍（边界瞬态），取 max 的规则专门挑到它，导致 L 被系统性压掉一半（报 20uH，而平台均值法给出 34~37uH、与手册 42.3uH 同量级）。两种算法的结果都在 RTT 里直接打印（env / pair），方便对照。"
+    },
+    {
+      "mk": "[!]",
+      "text": "RTT 打印的 probe 行含三行：第一行是偏置/纹波/实测 ISR 频率，第二行是一致性与偏置需求，第三行直接给出两种算法各自的电感：probe L: env=..uH (dE=..mA) pair=..uH (dp=..mA) fs=..Hz。结束时再打 done（Ld/Lq/比值/手册倍数）与过程量行。无需手工推算。"
+    },
+    {
+      "mk": "[!]",
+      "text": "重测：跑完后固件调用 CommRunner_ReleaseMode() 把模式号放回 STOP（Keil 里 comm_mode 会自动回 0），因此**直接再写一次 52 就能重测**，不必手动先写 0。原因：CommRunner_SetMode() 开头有\"同模式早退\"，若模式号停在 52，再写 52 会被吃掉 -- 这就是以前\"有时能重测、有时不能\"的根因。"
+    }
+  ],
+  "evidence": {
+    "g_ldlq52_di_target_a": "foc_52_ldlq.c:41",
+    "g_ldlq52_bias_a": "foc_52_ldlq.c:42",
+    "g_ldlq52_v_min_v": "foc_52_ldlq.c:43",
+    "g_ldlq52_v_max_v": "foc_52_ldlq.c:44",
+    "g_ldlq52_cycles": "foc_52_ldlq.c:45",
+    "g_ldlq52_do_q": "foc_52_ldlq.c:46",
+    "g_ldlq52_r_used_ohm": "foc_52_ldlq.c:48",
+    "g_ldlq52_running": "foc_52_ldlq.c:53",
+    "g_ldlq52_state": "foc_52_ldlq.c:54",
+    "g_ldlq52_evt": "foc_52_ldlq.c:55",
+    "g_ldlq52_axis": "foc_52_ldlq.c:56",
+    "g_ldlq52_ld_uh": "foc_52_ldlq.c:57",
+    "g_ldlq52_lq_uh": "foc_52_ldlq.c:58",
+    "g_ldlq52_ratio": "foc_52_ldlq.c:59",
+    "g_ldlq52_ratio_vs_vendor": "foc_52_ldlq.c:60",
+    "g_ldlq52_di_pp_a": "foc_52_ldlq.c:61",
+    "g_ldlq52_v_inj_v": "foc_52_ldlq.c:62",
+    "g_ldlq52_i_bias_ma": "foc_52_ldlq.c:63",
+    "g_ldlq52_vdead_v": "foc_52_ldlq.c:64",
+    "g_ldlq52_d_scatter_pct": "foc_52_ldlq.c:65",
+    "g_ldlq52_dcnt": "foc_52_ldlq.c:66",
+    "g_ldlq52_moved_cnts": "foc_52_ldlq.c:90",
+    "g_ldlq52_elapsed_ms": "foc_52_ldlq.c:91",
+    "Foc_LdLqId_Start": "foc_52_ldlq.c:529",
+    "Foc_LdLqId_Stop": "foc_52_ldlq.c:608",
+    "Foc_LdLqId_Step": "foc_52_ldlq.c:626",
+    "Foc_LdLqId_VofaFill": "foc_52_ldlq.c:798",
+    "LdLq52_SquareStep": "foc_52_ldlq.c:268",
+    "LdLq52_FinishMeasure": "foc_52_ldlq.c:437",
+    "LdLq52_PhaseReset": "foc_52_ldlq.c:385",
+    "LdLq52_RotorAngle": "foc_52_ldlq.c:205",
+    "LdLq52_AxisCurrent": "foc_52_ldlq.c:236",
+    "LdLq52_OutputAxis": "foc_52_ldlq.c:249",
+    "FOC_LDLQ52_DBG": "foc_52_ldlq.h:271",
+    "LDLQ52_DBG": "foc_52_ldlq.h:273",
+    "FOC52_ZERO_SAMPLES": "foc_52_ldlq.h:281",
+    "FOC52_SETTLE_CYCLES": "foc_52_ldlq.h:282",
+    "FOC52_HALF_ISRS": "foc_52_ldlq.h:283",
+    "FOC52_PROBE_V": "foc_52_ldlq.h:284",
+    "FOC52_PROBE_CYCLES": "foc_52_ldlq.h:285",
+    "FOC52_GAP_MS": "foc_52_ldlq.h:286",
+    "FOC52_BIAS_CYCLES": "foc_52_ldlq.h:287",
+    "FOC52_BIAS_SKIP": "foc_52_ldlq.h:288",
+    "FOC52_BIAS_MARGIN": "foc_52_ldlq.h:289",
+    "FOC52_VDEAD_PRIOR_V": "foc_52_ldlq.h:293",
+    "FOC52_DI_HARD_MAX_A": "foc_52_ldlq.h:294",
+    "FOC52_V_HARD_MAX_V": "foc_52_ldlq.h:295",
+    "FOC52_VBIAS_HARD_MAX_V": "foc_52_ldlq.h:296",
+    "FOC52_STEP_ZERO": "foc_52_ldlq.h:308",
+    "FOC52_STEP_PROBE": "foc_52_ldlq.h:309",
+    "FOC52_STEP_MEAS": "foc_52_ldlq.h:310",
+    "FOC52_STEP_GAP": "foc_52_ldlq.h:311",
+    "FOC52_EVT_DONE": "foc_52_ldlq.h:317",
+    "FOC52_EVT_BIAS_FAIL": "foc_52_ldlq.h:320",
+    "FOC_MOTOR_LS_UH": "motor_config.h:74",
+    "FOC_MOTOR_RS_OHM": "motor_config.h:73",
+    "FOC_ISR_HZ": "I.h:108",
+    "Foc_Core_GetDq": "foc_core.c:302",
+    "Foc_Core_OverCurrent": "foc_core.c:208",
+    "Foc_Dcal_GetResult": "foc_24_dcal.c:159",
+    "Foc_Svpwm": "foc_math.c:151",
+    "ENCODER_CPR": "encoder.h:31",
+    "g_foc_enc_dir": "foc_core.c:33",
+    "TMR4_PWM_SetDuty3Phase": "tmr4_pwm.h:107",
+    "TMRA_GetCountValue": "hc32_ll_tmra.h:514",
+    "FOC40_PI_KP": "foc_40_speed.h:135",
+    "FOC40_PI_KI": "foc_40_speed.h:136"
+  }
+}

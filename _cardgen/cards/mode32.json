@@ -5,58 +5,222 @@
   "pre": "无：自带对齐与复测，不依赖 mode30（会覆盖其锁定值与方向基准）；闭环启动推荐走本链路",
   "end": "锁定成功后自动交接 mode 31；失败或过流自动停机（step=5 / 6）",
   "watch": [
-    { "mk": "", "name": "g_lockiq_align_volt_v", "val": "0.4", "unit": "V", "desc": "对齐电压幅值；0.4V 约 4A 直流" },
-    { "mk": "[!]", "note": "初值来自宏 FOC_ALIGN_VOLT_V；写 <=0 会被 Start 自动改回 0.4V（防 Watch 改坏卡死）。" },
-    { "mk": "[!]", "note": "吸附电流 = 电压 / 相电阻，调大电压就是加大堵转电流（0.4V 已约 4A）。" },
-    { "mk": "(*)", "note": "吸附阶段转子会咔一下被磁力吸到对齐位，有响声属正常，不是故障。" }
+    {
+      "mk": "",
+      "name": "g_lockiq_align_volt_v",
+      "val": "0.4",
+      "unit": "V",
+      "desc": "对齐电压幅值；0.4V 约 4A 直流"
+    },
+    {
+      "mk": "[!]",
+      "note": "初值来自宏 FOC_ALIGN_VOLT_V；写 <=0 会被 Start 自动改回 0.4V（防 Watch 改坏卡死）。"
+    },
+    {
+      "mk": "[!]",
+      "note": "吸附电流 = 电压 / 相电阻，调大电压就是加大堵转电流（0.4V 已约 4A）。"
+    },
+    {
+      "mk": "(*)",
+      "note": "吸附阶段转子会咔一下被磁力吸到对齐位，有响声属正常，不是故障。"
+    }
   ],
   "obs": [
-    { "mk": "(*)", "name": "g_lockiq_step", "desc": "锁定阶段主判据；枚举含义见判据区" },
-    { "mk": "", "name": "g_lockiq_running", "desc": "1 = mode32 运行中；交接后自动清 0" },
-    { "mk": "(*)", "name": "g_lockiq_off_deg", "desc": "已注入 mode31 的偏移，成功必须为 0" },
-    { "mk": "(*)", "name": "g_lockiq_track_err_cnts", "desc": "VERIFY 复测位移误差 counts，0 附近才好" },
-    { "mk": "", "name": "g_lockiq_win_moved", "desc": "最近窗口平均位移 counts（判静止依据）" },
-    { "mk": "", "name": "g_lockiq_win_evals", "desc": "已完成静止窗口评估次数（0 = 没跑到）" },
-    { "mk": "[!]", "name": "g_lockiq_evt_code", "desc": "事件码：1 锁定 / 2 超时 / 3 跟踪失败" },
-    { "mk": "", "name": "g_lockiq_evt_off_deg", "desc": "事件快照偏移 deg（RTT 打印同源）" },
-    { "mk": "[!]", "note": "step=5 = 拒绝启动（宁可不起动），看 evt_code 分清是等静止超时还是复测位移不对。" },
-    { "mk": "[!]", "note": "VOFA+ 通道数必须同步配成 16，否则整帧错位。ch12 是 mode31 的 g_iqpi_theta_rad，吸附期间不更新（mode32 自己的磁场角在 g_foc_theta_rad，没进 VOFA）。" }
+    {
+      "mk": "(*)",
+      "name": "g_lockiq_step",
+      "desc": "锁定阶段主判据；枚举含义见判据区"
+    },
+    {
+      "mk": "",
+      "name": "g_lockiq_running",
+      "desc": "1 = mode32 运行中；交接后自动清 0"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_lockiq_off_deg",
+      "desc": "已注入 mode31 的偏移，成功必须为 0"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_lockiq_track_err_cnts",
+      "desc": "VERIFY 复测位移误差 counts，0 附近才好"
+    },
+    {
+      "mk": "",
+      "name": "g_lockiq_win_moved",
+      "desc": "最近窗口平均位移 counts（判静止依据）"
+    },
+    {
+      "mk": "",
+      "name": "g_lockiq_win_evals",
+      "desc": "已完成静止窗口评估次数（0 = 没跑到）"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_lockiq_evt_code",
+      "desc": "事件码：1 锁定 / 2 超时 / 3 跟踪失败"
+    },
+    {
+      "mk": "",
+      "name": "g_lockiq_evt_off_deg",
+      "desc": "事件快照偏移 deg（RTT 打印同源）"
+    },
+    {
+      "mk": "[!]",
+      "note": "step=5 = 拒绝启动（宁可不起动），看 evt_code 分清是等静止超时还是复测位移不对。"
+    },
+    {
+      "mk": "[!]",
+      "note": "VOFA+ 通道数必须同步配成 16，否则整帧错位。ch12 是 mode31 的 g_iqpi_theta_rad，吸附期间不更新（mode32 自己的磁场角在 g_foc_theta_rad，没进 VOFA）。"
+    }
   ],
   "vofa": {
     "n": 16,
     "fn": "Foc_LockIq_VofaFill",
     "shared": false,
     "rows": [
-      { "mk": "", "ch": "ch0", "what": "U 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch1", "what": "V 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch2", "what": "W 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch3", "what": "静止系电流幅值", "unit": "A", "desc": "吸附期间可见" },
-      { "mk": "", "ch": "ch4", "what": "静止系 ialpha", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch5", "what": "静止系 ibeta", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch6", "what": "iq 反馈", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch7", "what": "id 反馈", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch8", "what": "iq 目标", "unit": "A", "desc": "交接后有效" },
-      { "mk": "", "ch": "ch9", "what": "vd 输出", "unit": "V", "desc": "" },
-      { "mk": "", "ch": "ch10", "what": "vq 输出", "unit": "V", "desc": "" },
-      { "mk": "", "ch": "ch11", "what": "斜坡后 iq 参考", "unit": "A", "desc": "交接后有效" },
-      { "mk": "", "ch": "ch12", "what": "转子电角度", "unit": "rad", "desc": "交接后有效" },
-      { "mk": "", "ch": "ch13", "what": "U 相占空比", "unit": "%", "desc": "" },
-      { "mk": "", "ch": "ch14", "what": "已注入的偏移", "unit": "deg", "desc": "成功应为 0" },
-      { "mk": "(*)", "ch": "ch15", "what": "状态", "unit": "-", "desc": "锁定阶段主判据" }
+      {
+        "mk": "",
+        "ch": "ch0",
+        "what": "U 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch1",
+        "what": "V 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch2",
+        "what": "W 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch3",
+        "what": "静止系电流幅值",
+        "unit": "A",
+        "desc": "吸附期间可见"
+      },
+      {
+        "mk": "",
+        "ch": "ch4",
+        "what": "静止系 ialpha",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch5",
+        "what": "静止系 ibeta",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch6",
+        "what": "iq 反馈",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch7",
+        "what": "id 反馈",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch8",
+        "what": "iq 目标",
+        "unit": "A",
+        "desc": "交接后有效"
+      },
+      {
+        "mk": "",
+        "ch": "ch9",
+        "what": "vd 输出",
+        "unit": "V",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch10",
+        "what": "vq 输出",
+        "unit": "V",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch11",
+        "what": "斜坡后 iq 参考",
+        "unit": "A",
+        "desc": "交接后有效"
+      },
+      {
+        "mk": "",
+        "ch": "ch12",
+        "what": "转子电角度",
+        "unit": "rad",
+        "desc": "交接后有效"
+      },
+      {
+        "mk": "",
+        "ch": "ch13",
+        "what": "U 相占空比",
+        "unit": "%",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch14",
+        "what": "已注入的偏移",
+        "unit": "deg",
+        "desc": "成功应为 0"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch15",
+        "what": "状态",
+        "unit": "-",
+        "desc": "锁定阶段主判据"
+      }
     ]
   },
   "notes": [
-    { "mk": "(*)", "text": "主判据：g_lockiq_step 走到 4（已锁定等交接）= 成功；foc_obs 随即打印 [LOCKIQ] locked 并自动调 Foc_IqPi_Start() 交接 mode31，VOFA ch15 同步变为4。" },
-    { "mk": "(*)", "text": "step 序列：1 BETA 磁场90度盲等吸附 500ms -> 2 ALPHA 磁场0度等静止 -> 3 VERIFY 回90度复测位移 -> 4 已锁定等交接。" },
-    { "mk": "[!]", "text": "三道质量门全过才锁定：连续 2 个 300ms 窗口位移 <= 4 counts 才算静止、相位超时 3s（evt_code=2）、复测位移应约 102 counts（90 度电 = CPR/(4*极对数)）且误差 <= 12 counts（evt_code=3）。任一门不过 -> step=5，拒绝启动。" },
-    { "mk": "[!]", "text": "注入偏移恒为 0：VERIFY 结束时转子被吸停在静止系 90 度，而 mode31 启动清零自身计数后要求 off = 90 度 - Theta，结果恰为0（与停位无关）。旧版沿用两段式推导注入 90 度，造成 90 度框架差 -> iq 落在真实 d 轴 -> 零转矩堵转 -> 过流。" },
-    { "mk": "[!]", "text": "LOCKED_WAIT_HANDOFF 期间继续输出 90 度磁场吸住转子不放手（这是 off=0 的前提）；交接后若用手拧过转子，再单独进 mode31 无效，必须重跑 mode 32。" }
+    {
+      "mk": "(*)",
+      "text": "主判据：g_lockiq_step 走到 4（已锁定等交接）= 成功；foc_obs 随即打印 [LOCKIQ] locked 并自动调 Foc_IqPi_Start() 交接 mode31，VOFA ch15 同步变为4。"
+    },
+    {
+      "mk": "(*)",
+      "text": "step 序列：1 BETA 磁场90度盲等吸附 500ms -> 2 ALPHA 磁场0度等静止 -> 3 VERIFY 回90度复测位移 -> 4 已锁定等交接。"
+    },
+    {
+      "mk": "[!]",
+      "text": "三道质量门全过才锁定：连续 2 个 300ms 窗口位移 <= 4 counts 才算静止、相位超时 3s（evt_code=2）、复测位移应约 102 counts（90 度电 = CPR/(4*极对数)）且误差 <= 12 counts（evt_code=3）。任一门不过 -> step=5，拒绝启动。"
+    },
+    {
+      "mk": "[!]",
+      "text": "注入偏移恒为 0：VERIFY 结束时转子被吸停在静止系 90 度，而 mode31 启动清零自身计数后要求 off = 90 度 - Theta，结果恰为0（与停位无关）。旧版沿用两段式推导注入 90 度，造成 90 度框架差 -> iq 落在真实 d 轴 -> 零转矩堵转 -> 过流。"
+    },
+    {
+      "mk": "[!]",
+      "text": "LOCKED_WAIT_HANDOFF 期间继续输出 90 度磁场吸住转子不放手（这是 off=0 的前提）；交接后若用手拧过转子，再单独进 mode31 无效，必须重跑 mode 32。"
+    }
   ],
   "evidence": {
-    "g_lockiq_align_volt_v": "foc_32_lockiq.h:164",
-    "g_lockiq_running": "foc_32_lockiq.h:162",
-    "g_lockiq_step": "foc_32_lockiq.h:163",
-    "g_lockiq_off_deg": "foc_32_lockiq.h:166",
+    "g_lockiq_align_volt_v": "foc_32_lockiq.h:204",
+    "g_lockiq_running": "foc_32_lockiq.h:202",
+    "g_lockiq_step": "foc_32_lockiq.h:203",
+    "g_lockiq_off_deg": "foc_32_lockiq.h:206",
     "g_lockiq_win_moved": "foc_obs.h:89",
     "g_lockiq_win_evals": "foc_obs.h:90",
     "g_lockiq_track_err_cnts": "foc_obs.h:91",
@@ -64,14 +228,14 @@
     "g_lockiq_evt_off_deg": "foc_obs.h:96",
     "Foc_LockIq_VofaFill": "foc_32_lockiq.c:389",
     "Foc_LockIqPi_Start": "foc_32_lockiq.c:167",
-    "Foc_IqPi_Start": "foc_31_iqpi.h:196",
-    "FOC_ALIGN_VOLT_V": "motor_config.h:100",
-    "FOC32_TIMEOUT_MS": "foc_32_lockiq.h:128",
-    "FOC32_WIN_TOL_CNTS": "foc_32_lockiq.h:129",
-    "FOC32_QUIET_NEED": "foc_32_lockiq.h:130",
-    "FOC32_TRACK_TOL_CNTS": "foc_32_lockiq.h:131",
-    "FOC32_BETA_MS": "foc_32_lockiq.h:126",
-    "FOC32_WIN_MS": "foc_32_lockiq.h:127",
+    "Foc_IqPi_Start": "foc_31_iqpi.h:243",
+    "FOC_ALIGN_VOLT_V": "motor_config.h:103",
+    "FOC32_TIMEOUT_MS": "foc_32_lockiq.h:168",
+    "FOC32_WIN_TOL_CNTS": "foc_32_lockiq.h:169",
+    "FOC32_QUIET_NEED": "foc_32_lockiq.h:170",
+    "FOC32_TRACK_TOL_CNTS": "foc_32_lockiq.h:171",
+    "FOC32_BETA_MS": "foc_32_lockiq.h:166",
+    "FOC32_WIN_MS": "foc_32_lockiq.h:167",
     "g_i_iu_ma": "I.h:214",
     "g_foc_ialpha": "foc_core.h:72",
     "g_foc_ibeta": "foc_core.h:73",
@@ -82,8 +246,8 @@
     "g_foc_vq": "foc_core.h:67",
     "g_foc_du": "foc_core.h:52",
     "g_foc_theta_rad": "foc_core.h:51",
-    "g_iqpi_iq_ref_ma": "foc_31_iqpi.h:178",
-    "g_iqpi_iq_ref_ramp_ma": "foc_31_iqpi.h:179",
-    "g_iqpi_theta_rad": "foc_31_iqpi.h:181"
+    "g_iqpi_iq_ref_ma": "foc_31_iqpi.h:225",
+    "g_iqpi_iq_ref_ramp_ma": "foc_31_iqpi.h:226",
+    "g_iqpi_theta_rad": "foc_31_iqpi.h:228"
   }
 }

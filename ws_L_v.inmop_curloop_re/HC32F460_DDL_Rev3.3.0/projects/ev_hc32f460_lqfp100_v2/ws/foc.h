@@ -19,6 +19,7 @@
  *          foc_32_lockiq.h 模式32 自锁偏移（直流对齐）+ 自动交接 mode 31
  *          foc_calib.h    相电流 DC 零偏自校准（各模式启动时复用）
  *          foc_scope.h    MotorScope RTT 遥测
+ *          foc_51_rs.h    模式51 定子电阻辨识（静止直流注入 + 多电平最小二乘）
  *
  *        依赖方向：各模式模块 -> foc_core；本文件仅聚合头文件与
  *        Foc_Init/Foc_Isr 分发入口。main.c / dev_comm_runner.c 等
@@ -51,6 +52,8 @@
 #include "foc_32_lockiq.h"
 #include "foc_calib.h"
 #include "foc_scope.h"
+#include "foc_51_rs.h"
+#include "foc_52_ldlq.h"
 
 #ifdef __cplusplus
 extern "C" {

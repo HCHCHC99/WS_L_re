@@ -41,14 +41,16 @@ extern volatile uint8_t  g_scope_step;
  * Keil Watch 可调变量
  *   comm_mode 取值总览（每个 mode 的详表见该模式头文件顶部那张卡）
  *     0   空闲 / 静止观测态（通用 VOFA 20ch）      20  编码器零点校准
- *     23  静止电角度对齐（老版，替代品 20）         24  仅校准（零偏 + 零点）
- *     25  手动角度吸附                              26  开环 VF 负载角实验
- *     27  功角闭环拖动                              28  校准 + 功角参考电流闭环
- *     29  纯电流环（复用 24 校准）                  30  磁场角度自增拖动
- *     31  编码器 PI 电流环（id 恒 0）               32  自锁偏移 + 交接 31
- *     40  编码器 FOC 速度/电流双闭环                41  纯电流环 + dq 前馈
- *     45  SMO+PLL 无感 FOC 速度/电流双闭环
+ *     24  仅校准（零偏 + 零点）                     25  手动角度吸附
+ *     26  开环 VF 负载角实验                        27  功角闭环拖动
+ *     28  校准 + 功角参考电流闭环                   29  纯电流环（复用 24 校准）
+ *     30  磁场角度自增拖动                          31  编码器 PI 电流环（id 恒 0）
+ *     32  自锁偏移 + 交接 31                        40  编码器 FOC 速度/电流双闭环
+ *     41  纯电流环 + dq 前馈                        45  SMO+PLL 无感 FOC 速度/电流双闭环
+ *     51  定子电阻辨识（静止直流注入；不需要校准）
+ *     52  d/q 电感辨识（方波小信号；需先跑 24）      （53 磁链 待接入）
  *   1~11 为 CommRunner 六步方波模式，见 dev_comm_runner.h
+ *   注：23（老版静止对齐）已于 2026-09-26 整模式删除，见 md_record 记录。
  *=============================================================================*/
 volatile int   comm_mode        = 0;
 volatile float g_comm_duty_pct  = 80.0f;
@@ -77,9 +79,6 @@ volatile float g_comm_duty_pct  = 80.0f;
 #define NOISY_MODE_FOC_OBS     (8)
 
 volatile int check_noisy_mode = NOISY_MODE_FULL;
-
-/* FOC 对齐参数（Keil Watch 可调） */
-extern volatile float g_foc_align_volt_v;
 
 /* ZIZENG 参数（Keil Watch 可调） */
 extern volatile float g_zizeng_freq_hz;
@@ -241,7 +240,7 @@ static int Foc_Common_VofaFill(int32_t *cur)
 int main(void)
 	{
     Hardware_Init();
-    MAIN_DBG("System started (MINIMAL: mode23/30 only)");
+    MAIN_DBG("System started");
 
     /* ---- USART3 + VOFA+ ---- */
     {
@@ -263,7 +262,7 @@ int main(void)
     };
     CommRunner_Init(&runner_cfg);
 
-    /* ---- 电流采样（模式23和30需要电流监视） ---- */
+    /* ---- 电流采样（FOC 各模式与 mode 30 都要电流监视） ---- */
     I_Init();
     tickTimer_DelayMs(2000);    /* 等传感器基准/VDDA 冷启动暂态稳定后再校零 */
     I_Calibrate();              /* 内部已切 FOC 模式 + 50/50/50 零矢量并保持 */
@@ -380,11 +379,12 @@ int main(void)
          * 【架构】每个模式实现自己的 Foc_Xxx_VofaFill(cur)，返回**通道数**；
          *   返回 0 表示该模式无专属布局（回落到本文件的通用布局）。
          *   **通道含义的唯一事实源 = 各模式 .h 顶部的【模式速览卡】**：
-         *     mode 20  14ch     mode 23  12ch     mode 24  16ch
-         *     mode 25  16ch     mode 26  16ch     mode 27  17ch
-         *     mode 28  17ch     mode 29  19ch     mode 30  15ch
-         *     mode 31  16ch     mode 32  16ch     mode 40  18ch
-         *     mode 41  21ch     mode 45  16/8/16ch（随 g_smo45_wave_mode）
+         *     mode 20  14ch     mode 24  16ch     mode 25  16ch
+         *     mode 26  16ch     mode 27  17ch     mode 28  17ch
+         *     mode 29  19ch     mode 30  15ch     mode 31  16ch
+         *     mode 32  16ch     mode 40  18ch     mode 41  21ch
+         *     mode 45  16/8/16ch（随 g_smo45_wave_mode）
+         *     mode 51  12ch     mode 52  12ch
          *     通用/mode 0 → 本文件下方 Foc_Common_VofaFill（20ch，见其注释）
          *   只有六步方波模式（comm_mode 1~11）与空闲态才回落到通用布局。
          *
@@ -410,10 +410,11 @@ int main(void)
             else if (g_olf_running)       { n = Foc_Olf_VofaFill(cur); }     /* 16ch */
             else if (g_calang_running)    { n = Foc_CalAngle_VofaFill(cur); }/* 16ch */
             else if (g_cal_running)       { n = Foc_Cal_VofaFill(cur); }     /* 14ch */
-            else if (g_align_running)     { n = Foc_Align_VofaFill(cur); }   /* 12ch */
             else if (g_zizeng_running)    { n = Foc_Ramp_VofaFill(cur); }    /* 15ch */
             else if (g_lockiq_running)    { n = Foc_LockIq_VofaFill(cur); }  /* 16ch */
             else if (g_iqpi_running)      { n = Foc_IqPi_VofaFill(cur); }    /* 16ch */
+            else if (g_rs51_running)      { n = Foc_RsId_VofaFill(cur); }    /* 12ch */
+            else if (g_ldlq52_running)    { n = Foc_LdLqId_VofaFill(cur); }  /* 12ch */
             else                          { n = 0; }   /* mode 0 及空闲态 */
 
             if (n <= 0) {

@@ -35,6 +35,8 @@ typedef enum {
     COMM_RUNNER_ZIZENG     = 30, /* 磁场角度自增拖动模式 */
     COMM_RUNNER_IQ_PI      = 31, /* PI 电流环模式（需先跑 mode 30 锁偏移） */
     COMM_RUNNER_LOCK_IQ_PI = 32, /* 自锁偏移 + 自动交接 mode 31（不依赖 mode 30） */
+    COMM_RUNNER_RS51       = 51, /* 定子电阻辨识（静止直流注入 + 多电平最小二乘） */
+    COMM_RUNNER_LDLQ52     = 52, /* d/q 轴电感辨识（直流偏置方波 + 单极性纹波，需先跑 mode 24） */
 } comm_runner_mode_t;
 
 /* 配置结构（精简版） */
@@ -58,6 +60,7 @@ typedef struct {
  *     mode 0/通用 20ch | 20 14ch | 24 16ch | 25 16ch | 26 16ch
  *     mode 27 17ch | 28 17ch | 29 19ch | 30 15ch | 31 16ch
  *     mode 32 16ch | 40 18ch | 41 21ch | 45 16/8/16ch（随 wave_mode）
+ *     mode 51 12ch
  *
  *   ⚠ 通道数可变 ⇒ 切模式时 VOFA+ 上位机的通道数必须同步修改。
  *   ⚠ 硬上限 USART3_VOFA_MAX_CHANNELS(24)；main.c 内部缓冲 cur[32]。
@@ -86,5 +89,10 @@ float CommRunner_GetTargetRPM(void);
 
 /* 删除所有 Calibration 相关声明 */
 /* 删除所有 PID/JScope 相关 extern 变量 */
+
+/* 释放当前模式号（不清 FOC 模块、不动运行标志）：自终止模式跑完后调用，
+ * 使 Keil 里再次写同一个模式号能真正重进 —— 否则 SetMode 开头的
+ * "同模式早退"会把重测请求吃掉（mode 52 重测问题的根因）。 */
+void CommRunner_ReleaseMode(void);
 
 #endif /* __DEV_COMM_RUNNER_H__ */

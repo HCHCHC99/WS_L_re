@@ -5,87 +5,307 @@
   "pre": "无。进入即自带校准：BETA 90deg 吸 2s -> ALPHA 0deg 吸 2s 锁零点（约 4s 后进 DRAG）",
   "end": "持续拖动到手动停机（SW2 短按或写 comm_mode = 0）；仅过流自动回 mode 0",
   "watch": [
-    { "mk": "", "name": "g_olf_freq_init_hz", "val": "0.2", "unit": "Hz", "desc": "斜坡起点（Start 不复位）" },
-    { "mk": "", "name": "g_olf_freq_targ_hz", "val": "150.0", "unit": "Hz", "desc": "斜坡终点（SW1 每按 +0.5）" },
-    { "mk": "", "name": "g_olf_freq_tr_ms", "val": "20000", "unit": "ms", "desc": "过渡时间，0=立即" },
-    { "mk": "", "name": "g_olf_volt_v", "val": "0.6", "unit": "V", "desc": "拖动电压，Start 复位 0.6" },
-    { "mk": "", "name": "g_olf_step_010", "val": "1", "unit": "0.1deg", "desc": "自增步长，1 约等于连续旋转" },
-    { "mk": "", "name": "g_olf_dir", "val": "1", "unit": "-", "desc": "自增方向 +1=角加 / -1=角减" },
-    { "mk": "(*)", "note": "默认值取 .c 初始化：0.2Hz 起步、20s 爬到 150Hz 自动扫频；.h 速览卡写的 0.5 与交接.md 写的 3Hz 与此不一致。" },
-    { "mk": "[!]", "note": "g_olf_step_010 / g_olf_dir 在 Start 会复位成 1 / +1；想用大步长做跳跃实验，必须在启动之后再改。" }
+    {
+      "mk": "",
+      "name": "g_olf_freq_init_hz",
+      "val": "0.2",
+      "unit": "Hz",
+      "desc": "斜坡起点（Start 不复位）"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_freq_targ_hz",
+      "val": "150.0",
+      "unit": "Hz",
+      "desc": "斜坡终点（SW1 每按 +0.5）"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_freq_tr_ms",
+      "val": "20000",
+      "unit": "ms",
+      "desc": "过渡时间，0=立即"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_volt_v",
+      "val": "0.6",
+      "unit": "V",
+      "desc": "拖动电压，Start 复位 0.6"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_step_010",
+      "val": "1",
+      "unit": "0.1deg",
+      "desc": "自增步长，1 约等于连续旋转"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_dir",
+      "val": "1",
+      "unit": "-",
+      "desc": "自增方向 +1=角加 / -1=角减"
+    },
+    {
+      "mk": "(*)",
+      "note": "默认值取 .c 初始化：0.2Hz 起步、20s 爬到 150Hz 自动扫频；.h 速览卡写的 0.5 与交接.md 写的 3Hz 与此不一致。"
+    },
+    {
+      "mk": "[!]",
+      "note": "g_olf_step_010 / g_olf_dir 在 Start 会复位成 1 / +1；想用大步长做跳跃实验，必须在启动之后再改。"
+    }
   ],
   "obs": [
-    { "mk": "(*)", "name": "g_olf_diff_deg", "desc": "负载角 delta = field - rotor；主判据 ch7" },
-    { "mk": "", "name": "g_olf_freq_hz", "desc": "斜坡实时频率；每拍被覆盖，改写无效" },
-    { "mk": "", "name": "g_olf_iq_ma", "desc": "真实转子系 iq（力矩分量）" },
-    { "mk": "", "name": "g_olf_id_ma", "desc": "真实转子系 id；高频时转负" },
-    { "mk": "", "name": "g_olf_iq_pp_ma", "desc": "iq 的 5s 窗口峰峰值；失步后剧烈振荡" },
-    { "mk": "", "name": "g_olf_id_pp_ma", "desc": "id 的 5s 窗口峰峰值" },
-    { "mk": "", "name": "g_olf_field_deg", "desc": "磁场电角 (deg，0~359)" },
-    { "mk": "", "name": "g_olf_rotor_deg", "desc": "转子电角 (deg，0~359)" },
-    { "mk": "", "name": "g_olf_theta_rad", "desc": "控制系 d 轴角（rad）；磁场角 = +90deg" },
-    { "mk": "", "name": "g_olf_state", "desc": "0IDLE/1BETA/2ALPHA/3DRAG/4OC" },
-    { "mk": "", "name": "g_olf_evt", "desc": "事件 1BETA/2LOCKED/3OC/4RAMP" },
-    { "mk": "", "name": "g_olf_running", "desc": "1 = 正在运行（切模式后清零）" },
-    { "mk": "", "name": "g_olf_offset", "desc": "校准锁零点（counts）" },
-    { "mk": "", "name": "g_olf_du", "desc": "U 相占空比 %；VOFA 16ch 里没有它" },
-    { "mk": "", "name": "g_olf_dv", "desc": "V 相占空比 %" },
-    { "mk": "", "name": "g_olf_dw", "desc": "W 相占空比 %" },
-    { "mk": "[!]", "note": "delta 折叠到 (-180,180]：正常拖动为正且缓升；出现正负剧烈跳变 = 已经失步。" }
+    {
+      "mk": "(*)",
+      "name": "g_olf_diff_deg",
+      "desc": "负载角 delta = field - rotor；主判据 ch7"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_freq_hz",
+      "desc": "斜坡实时频率；每拍被覆盖，改写无效"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_iq_ma",
+      "desc": "真实转子系 iq（力矩分量）"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_id_ma",
+      "desc": "真实转子系 id；高频时转负"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_iq_pp_ma",
+      "desc": "iq 的 5s 窗口峰峰值；失步后剧烈振荡"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_id_pp_ma",
+      "desc": "id 的 5s 窗口峰峰值"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_field_deg",
+      "desc": "磁场电角 (deg，0~359)"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_rotor_deg",
+      "desc": "转子电角 (deg，0~359)"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_theta_rad",
+      "desc": "控制系 d 轴角（rad）；磁场角 = +90deg"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_state",
+      "desc": "0IDLE/1BETA/2ALPHA/3DRAG/4OC"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_evt",
+      "desc": "事件 1BETA/2LOCKED/3OC/4RAMP"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_running",
+      "desc": "1 = 正在运行（切模式后清零）"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_offset",
+      "desc": "校准锁零点（counts）"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_du",
+      "desc": "U 相占空比 %；VOFA 16ch 里没有它"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_dv",
+      "desc": "V 相占空比 %"
+    },
+    {
+      "mk": "",
+      "name": "g_olf_dw",
+      "desc": "W 相占空比 %"
+    },
+    {
+      "mk": "[!]",
+      "note": "delta 折叠到 (-180,180]：正常拖动为正且缓升；出现正负剧烈跳变 = 已经失步。"
+    }
   ],
   "vofa": {
     "n": 16,
     "fn": "Foc_Olf_VofaFill",
     "shared": false,
     "rows": [
-      { "mk": "", "ch": "ch0", "what": "U 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch1", "what": "V 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch2", "what": "W 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch3", "what": "磁场自增频率", "unit": "Hz", "desc": "斜坡实时输出（改它无效）" },
-      { "mk": "", "ch": "ch4", "what": "目标频率", "unit": "Hz", "desc": "SW1 每按 +0.5Hz" },
-      { "mk": "", "ch": "ch5", "what": "iq 力矩分量", "unit": "A", "desc": "失步后剧烈振荡" },
-      { "mk": "", "ch": "ch6", "what": "id 磁链分量", "unit": "A", "desc": "高频转负（电压饥饿）" },
-      { "mk": "(*)", "ch": "ch7", "what": "负载角 delta", "unit": "deg", "desc": "主曲线：摩擦锥->缓升->冲 90 崩塌" },
-      { "mk": "", "ch": "ch8", "what": "磁场电角度", "unit": "deg", "desc": "" },
-      { "mk": "", "ch": "ch9", "what": "转子电角度", "unit": "deg", "desc": "" },
-      { "mk": "", "ch": "ch10", "what": "拖动电压幅值", "unit": "V", "desc": "" },
-      { "mk": "", "ch": "ch11", "what": "iq 峰峰值", "unit": "A", "desc": "5s 窗口刷新，失步判据" },
-      { "mk": "", "ch": "ch12", "what": "id 峰峰值", "unit": "A", "desc": "5s 窗口刷新" },
-      { "mk": "", "ch": "ch13", "what": "控制系 d 轴角", "unit": "rad", "desc": "磁场角 = 该值 + 90deg" },
-      { "mk": "", "ch": "ch14", "what": "自增方向", "unit": "-", "desc": "+1=角加 / -1=角减" },
-      { "mk": "", "ch": "ch15", "what": "状态", "unit": "-", "desc": "0IDLE/1BETA/2ALPHA/3DRAG/4OC" }
+      {
+        "mk": "",
+        "ch": "ch0",
+        "what": "U 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch1",
+        "what": "V 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch2",
+        "what": "W 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch3",
+        "what": "磁场自增频率",
+        "unit": "Hz",
+        "desc": "斜坡实时输出（改它无效）"
+      },
+      {
+        "mk": "",
+        "ch": "ch4",
+        "what": "目标频率",
+        "unit": "Hz",
+        "desc": "SW1 每按 +0.5Hz"
+      },
+      {
+        "mk": "",
+        "ch": "ch5",
+        "what": "iq 力矩分量",
+        "unit": "A",
+        "desc": "失步后剧烈振荡"
+      },
+      {
+        "mk": "",
+        "ch": "ch6",
+        "what": "id 磁链分量",
+        "unit": "A",
+        "desc": "高频转负（电压饥饿）"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch7",
+        "what": "负载角 delta",
+        "unit": "deg",
+        "desc": "主曲线：摩擦锥->缓升->冲 90 崩塌"
+      },
+      {
+        "mk": "",
+        "ch": "ch8",
+        "what": "磁场电角度",
+        "unit": "deg",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch9",
+        "what": "转子电角度",
+        "unit": "deg",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch10",
+        "what": "拖动电压幅值",
+        "unit": "V",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch11",
+        "what": "iq 峰峰值",
+        "unit": "A",
+        "desc": "5s 窗口刷新，失步判据"
+      },
+      {
+        "mk": "",
+        "ch": "ch12",
+        "what": "id 峰峰值",
+        "unit": "A",
+        "desc": "5s 窗口刷新"
+      },
+      {
+        "mk": "",
+        "ch": "ch13",
+        "what": "控制系 d 轴角",
+        "unit": "rad",
+        "desc": "磁场角 = 该值 + 90deg"
+      },
+      {
+        "mk": "",
+        "ch": "ch14",
+        "what": "自增方向",
+        "unit": "-",
+        "desc": "+1=角加 / -1=角减"
+      },
+      {
+        "mk": "",
+        "ch": "ch15",
+        "what": "状态",
+        "unit": "-",
+        "desc": "0IDLE/1BETA/2ALPHA/3DRAG/4OC"
+      }
     ]
   },
   "notes": [
-    { "mk": "(*)", "text": "主判据：拖动后 delta（ch7）随频率走 摩擦锥 5~15deg -> 缓升 -> 冲 90deg -> 越过即锯齿崩塌（失步）；同步看 iq 上升、id 高频段转负、pp 剧烈振荡。" },
-    { "mk": "(*)", "text": "实测：delta 存在约 +/-10deg 的持续抖动（VOFA 呈马鞍波）；同步转速下 PMSM 无电磁阻尼，属欠阻尼猎振 hunting，不是故障。这正是 mode 27 闭环对照的动机。" },
-    { "mk": "[!]", "text": "g_olf_freq_hz 是斜坡输出，DRAG 态每拍被覆盖：直接写它调频无效，改 g_olf_freq_targ_hz 或按 SW1（+0.5Hz）。" },
-    { "mk": "[!]", "text": "tr=0 或斜坡已完成后改 targ 是阶跃：小步 +0.5Hz 转子跟得上，大改动直接失步。" },
-    { "mk": "[!]", "text": "VOFA+ 通道数必须同步配成 16，否则整帧错位；改通道数改 Foc_Olf_VofaFill 末尾的 return。" }
+    {
+      "mk": "(*)",
+      "text": "主判据：拖动后 delta（ch7）随频率走 摩擦锥 5~15deg -> 缓升 -> 冲 90deg -> 越过即锯齿崩塌（失步）；同步看 iq 上升、id 高频段转负、pp 剧烈振荡。"
+    },
+    {
+      "mk": "(*)",
+      "text": "实测：delta 存在约 +/-10deg 的持续抖动（VOFA 呈马鞍波）；同步转速下 PMSM 无电磁阻尼，属欠阻尼猎振 hunting，不是故障。这正是 mode 27 闭环对照的动机。"
+    },
+    {
+      "mk": "[!]",
+      "text": "g_olf_freq_hz 是斜坡输出，DRAG 态每拍被覆盖：直接写它调频无效，改 g_olf_freq_targ_hz 或按 SW1（+0.5Hz）。"
+    },
+    {
+      "mk": "[!]",
+      "text": "tr=0 或斜坡已完成后改 targ 是阶跃：小步 +0.5Hz 转子跟得上，大改动直接失步。"
+    },
+    {
+      "mk": "[!]",
+      "text": "VOFA+ 通道数必须同步配成 16，否则整帧错位；改通道数改 Foc_Olf_VofaFill 末尾的 return。"
+    }
   ],
   "evidence": {
-    "g_olf_freq_hz": "foc_26_olf.h:185",
-    "g_olf_freq_init_hz": "foc_26_olf.h:186",
-    "g_olf_freq_targ_hz": "foc_26_olf.h:187",
-    "g_olf_freq_tr_ms": "foc_26_olf.h:188",
-    "g_olf_step_010": "foc_26_olf.h:189",
-    "g_olf_dir": "foc_26_olf.h:190",
-    "g_olf_volt_v": "foc_26_olf.h:191",
-    "g_olf_running": "foc_26_olf.h:192",
-    "g_olf_state": "foc_26_olf.h:193",
-    "g_olf_evt": "foc_26_olf.h:194",
-    "g_olf_offset": "foc_26_olf.h:195",
-    "g_olf_field_deg": "foc_26_olf.h:196",
-    "g_olf_rotor_deg": "foc_26_olf.h:197",
-    "g_olf_diff_deg": "foc_26_olf.h:198",
-    "g_olf_id_ma": "foc_26_olf.h:199",
-    "g_olf_iq_ma": "foc_26_olf.h:200",
-    "g_olf_id_pp_ma": "foc_26_olf.h:201",
-    "g_olf_iq_pp_ma": "foc_26_olf.h:202",
-    "g_olf_theta_rad": "foc_26_olf.h:203",
-    "g_olf_du": "foc_26_olf.h:204",
-    "g_olf_dv": "foc_26_olf.h:205",
-    "g_olf_dw": "foc_26_olf.h:206",
+    "g_olf_freq_hz": "foc_26_olf.h:220",
+    "g_olf_freq_init_hz": "foc_26_olf.h:221",
+    "g_olf_freq_targ_hz": "foc_26_olf.h:222",
+    "g_olf_freq_tr_ms": "foc_26_olf.h:223",
+    "g_olf_step_010": "foc_26_olf.h:224",
+    "g_olf_dir": "foc_26_olf.h:225",
+    "g_olf_volt_v": "foc_26_olf.h:226",
+    "g_olf_running": "foc_26_olf.h:227",
+    "g_olf_state": "foc_26_olf.h:228",
+    "g_olf_evt": "foc_26_olf.h:229",
+    "g_olf_offset": "foc_26_olf.h:230",
+    "g_olf_field_deg": "foc_26_olf.h:231",
+    "g_olf_rotor_deg": "foc_26_olf.h:232",
+    "g_olf_diff_deg": "foc_26_olf.h:233",
+    "g_olf_id_ma": "foc_26_olf.h:234",
+    "g_olf_iq_ma": "foc_26_olf.h:235",
+    "g_olf_id_pp_ma": "foc_26_olf.h:236",
+    "g_olf_iq_pp_ma": "foc_26_olf.h:237",
+    "g_olf_theta_rad": "foc_26_olf.h:238",
+    "g_olf_du": "foc_26_olf.h:239",
+    "g_olf_dv": "foc_26_olf.h:240",
+    "g_olf_dw": "foc_26_olf.h:241",
     "g_i_iu_ma": "I.h:214",
     "g_i_iv_ma": "I.h:215",
     "g_i_iw_ma": "I.h:216",

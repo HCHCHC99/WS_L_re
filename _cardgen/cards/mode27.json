@@ -5,83 +5,289 @@
   "pre": "无。进入即自带校准：BETA 90deg 吸 2s -> ALPHA 0deg 吸 2s 锁零点（约 4s 后自动 RUN）",
   "end": "持续运行到手动停机（SW2 短按或写 comm_mode = 0）；仅过流自动回 mode 0",
   "watch": [
-    { "mk": "", "name": "g_dcl_volt_v", "val": "0.6", "unit": "V", "desc": "调速旋钮（0.1V 约 1A）" },
-    { "mk": "", "name": "g_dcl_dlt_init_deg", "val": "5", "unit": "deg", "desc": "delta 爬坡起点（不复位）" },
-    { "mk": "", "name": "g_dcl_dlt_targ_deg", "val": "45", "unit": "deg", "desc": "delta 爬坡终点（扫 MTPA）" },
-    { "mk": "", "name": "g_dcl_dlt_tr_ms", "val": "2000", "unit": "ms", "desc": "过渡时间，0=立即" },
-    { "mk": "(*)", "note": "实测：delta=90deg、volt=0.6V 时稳态约 460Hz 电频（约 2760rpm），id 转负、iq 降到摩擦级电流。" },
-    { "mk": "[!]", "note": "功角三参数 Start 不复位（可预设后启动），g_dcl_volt_v 则每次 Start 复位 0.6；运行中改参数 = 按新值重算轨迹并跳变，实验前先设好。" }
+    {
+      "mk": "",
+      "name": "g_dcl_volt_v",
+      "val": "0.6",
+      "unit": "V",
+      "desc": "调速旋钮（0.1V 约 1A）"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_dlt_init_deg",
+      "val": "5",
+      "unit": "deg",
+      "desc": "delta 爬坡起点（不复位）"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_dlt_targ_deg",
+      "val": "45",
+      "unit": "deg",
+      "desc": "delta 爬坡终点（扫 MTPA）"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_dlt_tr_ms",
+      "val": "2000",
+      "unit": "ms",
+      "desc": "过渡时间，0=立即"
+    },
+    {
+      "mk": "(*)",
+      "note": "实测：delta=90deg、volt=0.6V 时稳态约 460Hz 电频（约 2760rpm），id 转负、iq 降到摩擦级电流。"
+    },
+    {
+      "mk": "[!]",
+      "note": "功角三参数 Start 不复位（可预设后启动），g_dcl_volt_v 则每次 Start 复位 0.6；运行中改参数 = 按新值重算轨迹并跳变，实验前先设好。"
+    }
   ],
   "obs": [
-    { "mk": "(*)", "name": "g_dcl_speed_hz", "desc": "实测电频（200ms 窗口，带符号）" },
-    { "mk": "", "name": "g_dcl_dlt_now_deg", "desc": "delta 指令电角（爬坡实时值）" },
-    { "mk": "", "name": "g_dcl_diff_deg", "desc": "功角实测；与指令同源，恒等验证" },
-    { "mk": "", "name": "g_dcl_id_ma", "desc": "真实转子系 id（磁链分量）" },
-    { "mk": "", "name": "g_dcl_iq_ma", "desc": "真实转子系 iq（力矩分量）" },
-    { "mk": "", "name": "g_dcl_iq_pp_ma", "desc": "iq 的 5s 窗口峰峰值（猎振判据）" },
-    { "mk": "", "name": "g_dcl_id_pp_ma", "desc": "id 的 5s 窗口峰峰值" },
-    { "mk": "", "name": "g_dcl_field_deg", "desc": "磁场电角 (deg，0~359)" },
-    { "mk": "", "name": "g_dcl_rotor_deg", "desc": "转子电角 (deg，0~359)" },
-    { "mk": "", "name": "g_dcl_enc_pos", "desc": "相对计数镜像（毛刺/限幅排查用）" },
-    { "mk": "", "name": "g_dcl_state", "desc": "0IDLE/1BETA/2ALPHA/3RUN/4OC" },
-    { "mk": "", "name": "g_dcl_evt", "desc": "事件 1BETA/2LOCKED/3RAMP/4OC" },
-    { "mk": "", "name": "g_dcl_running", "desc": "1 = 正在运行（切模式后清零）" },
-    { "mk": "", "name": "g_dcl_offset", "desc": "校准锁零点（hw 绝对帧 counts）" },
-    { "mk": "[!]", "note": "diff 由 field-rotor 同源构造，它等于 dlt_now 只证明数学没算错，不是独立测出的真功角；真功角看 id/iq 的矢量角。" }
+    {
+      "mk": "(*)",
+      "name": "g_dcl_speed_hz",
+      "desc": "实测电频（200ms 窗口，带符号）"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_dlt_now_deg",
+      "desc": "delta 指令电角（爬坡实时值）"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_diff_deg",
+      "desc": "功角实测；与指令同源，恒等验证"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_id_ma",
+      "desc": "真实转子系 id（磁链分量）"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_iq_ma",
+      "desc": "真实转子系 iq（力矩分量）"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_iq_pp_ma",
+      "desc": "iq 的 5s 窗口峰峰值（猎振判据）"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_id_pp_ma",
+      "desc": "id 的 5s 窗口峰峰值"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_field_deg",
+      "desc": "磁场电角 (deg，0~359)"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_rotor_deg",
+      "desc": "转子电角 (deg，0~359)"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_enc_pos",
+      "desc": "相对计数镜像（毛刺/限幅排查用）"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_state",
+      "desc": "0IDLE/1BETA/2ALPHA/3RUN/4OC"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_evt",
+      "desc": "事件 1BETA/2LOCKED/3RAMP/4OC"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_running",
+      "desc": "1 = 正在运行（切模式后清零）"
+    },
+    {
+      "mk": "",
+      "name": "g_dcl_offset",
+      "desc": "校准锁零点（hw 绝对帧 counts）"
+    },
+    {
+      "mk": "[!]",
+      "note": "diff 由 field-rotor 同源构造，它等于 dlt_now 只证明数学没算错，不是独立测出的真功角；真功角看 id/iq 的矢量角。"
+    }
   ],
   "vofa": {
     "n": 17,
     "fn": "Foc_Dcl_VofaFill",
     "shared": false,
     "rows": [
-      { "mk": "", "ch": "ch0", "what": "U 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch1", "what": "V 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch2", "what": "W 相电流", "unit": "A", "desc": "" },
-      { "mk": "(*)", "ch": "ch3", "what": "实测电频率", "unit": "Hz", "desc": "扫 delta 看这个；符号未乘 enc_dir" },
-      { "mk": "", "ch": "ch4", "what": "delta 指令", "unit": "deg", "desc": "爬坡中的当前设定值" },
-      { "mk": "", "ch": "ch5", "what": "功角实测", "unit": "deg", "desc": "应约等于 ch4（同源恒等式）" },
-      { "mk": "", "ch": "ch6", "what": "iq 力矩分量", "unit": "A", "desc": "= I sin(delta)" },
-      { "mk": "", "ch": "ch7", "what": "id 磁链分量", "unit": "A", "desc": "= I cos(delta)，delta 小则变大" },
-      { "mk": "", "ch": "ch8", "what": "磁场电角度", "unit": "deg", "desc": "" },
-      { "mk": "", "ch": "ch9", "what": "转子电角度", "unit": "deg", "desc": "" },
-      { "mk": "", "ch": "ch10", "what": "电压幅值", "unit": "V", "desc": "= 本模式调速旋钮" },
-      { "mk": "", "ch": "ch11", "what": "iq 峰峰值", "unit": "A", "desc": "5s 窗口刷新，猎振判据" },
-      { "mk": "", "ch": "ch12", "what": "id 峰峰值", "unit": "A", "desc": "5s 窗口刷新" },
-      { "mk": "", "ch": "ch13", "what": "U 相占空比", "unit": "%", "desc": "" },
-      { "mk": "", "ch": "ch14", "what": "V 相占空比", "unit": "%", "desc": "" },
-      { "mk": "", "ch": "ch15", "what": "W 相占空比", "unit": "%", "desc": "" },
-      { "mk": "", "ch": "ch16", "what": "状态", "unit": "-", "desc": "0IDLE/1BETA/2ALPHA/3RUN/4OC" }
+      {
+        "mk": "",
+        "ch": "ch0",
+        "what": "U 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch1",
+        "what": "V 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch2",
+        "what": "W 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch3",
+        "what": "实测电频率",
+        "unit": "Hz",
+        "desc": "扫 delta 看这个；符号未乘 enc_dir"
+      },
+      {
+        "mk": "",
+        "ch": "ch4",
+        "what": "delta 指令",
+        "unit": "deg",
+        "desc": "爬坡中的当前设定值"
+      },
+      {
+        "mk": "",
+        "ch": "ch5",
+        "what": "功角实测",
+        "unit": "deg",
+        "desc": "应约等于 ch4（同源恒等式）"
+      },
+      {
+        "mk": "",
+        "ch": "ch6",
+        "what": "iq 力矩分量",
+        "unit": "A",
+        "desc": "= I sin(delta)"
+      },
+      {
+        "mk": "",
+        "ch": "ch7",
+        "what": "id 磁链分量",
+        "unit": "A",
+        "desc": "= I cos(delta)，delta 小则变大"
+      },
+      {
+        "mk": "",
+        "ch": "ch8",
+        "what": "磁场电角度",
+        "unit": "deg",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch9",
+        "what": "转子电角度",
+        "unit": "deg",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch10",
+        "what": "电压幅值",
+        "unit": "V",
+        "desc": "= 本模式调速旋钮"
+      },
+      {
+        "mk": "",
+        "ch": "ch11",
+        "what": "iq 峰峰值",
+        "unit": "A",
+        "desc": "5s 窗口刷新，猎振判据"
+      },
+      {
+        "mk": "",
+        "ch": "ch12",
+        "what": "id 峰峰值",
+        "unit": "A",
+        "desc": "5s 窗口刷新"
+      },
+      {
+        "mk": "",
+        "ch": "ch13",
+        "what": "U 相占空比",
+        "unit": "%",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch14",
+        "what": "V 相占空比",
+        "unit": "%",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch15",
+        "what": "W 相占空比",
+        "unit": "%",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch16",
+        "what": "状态",
+        "unit": "-",
+        "desc": "0IDLE/1BETA/2ALPHA/3RUN/4OC"
+      }
     ]
   },
   "notes": [
-    { "mk": "(*)", "text": "主判据：delta 钉死后转速改由电压决定。扫 g_dcl_dlt_targ_deg 5/30/45/60/75/89，g_dcl_speed_hz 峰值应在 90deg 附近（MTPA 闭环验证）。" },
-    { "mk": "(*)", "text": "实测：delta=90deg、volt=0.6V 稳态约 460Hz 电频（约 2760rpm），id 转负、iq 降到摩擦级，即电压被 BEMF 吃掉的平衡点。" },
-    { "mk": "[!]", "text": "diff（ch5）= fold(field - rotor) 与 dlt_now（ch4）同源，两者相等只验证数学，不是真功角；要独立判据看 id/iq 矢量角 atan2(iq, id)。" },
-    { "mk": "[!]", "text": "g_dcl_speed_hz 符号取原始计数方向（未乘 g_foc_enc_dir），可能与实际转向相反；判 MTPA 只看幅值趋势。" },
-    { "mk": "[!]", "text": "高速下半拍滞后使实际 delta 比设定大 w*Ts/2（100~300Hz 约 1~3deg），要准就把 targ 少设 1~2deg；delta 小角度 id 大（铜损约 2W），长跑注意温升。" }
+    {
+      "mk": "(*)",
+      "text": "主判据：delta 钉死后转速改由电压决定。扫 g_dcl_dlt_targ_deg 5/30/45/60/75/89，g_dcl_speed_hz 峰值应在 90deg 附近（MTPA 闭环验证）。"
+    },
+    {
+      "mk": "(*)",
+      "text": "实测：delta=90deg、volt=0.6V 稳态约 460Hz 电频（约 2760rpm），id 转负、iq 降到摩擦级，即电压被 BEMF 吃掉的平衡点。"
+    },
+    {
+      "mk": "[!]",
+      "text": "diff（ch5）= fold(field - rotor) 与 dlt_now（ch4）同源，两者相等只验证数学，不是真功角；要独立判据看 id/iq 矢量角 atan2(iq, id)。"
+    },
+    {
+      "mk": "[!]",
+      "text": "g_dcl_speed_hz 符号取原始计数方向（未乘 g_foc_enc_dir），可能与实际转向相反；判 MTPA 只看幅值趋势。"
+    },
+    {
+      "mk": "[!]",
+      "text": "高速下半拍滞后使实际 delta 比设定大 w*Ts/2（100~300Hz 约 1~3deg），要准就把 targ 少设 1~2deg；delta 小角度 id 大（铜损约 2W），长跑注意温升。"
+    }
   ],
   "evidence": {
-    "g_dcl_dlt_init_deg": "foc_27_dcl.h:172",
-    "g_dcl_dlt_targ_deg": "foc_27_dcl.h:173",
-    "g_dcl_dlt_tr_ms": "foc_27_dcl.h:174",
-    "g_dcl_volt_v": "foc_27_dcl.h:175",
-    "g_dcl_running": "foc_27_dcl.h:176",
-    "g_dcl_state": "foc_27_dcl.h:177",
-    "g_dcl_evt": "foc_27_dcl.h:178",
-    "g_dcl_offset": "foc_27_dcl.h:179",
-    "g_dcl_dlt_now_deg": "foc_27_dcl.h:180",
-    "g_dcl_speed_hz": "foc_27_dcl.h:181",
-    "g_dcl_field_deg": "foc_27_dcl.h:182",
-    "g_dcl_rotor_deg": "foc_27_dcl.h:183",
-    "g_dcl_diff_deg": "foc_27_dcl.h:184",
-    "g_dcl_id_ma": "foc_27_dcl.h:185",
-    "g_dcl_iq_ma": "foc_27_dcl.h:186",
-    "g_dcl_id_pp_ma": "foc_27_dcl.h:187",
-    "g_dcl_iq_pp_ma": "foc_27_dcl.h:188",
-    "g_dcl_enc_pos": "foc_27_dcl.h:189",
-    "g_dcl_du": "foc_27_dcl.h:190",
-    "g_dcl_dv": "foc_27_dcl.h:191",
-    "g_dcl_dw": "foc_27_dcl.h:192",
+    "g_dcl_dlt_init_deg": "foc_27_dcl.h:209",
+    "g_dcl_dlt_targ_deg": "foc_27_dcl.h:210",
+    "g_dcl_dlt_tr_ms": "foc_27_dcl.h:211",
+    "g_dcl_volt_v": "foc_27_dcl.h:212",
+    "g_dcl_running": "foc_27_dcl.h:213",
+    "g_dcl_state": "foc_27_dcl.h:214",
+    "g_dcl_evt": "foc_27_dcl.h:215",
+    "g_dcl_offset": "foc_27_dcl.h:216",
+    "g_dcl_dlt_now_deg": "foc_27_dcl.h:217",
+    "g_dcl_speed_hz": "foc_27_dcl.h:218",
+    "g_dcl_field_deg": "foc_27_dcl.h:219",
+    "g_dcl_rotor_deg": "foc_27_dcl.h:220",
+    "g_dcl_diff_deg": "foc_27_dcl.h:221",
+    "g_dcl_id_ma": "foc_27_dcl.h:222",
+    "g_dcl_iq_ma": "foc_27_dcl.h:223",
+    "g_dcl_id_pp_ma": "foc_27_dcl.h:224",
+    "g_dcl_iq_pp_ma": "foc_27_dcl.h:225",
+    "g_dcl_enc_pos": "foc_27_dcl.h:226",
+    "g_dcl_du": "foc_27_dcl.h:227",
+    "g_dcl_dv": "foc_27_dcl.h:228",
+    "g_dcl_dw": "foc_27_dcl.h:229",
     "g_foc_enc_dir": "foc_core.h:62",
     "g_i_iu_ma": "I.h:214",
     "g_i_iv_ma": "I.h:215",

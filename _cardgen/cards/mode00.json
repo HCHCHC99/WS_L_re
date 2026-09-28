@@ -4,76 +4,321 @@
   "entry": "comm_mode = 0",
   "pre": "无（上电默认就是它）",
   "end": "写任何 mode 号即离开",
-  "files": { "h": "main.c", "c": "main.c" },
+  "files": {
+    "h": "main.c",
+    "c": "main.c"
+  },
   "watch": [
-    { "mk": "", "name": "comm_mode", "val": "0", "unit": "-", "desc": "写模式号即切模式" },
-    { "mk": "", "name": "check_noisy_mode", "val": "0", "unit": "-", "desc": "噪声排查开关，见下方取值表" },
-    { "mk": "[!]", "note": "check_noisy_mode 非 0 会先强制 comm_mode=0；0 完整 / 1 关电流 ADC / 2 关 PWM / 3 停 Timer0 / 4 关 SysTick / 5 停 Timer6 / 6 关 VOFA / 7 停编码器更新 / 8 停 Foc_Obs" },
-    { "mk": "", "name": "g_comm_duty_pct", "val": "80.0", "unit": "%", "desc": "开环模式占空比（本态不用）" }
+    {
+      "mk": "",
+      "name": "comm_mode",
+      "val": "0",
+      "unit": "-",
+      "desc": "写模式号即切模式"
+    },
+    {
+      "mk": "",
+      "name": "check_noisy_mode",
+      "val": "0",
+      "unit": "-",
+      "desc": "噪声排查开关，见下方取值表"
+    },
+    {
+      "mk": "[!]",
+      "note": "check_noisy_mode 非 0 会先强制 comm_mode=0；0 完整 / 1 关电流 ADC / 2 关 PWM / 3 停 Timer0 / 4 关 SysTick / 5 停 Timer6 / 6 关 VOFA / 7 停编码器更新 / 8 停 Foc_Obs"
+    },
+    {
+      "mk": "",
+      "name": "g_comm_duty_pct",
+      "val": "80.0",
+      "unit": "%",
+      "desc": "开环模式占空比（本态不用）"
+    }
   ],
   "obs": [
-    { "mk": "(*)", "name": "g_foc_iab_mag", "desc": "静止系电流幅值 (mA)；总噪声的单一指标" },
-    { "mk": "", "name": "g_i_iu_ma", "desc": "U 相电流 (mA)" },
-    { "mk": "", "name": "g_i_iv_ma", "desc": "V 相电流 (mA)" },
-    { "mk": "", "name": "g_i_iw_ma", "desc": "W 相电流 (mA)" },
-    { "mk": "(*)", "name": "g_i_calib_zero_u", "desc": "U 相零偏 (ADC counts，约 2000)" },
-    { "mk": "(*)", "name": "g_i_calib_zero_v", "desc": "V 相零偏 (ADC counts)" },
-    { "mk": "(*)", "name": "g_i_calib_zero_w", "desc": "W 相零偏 (ADC counts)" },
-    { "mk": "[!]", "note": "零偏与 ch0~2 对比：零偏漂了电流就偏，可判零漂/温漂；三相应基本相等。" },
-    { "mk": "", "name": "g_foc_ialpha", "desc": "静止系 ialpha 电流 (mA)" },
-    { "mk": "", "name": "g_foc_ibeta", "desc": "静止系 ibeta 电流 (mA)" },
-    { "mk": "", "name": "g_foc_id_ma", "desc": "控制系 d 轴电流反馈 (mA)" },
-    { "mk": "", "name": "g_foc_iq_ma", "desc": "控制系 q 轴电流反馈 (mA)" },
-    { "mk": "", "name": "g_foc_vd", "desc": "控制系 d 轴电压输出 (V)" },
-    { "mk": "", "name": "g_foc_vq", "desc": "控制系 q 轴电压输出 (V)" },
-    { "mk": "", "name": "g_foc_elec_deg", "desc": "转子电角度 (deg，0~360 倍极对数)" },
-    { "mk": "", "name": "g_foc_mech_deg", "desc": "转子机械角度 (deg)；手捏转子看是否跟随" },
-    { "mk": "", "name": "g_foc_align_offset", "desc": "对齐零点 (counts)" },
-    { "mk": "", "name": "g_foc_fault", "desc": "故障标志 (0/1)" },
-    { "mk": "", "name": "g_foc_oc_limit_a", "desc": "过流阈值 (A)" },
-    { "mk": "[!]", "name": "g_zizeng_volt_v", "desc": "mode 30 的量；通用布局里只作兼容保留" },
-    { "mk": "[!]", "name": "g_zizeng_theta_rad", "desc": "mode 30 的量；通用布局里只作兼容保留" }
+    {
+      "mk": "(*)",
+      "name": "g_foc_iab_mag",
+      "desc": "静止系电流幅值 (mA)；总噪声的单一指标"
+    },
+    {
+      "mk": "",
+      "name": "g_i_iu_ma",
+      "desc": "U 相电流 (mA)"
+    },
+    {
+      "mk": "",
+      "name": "g_i_iv_ma",
+      "desc": "V 相电流 (mA)"
+    },
+    {
+      "mk": "",
+      "name": "g_i_iw_ma",
+      "desc": "W 相电流 (mA)"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_i_calib_zero_u",
+      "desc": "U 相零偏 (ADC counts，约 2000)"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_i_calib_zero_v",
+      "desc": "V 相零偏 (ADC counts)"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_i_calib_zero_w",
+      "desc": "W 相零偏 (ADC counts)"
+    },
+    {
+      "mk": "[!]",
+      "note": "零偏与 ch0~2 对比：零偏漂了电流就偏，可判零漂/温漂；三相应基本相等。"
+    },
+    {
+      "mk": "",
+      "name": "g_foc_ialpha",
+      "desc": "静止系 ialpha 电流 (mA)"
+    },
+    {
+      "mk": "",
+      "name": "g_foc_ibeta",
+      "desc": "静止系 ibeta 电流 (mA)"
+    },
+    {
+      "mk": "",
+      "name": "g_foc_id_ma",
+      "desc": "控制系 d 轴电流反馈 (mA)"
+    },
+    {
+      "mk": "",
+      "name": "g_foc_iq_ma",
+      "desc": "控制系 q 轴电流反馈 (mA)"
+    },
+    {
+      "mk": "",
+      "name": "g_foc_vd",
+      "desc": "控制系 d 轴电压输出 (V)"
+    },
+    {
+      "mk": "",
+      "name": "g_foc_vq",
+      "desc": "控制系 q 轴电压输出 (V)"
+    },
+    {
+      "mk": "",
+      "name": "g_foc_elec_deg",
+      "desc": "转子电角度 (deg，0~360 倍极对数)"
+    },
+    {
+      "mk": "",
+      "name": "g_foc_mech_deg",
+      "desc": "转子机械角度 (deg)；手捏转子看是否跟随"
+    },
+    {
+      "mk": "",
+      "name": "g_foc_align_offset",
+      "desc": "对齐零点 (counts)"
+    },
+    {
+      "mk": "",
+      "name": "g_foc_fault",
+      "desc": "故障标志 (0/1)"
+    },
+    {
+      "mk": "",
+      "name": "g_foc_oc_limit_a",
+      "desc": "过流阈值 (A)"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_zizeng_volt_v",
+      "desc": "mode 30 的量；通用布局里只作兼容保留"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_zizeng_theta_rad",
+      "desc": "mode 30 的量；通用布局里只作兼容保留"
+    }
   ],
   "vofa": {
     "n": 20,
     "fn": "Foc_Common_VofaFill",
     "shared": true,
     "rows": [
-      { "mk": "", "ch": "ch0", "what": "U 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch1", "what": "V 相电流", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch2", "what": "W 相电流", "unit": "A", "desc": "" },
-      { "mk": "(*)", "ch": "ch3", "what": "U 相零偏", "unit": "kcounts", "desc": "ADC counts/1000，约 2.0" },
-      { "mk": "(*)", "ch": "ch4", "what": "V 相零偏", "unit": "kcounts", "desc": "" },
-      { "mk": "(*)", "ch": "ch5", "what": "W 相零偏", "unit": "kcounts", "desc": "" },
-      { "mk": "", "ch": "ch6", "what": "静止系 ialpha", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch7", "what": "静止系 ibeta", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch8", "what": "控制系 id 反馈", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch9", "what": "控制系 iq 反馈", "unit": "A", "desc": "" },
-      { "mk": "", "ch": "ch10", "what": "控制系 vd 输出", "unit": "V", "desc": "" },
-      { "mk": "", "ch": "ch11", "what": "控制系 vq 输出", "unit": "V", "desc": "" },
-      { "mk": "(*)", "ch": "ch12", "what": "静止系电流幅值", "unit": "A", "desc": "噪声单一指标" },
-      { "mk": "", "ch": "ch13", "what": "转子电角度", "unit": "deg", "desc": "0~360 倍极对数" },
-      { "mk": "", "ch": "ch14", "what": "转子机械角度", "unit": "deg", "desc": "0~360" },
-      { "mk": "", "ch": "ch15", "what": "对齐零点", "unit": "counts", "desc": "" },
-      { "mk": "", "ch": "ch16", "what": "故障标志", "unit": "0/1", "desc": "" },
-      { "mk": "[!]", "ch": "ch17", "what": "ZIZENG 电压幅值", "unit": "V", "desc": "为 mode 30 兼容保留" },
-      { "mk": "[!]", "ch": "ch18", "what": "ZIZENG 磁场角", "unit": "rad", "desc": "兼容保留" },
-      { "mk": "", "ch": "ch19", "what": "OC 阈值", "unit": "A", "desc": "" }
+      {
+        "mk": "",
+        "ch": "ch0",
+        "what": "U 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch1",
+        "what": "V 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch2",
+        "what": "W 相电流",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch3",
+        "what": "U 相零偏",
+        "unit": "kcounts",
+        "desc": "ADC counts/1000，约 2.0"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch4",
+        "what": "V 相零偏",
+        "unit": "kcounts",
+        "desc": ""
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch5",
+        "what": "W 相零偏",
+        "unit": "kcounts",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch6",
+        "what": "静止系 ialpha",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch7",
+        "what": "静止系 ibeta",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch8",
+        "what": "控制系 id 反馈",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch9",
+        "what": "控制系 iq 反馈",
+        "unit": "A",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch10",
+        "what": "控制系 vd 输出",
+        "unit": "V",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch11",
+        "what": "控制系 vq 输出",
+        "unit": "V",
+        "desc": ""
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch12",
+        "what": "静止系电流幅值",
+        "unit": "A",
+        "desc": "噪声单一指标"
+      },
+      {
+        "mk": "",
+        "ch": "ch13",
+        "what": "转子电角度",
+        "unit": "deg",
+        "desc": "0~360 倍极对数"
+      },
+      {
+        "mk": "",
+        "ch": "ch14",
+        "what": "转子机械角度",
+        "unit": "deg",
+        "desc": "0~360"
+      },
+      {
+        "mk": "",
+        "ch": "ch15",
+        "what": "对齐零点",
+        "unit": "counts",
+        "desc": ""
+      },
+      {
+        "mk": "",
+        "ch": "ch16",
+        "what": "故障标志",
+        "unit": "0/1",
+        "desc": ""
+      },
+      {
+        "mk": "[!]",
+        "ch": "ch17",
+        "what": "ZIZENG 电压幅值",
+        "unit": "V",
+        "desc": "为 mode 30 兼容保留"
+      },
+      {
+        "mk": "[!]",
+        "ch": "ch18",
+        "what": "ZIZENG 磁场角",
+        "unit": "rad",
+        "desc": "兼容保留"
+      },
+      {
+        "mk": "",
+        "ch": "ch19",
+        "what": "OC 阈值",
+        "unit": "A",
+        "desc": ""
+      }
     ]
   },
   "notes": [
-    { "mk": "(*)", "text": "本态是静止观测态，主要用来查电流测量质量：ch12 是总噪声的单一指标。" },
-    { "mk": "(*)", "text": "ch3~5 与 ch0~2 对比：零偏漂了电流就会偏，可判零漂/温漂。" },
-    { "mk": "(*)", "text": "手捏转子慢转，看 ch13/ch14 是否平滑跟随，可验证 mode 24 校准是否仍然有效。" },
-    { "mk": "[!]", "text": "SendScaled 会统一乘 0.001，零偏必须除 1000 折算成 kcounts，否则显示成 0.002 量级丢精度。" },
-    { "mk": "[!]", "text": "VOFA+ 上位机通道数配成 20；本布局同时被没有专属填充的 mode 20/23/24/25 复用。" },
-    { "mk": "[!]", "text": "ch17/ch18 是为 mode 30 保留的兼容项，迁出后可换别的诊断量。" }
+    {
+      "mk": "(*)",
+      "text": "本态是静止观测态，主要用来查电流测量质量：ch12 是总噪声的单一指标。"
+    },
+    {
+      "mk": "(*)",
+      "text": "ch3~5 与 ch0~2 对比：零偏漂了电流就会偏，可判零漂/温漂。"
+    },
+    {
+      "mk": "(*)",
+      "text": "手捏转子慢转，看 ch13/ch14 是否平滑跟随，可验证 mode 24 校准是否仍然有效。"
+    },
+    {
+      "mk": "[!]",
+      "text": "SendScaled 会统一乘 0.001，零偏必须除 1000 折算成 kcounts，否则显示成 0.002 量级丢精度。"
+    },
+    {
+      "mk": "[!]",
+      "text": "VOFA+ 上位机通道数配成 20；本布局同时被没有专属填充的 mode 20/23/24/25 复用。"
+    },
+    {
+      "mk": "[!]",
+      "text": "ch17/ch18 是为 mode 30 保留的兼容项，迁出后可换别的诊断量。"
+    }
   ],
   "evidence": {
-    "comm_mode": "main.c:43",
-    "g_comm_duty_pct": "main.c:44",
-    "check_noisy_mode": "main.c:69",
-    "Foc_Common_VofaFill": "main.c:151",
+    "comm_mode": "main.c:55",
+    "g_comm_duty_pct": "main.c:56",
+    "check_noisy_mode": "main.c:81",
+    "Foc_Common_VofaFill": "main.c:212",
     "g_i_iu_ma": "I.h:214",
     "g_i_iv_ma": "I.h:215",
     "g_i_iw_ma": "I.h:216",
@@ -92,7 +337,7 @@
     "g_foc_mech_deg": "foc_core.h:102",
     "g_foc_elec_deg": "foc_core.h:103",
     "g_foc_align_offset": "foc_core.h:106",
-    "g_zizeng_volt_v": "foc_30_ramp.h:127",
-    "g_zizeng_theta_rad": "foc_30_ramp.h:125"
+    "g_zizeng_volt_v": "foc_30_ramp.h:168",
+    "g_zizeng_theta_rad": "foc_30_ramp.h:166"
   }
 }

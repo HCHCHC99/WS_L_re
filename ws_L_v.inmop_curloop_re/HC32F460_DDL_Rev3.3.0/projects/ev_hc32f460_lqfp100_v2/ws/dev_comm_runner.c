@@ -106,6 +106,13 @@ static void CommRunner_StopFocModes(void)
     if (g_iqpi_running) {
         Foc_IqPi_Stop();
     }
+    if (g_rs51_running) {
+        Foc_RsId_Stop();
+    }
+    if (g_ldlq52_running) {
+        Foc_LdLqId_Stop();
+    }
+    /* mode 53 接入时在此追加各自的 Stop */
 }
 
 /*=============================================================================
@@ -217,6 +224,20 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         RUNNER_DBG("SMO45 (mode 45)");
         break;
 
+    case COMM_RUNNER_RS51:
+        CommRunner_StopFocModes();
+        Commutation_Stop();
+        Foc_RsId_Start();
+        RUNNER_DBG("RS51 (mode 51, Rs identification)");
+        break;
+
+    case COMM_RUNNER_LDLQ52:
+        CommRunner_StopFocModes();
+        Commutation_Stop();
+        Foc_LdLqId_Start();
+        RUNNER_DBG("LDLQ52 (mode 52, Ld/Lq identification)");
+        break;
+
     default:
         break;
     }
@@ -236,6 +257,17 @@ comm_runner_mode_t CommRunner_GetMode(void)
 uint32_t CommRunner_GetPwmFreqHz(void)
 {
     return s_cfg.pwm_freq_hz;
+}
+
+/*=============================================================================
+ * CommRunner_ReleaseMode — 只把模式号放回 STOP（供自终止模式跑完后调用）
+ *   动机：SetMode() 开头有 "同模式早退"，跑完后 s_mode 仍停在原模式号，
+ *   于是 Keil 里再写同一个号不会重新启动。把它放回 STOP 即可重进；
+ *   不动 FOC 模块状态，所以 VOFA 布局与观测量都保留。
+ *=============================================================================*/
+void CommRunner_ReleaseMode(void)
+{
+    s_mode = COMM_RUNNER_STOP;
 }
 
 /*=============================================================================

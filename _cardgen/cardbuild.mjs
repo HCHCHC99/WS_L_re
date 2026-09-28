@@ -22,7 +22,21 @@ function locateCard(lines, cardAnchor) {
   const titleRe = /^ \*\s*(={4,}\s*)?模式速览卡/;
   const titleIdx = lines.findIndex(l => titleRe.test(l));
   if (titleIdx < 0) {
-    // 没有旧卡：用填充函数定义作为锚点，替换它上方那个注释块
+    // 首次插入：优先放进**文件顶部文档块**（含 @file 的那个 /* ... */）的末尾。
+    // 不能直接用填充函数名当锚点 —— .h 里通常也有 "int Foc_Xxx_VofaFill(...)" 声明，
+    // 锚点会命中 API 注释块，把卡插到文件中部（mode 51 曾因此插错，靠一次性脚本搬回）。
+    const docIdx = lines.findIndex(l => /@file\b/.test(l));
+    if (docIdx >= 0) {
+      let cstart = -1, cend = -1;
+      for (let i = docIdx; i >= 0; i--) if (/^\/\*/.test(lines[i])) { cstart = i; break; }
+      for (let i = docIdx; i < lines.length; i++) if (/\*\/\s*$/.test(lines[i])) { cend = i; break; }
+      if (cstart >= 0 && cend >= 0) {
+        // 文档块以 " ***...***" 星号分隔线收尾 => 插到它之前，保持块尾格式一致
+        const insertAt = /^ \*{5,}\s*$/.test(lines[cend - 1]) ? cend - 1 : cend;
+        return { start: insertAt, end: insertAt - 1, closeIdx: cend, insertOnly: true };
+      }
+    }
+    // 没有文档块（理论上不会发生）：退回用填充函数定义作为锚点，替换它上方那个注释块
     const fn = (cardAnchor ?? 'Foc_Common_VofaFill');
     const fnIdx = lines.findIndex(l => new RegExp(`^\\s*(static\\s+)?int\\s+${fn}\\s*\\(`).test(l));
     if (fnIdx < 0) return null;
@@ -49,10 +63,12 @@ function splice(headerPath, cardLines, cardAnchor) {
   const loc = locateCard(lines, cardAnchor);
   if (!loc) throw new Error('无法定位插入点');
   const { start, end, closeIdx, insertOnly, replaceBlock } = loc;
-  // 卡尾与 */ 之间只允许空注释行
+  // 卡尾与 */ 之间只允许：空注释行，或文档块收尾的星号分隔线（" ***...***"）
   if (!replaceBlock) {
     for (let i = end + 1; i < closeIdx; i++) {
-      if (!/^ \*\s*$/.test(lines[i])) throw new Error(`卡尾与 */ 之间有多余内容: 第${i + 1}行 "${lines[i]}"`);
+      if (!/^ \*(?:\s*|\*{5,}\s*)$/.test(lines[i])) {
+        throw new Error(`卡尾与 */ 之间有多余内容: 第${i + 1}行 "${lines[i]}"`);
+      }
     }
   }
   if (DRY) {
