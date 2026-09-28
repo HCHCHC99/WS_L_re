@@ -27,6 +27,7 @@
 #include "encoder.h"
 #include "motor_config.h"
 #include "hc32_ll_tmra.h"      /* TMRA_GetCountValue(CM_TMRA_1) 位移监视 */
+#include "timer6_timebase.h"   /* Timer6 计数器：0.32us 分辨率时基，实测 ISR 频率 */
 #include <math.h>              /* sqrtf / fabsf */
 
 /*=============================================================================
@@ -61,6 +62,7 @@ volatile float    g_rs51_v_now_v     = 0.0f;    /* 当前注入电压 */
 volatile float    g_rs51_i_now_a     = 0.0f;    /* 当前电流矢量幅值 */
 volatile int32_t  g_rs51_moved_cnts  = 0;       /* 全程编码器位移 (counts) */
 volatile uint32_t g_rs51_elapsed_ms  = 0u;      /* 累计注入时间 */
+volatile uint32_t g_rs51_fs_meas_hz  = 0u;      /* 实测 ISR 频率（零偏窗用 Timer6 计数测得） */
 volatile uint32_t g_rs51_pts_done    = 0u;      /* 已完成档位数（供 foc_obs 打印进度） */
 volatile float    g_rs51_v_scale     = 1.0f;    /* 运行时电压缩放（电流超限自动下调） */
 volatile uint32_t g_rs51_scale_hits  = 0u;      /* 电流护栏触发次数 */
@@ -80,6 +82,8 @@ static float    s_acc_i;                /* 平均窗口电流累加 */
 static float    s_zero_u, s_zero_v, s_zero_w;   /* 零偏窗测得的零偏 (mA) */
 static int32_t  s_acc_zero_u, s_acc_zero_v, s_acc_zero_w;
 static uint32_t s_zero_cnt;
+static uint32_t s_tb_ticks;             /* 零偏窗内累计的 Timer6 计数差（回绕已处理） */
+static uint16_t s_tb_prev;              /* 上一拍的 Timer6 计数 */
 static float    s_v_probe;              /* 探测档电压 */
 static float    s_r_guess;              /* 探测得到的 R 粗估 */
 static int32_t  s_cnt_entry;            /* 进模式时的编码器计数 */
@@ -299,14 +303,29 @@ void Foc_RsId_Step(const stc_i_data_t *pData)
     /* ---------- 零偏窗：零矢量采平均，扣掉残余零偏 ---------- */
     case FOC51_STEP_ZERO:
         Rs51_OutputAlpha(0.0f);
+        if (s_zero_cnt == 0u) {
+            s_tb_prev  = (uint16_t)Timer6_Timebase_GetCounter();   /* 零偏窗起点（us 时基） */
+            s_tb_ticks = 0u;
+        } else {
+            uint16_t now_cnt = (uint16_t)Timer6_Timebase_GetCounter();
+            s_tb_ticks += (uint32_t)(uint16_t)(now_cnt - s_tb_prev);  /* 16 位相减天然处理回绕 */
+            s_tb_prev = now_cnt;
+        }
         s_acc_zero_u += (int32_t)pData->i16IU_mA;
         s_acc_zero_v += (int32_t)pData->i16IV_mA;
         s_acc_zero_w += (int32_t)pData->i16IW_mA;
         s_zero_cnt++;
         if (s_zero_cnt >= FOC51_ZERO_SAMPLES) {
+            uint32_t freq = Timer6_Timebase_GetFrequency();   /* PCLK0/64 = 3.125MHz -> 0.32us/tick */
             s_zero_u = (float)s_acc_zero_u / (float)s_zero_cnt;
             s_zero_v = (float)s_acc_zero_v / (float)s_zero_cnt;
             s_zero_w = (float)s_acc_zero_w / (float)s_zero_cnt;
+            /* 实测 ISR 频率：FOC51_ZERO_SAMPLES 拍共耗多少 Timer6 计数（真实时基，不是推断值）。
+             * 本模式所有时长预算都按 FOC_ISR_HZ 换算，此值一旦偏离即说明预算整体失真。
+             * 用 GetCounter() 而非 GetTimestamp()：后者的累加只在主循环推进，会被量化到主循环节拍。 */
+            if ((freq != 0u) && (s_tb_ticks != 0u)) {
+                g_rs51_fs_meas_hz = (uint32_t)((float)FOC51_ZERO_SAMPLES * (float)freq / (float)s_tb_ticks);
+            }
             g_rs51_state = FOC51_STEP_PRECOND;   /* 先预置，再探测 */
             s_tick    = 0u;
             s_acc_cnt = 0u;

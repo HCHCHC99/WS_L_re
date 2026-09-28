@@ -27,7 +27,7 @@
 #include "encoder.h"
 #include "motor_config.h"
 #include "hc32_ll_tmra.h"
-#include "TickTimer.h"         /* tickTimer_GetCount：独立时基，实测 ISR 频率 */
+#include "timer6_timebase.h"  /* Timer6 计数器：0.32us 分辨率时基，实测 ISR 频率 */
 #include <math.h>
 
 /*=============================================================================
@@ -141,7 +141,8 @@ static float    s_zero_u, s_zero_v, s_zero_w;
 static int32_t  s_acc_zero_u, s_acc_zero_v, s_acc_zero_w;
 static uint32_t s_zero_cnt;
 static int32_t  s_cnt_entry;
-static uint64_t s_tick0;              /* 零偏窗起点的独立时基读数 (ms)，用于实测 ISR 频率 */
+static uint32_t s_tb_ticks;           /* 零偏窗内累计的 Timer6 计数差（回绕已处理） */
+static uint16_t s_tb_prev;            /* 上一拍的 Timer6 计数 */
 static int32_t  s_offset;             /* mode 24 锁定的编码器零点 */
 
 /*=============================================================================
@@ -644,21 +645,27 @@ void Foc_LdLqId_Step(const stc_i_data_t *pData)
     case FOC52_STEP_ZERO:
         LdLq52_OutputDq(0.0f, 0.0f, LdLq52_RotorAngle());
         if (s_zero_cnt == 0u) {
-            s_tick0 = tickTimer_GetCount();     /* 零偏窗起点：用独立时基实测 ISR 频率 */
+            s_tb_prev  = (uint16_t)Timer6_Timebase_GetCounter();   /* 零偏窗起点（us 时基） */
+            s_tb_ticks = 0u;
+        } else {
+            uint16_t now_cnt = (uint16_t)Timer6_Timebase_GetCounter();
+            s_tb_ticks += (uint32_t)(uint16_t)(now_cnt - s_tb_prev);  /* 16 位相减天然处理回绕 */
+            s_tb_prev = now_cnt;
         }
         s_acc_zero_u += (int32_t)pData->i16IU_mA;
         s_acc_zero_v += (int32_t)pData->i16IV_mA;
         s_acc_zero_w += (int32_t)pData->i16IW_mA;
         s_zero_cnt++;
         if (s_zero_cnt >= FOC52_ZERO_SAMPLES) {
-            uint32_t dt = (uint32_t)(tickTimer_GetCount() - s_tick0);   /* ms */
+            uint32_t freq = Timer6_Timebase_GetFrequency();   /* PCLK0/64 = 3.125MHz -> 0.32us/tick */
             s_zero_u = (float)s_acc_zero_u / (float)s_zero_cnt;
             s_zero_v = (float)s_acc_zero_v / (float)s_zero_cnt;
             s_zero_w = (float)s_acc_zero_w / (float)s_zero_cnt;
-            /* 实测 ISR 频率：FOC52_ZERO_SAMPLES 拍用了多少 ms（独立时基，不是推断值）。
-             * 2026-09-27 波形分析提示真实采样率可能只有宏值的一半，必须实测。 */
-            if (dt > 0u) {
-                g_ldlq52_fs_meas_hz = (uint32_t)((float)FOC52_ZERO_SAMPLES * 1000.0f / (float)dt);
+            /* 实测 ISR 频率：FOC52_ZERO_SAMPLES 拍共耗多少 Timer6 计数（真实时基，不是推断值）。
+             * 2026-09-27 波形分析提示真实采样率可能只有宏值的一半，必须实测。
+             * 用 GetCounter() 而非 GetTimestamp()：后者的累加只在主循环推进，会被量化到主循环节拍。 */
+            if ((freq != 0u) && (s_tb_ticks != 0u)) {
+                g_ldlq52_fs_meas_hz = (uint32_t)((float)FOC52_ZERO_SAMPLES * (float)freq / (float)s_tb_ticks);
             }
             s_v_amp  = FOC52_PROBE_V;
             g_ldlq52_v_inj_v = FOC52_PROBE_V;

@@ -644,13 +644,14 @@ void Foc_Obs_Task(void)
                          (int)(g_rs51_vdead_v * 1000.0f),
                          (int)(g_rs51_r2 * 10000.0f),
                          (int)(g_rs51_ratio * 1000.0f));
-                RS51_DBG("  vendor Rs=%dmohm moved=%dcnts t=%dms state=%u clamp=%u scale=%d/1000",
+                RS51_DBG("  vendor Rs=%dmohm moved=%dcnts t=%dms state=%u clamp=%u scale=%d/1000 fs=%uHz",
                          (int)(FOC_MOTOR_RS_OHM * 1000.0f),
                          (int)g_rs51_moved_cnts,
                          (int)g_rs51_elapsed_ms,
                          (unsigned)g_rs51_state,
                          (unsigned)g_rs51_scale_hits,
-                         (int)(g_rs51_v_scale * 1000.0f));
+                         (int)(g_rs51_v_scale * 1000.0f),
+                         (unsigned)g_rs51_fs_meas_hz);
                 for (k = 0u; k + 1u < n; k += 2u) {   /* 原始点，每行两对 */
                     RS51_DBG("  pt%u v=%dmV i=%dmA | pt%u v=%dmV i=%dmA",
                              (unsigned)k,
@@ -703,11 +704,12 @@ void Foc_Obs_Task(void)
         /* 探测完成：两行（第 1 行配置/偏置，第 2 行两种算法的电感） */
         if (g_ldlq52_probe_seq != s_ldlq52_probe_printed) {
             s_ldlq52_probe_printed = g_ldlq52_probe_seq;
-            LDLQ52_DBG("probe#%u axis=%u: v=%dmV dE=%dmA bias=%dmA need=%dmA",
+            LDLQ52_DBG("probe#%u axis=%u: v=%dmV dE=%dmA bias=%dmA need=%dmA fs=%uHz",
                        (unsigned)g_ldlq52_probe_seq, (unsigned)g_ldlq52_axis,
                        (int)g_ldlq52_v_probe_mv, (int)g_ldlq52_de_ma,
                        (int)g_ldlq52_i_bias_ma,
-                       (int)(g_ldlq52_de_ma * 0.5f * FOC52_BIAS_NEED_RATIO));
+                       (int)(g_ldlq52_de_ma * 0.5f * FOC52_BIAS_NEED_RATIO),
+                       (unsigned)g_ldlq52_fs_meas_hz);
             LDLQ52_DBG("  cons=%d/10 path=%u env=%duH pair=%duH",
                        (int)(g_ldlq52_cons_pct * 10.0f), (unsigned)g_ldlq52_path_cnts,
                        (int)(g_ldlq52_l_env_uh + 0.5f), (int)(g_ldlq52_l_pair_uh + 0.5f));
