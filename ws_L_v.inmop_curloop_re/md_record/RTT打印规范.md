@@ -57,6 +57,7 @@
 | foc_51_rs.h | `FOC_RS51_DBG` | `RS51_DBG`（[RS51] 前缀，打印在 foc_obs 事件段，ISR 内不打印） |
 | foc_52_ldlq.h | `FOC_LDLQ52_DBG` | `LDLQ52_DBG`（[LDLQ52] 前缀，打印在 foc_obs 事件段，ISR 内不打印） |
 | foc_53_flx.h | `FOC_FLX53_DBG` | `FLX53_DBG`（[FLX53] 前缀，打印在 foc_obs 事件段，ISR 内不打印） |
+| Hardware.h（Adp 层，母线电压 PA4） | `DEBUG_VBUS` | `VBUS_DBG`（[VBUS] 前缀） |
 | main.c（无独立 .h，定义在文件顶部） | `DEBUG_MAIN` | `MAIN_DBG` |
 
 新增模块时按第 1 节模板添加，并同步更新本表。
