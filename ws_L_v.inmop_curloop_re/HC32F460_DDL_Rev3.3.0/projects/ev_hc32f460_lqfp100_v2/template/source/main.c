@@ -292,20 +292,11 @@ int main(void)
 
     /* ---- 主循环 ---- */
     static int s_prev_mode = -1;
-    static NonBlockingDelay_t s_vbus_log;   /* 母线电压 RTT 打印的非阻塞延时器 */
-    nbDelay_Init(&s_vbus_log, 1000U);       /* 周期 1s */
-    nbDelay_Start(&s_vbus_log);
     s_noisy_applied = NOISY_MODE_FULL;
 
     while (1) {
         /* 母线电压采集（PA4 / ADC1_CH4，软件触发单次转换；内部 100ms 限速） */
         Vbus_Adc_Process();
-
-        /* 母线电压 RTT 观测：每 1s 打印一次原始 ADC 码值（开关 = 文件顶部 DEBUG_MAIN） */
-        if (nbDelay_IsComplete(&s_vbus_log)) {
-            nbDelay_Start(&s_vbus_log);     /* 重新装载下一个 1s */
-            MAIN_DBG("VBUS raw ADC = %d / 4095", (int)g_vbus_raw);
-        }
 
 #if !APP_MINIMAL_CURRENT_TEST
         /* Keil Watch 噪声排查开关：必须先处理，避免在异常模块关闭期间

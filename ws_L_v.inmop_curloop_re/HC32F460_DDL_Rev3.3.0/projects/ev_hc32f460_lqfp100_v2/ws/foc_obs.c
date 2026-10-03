@@ -609,7 +609,7 @@ void Foc_Obs_Task(void)
 
     /* ---- mode 51 定子电阻辨识：逐档进度 + 最终结果 ----
      * ISR 只置 g_rs51_evt / 递增 g_rs51_pts_done，打印全部在本段（RTT 打印规范：
-     * ISR 内不打印；禁止 %f 与中文，物理量一律缩放为整型 mV/mA/mohm）。 */
+     * ISR 内不打印；禁止 %f 与中文，物理量一律缩放为整型（mV/mA；R 按 ohm 拆成整数+3 位小数））。 */
     if (g_rs51_running != 0u) {
         static uint32_t s_rs51_pt_printed = 0u;
         static uint32_t s_rs51_hits_printed = 0u;
@@ -640,13 +640,15 @@ void Foc_Obs_Task(void)
             case FOC51_EVT_FIT_POOR: {
                 uint32_t k, n = g_rs51_points;
 
-                RS51_DBG("done: R=%dmohm Vdead=%dmV R2=%d/10000 ratio=%d/1000",
-                         (int)(g_rs51_meas_ohm * 1000.0f),
+                RS51_DBG("done: R=%d.%03dohm Vdead=%dmV R2=%d/10000 ratio=%d/1000",
+                         (int)(g_rs51_meas_ohm * 1000.0f + 0.5f) / 1000,
+                         (int)(g_rs51_meas_ohm * 1000.0f + 0.5f) % 1000,
                          (int)(g_rs51_vdead_v * 1000.0f),
                          (int)(g_rs51_r2 * 10000.0f),
                          (int)(g_rs51_ratio * 1000.0f));
-                RS51_DBG("  vendor Rs=%dmohm moved=%dcnts t=%dms state=%u clamp=%u scale=%d/1000 fs=%uHz",
-                         (int)(FOC_MOTOR_RS_OHM * 1000.0f),
+                RS51_DBG("  vendor Rs=%d.%03dohm moved=%dcnts t=%dms state=%u clamp=%u scale=%d/1000 fs=%uHz",
+                         (int)(FOC_MOTOR_RS_OHM * 1000.0f + 0.5f) / 1000,
+                         (int)(FOC_MOTOR_RS_OHM * 1000.0f + 0.5f) % 1000,
                          (int)g_rs51_moved_cnts,
                          (int)g_rs51_elapsed_ms,
                          (unsigned)g_rs51_state,
@@ -894,16 +896,18 @@ void Foc_Obs_Task(void)
                               (int)g_flx53_vdt_fit_mv,
                               (int)(g_flx53_r2 * 1000.0f),
                               (int)(g_flx53_ratio * 1000.0f));
-                    FLX53_DBG("  spread=%d/1000mWb win_split=%d/1000 R_used=%dmohm Vdt_used=%dmV pts=%u t=%dms",
+                    FLX53_DBG("  spread=%d/1000mWb win_split=%d/1000 R_used=%d.%03dohm Vdt_used=%dmV pts=%u t=%dms",
                               (int)(g_flx53_psi_spread_mwb * 1000.0f),
                               (int)(g_flx53_win_split_pct * 1000.0f),
-                              (int)(g_flx53_r_used_ohm * 1000.0f),
+                              (int)(g_flx53_r_used_ohm * 1000.0f + 0.5f) / 1000,
+                              (int)(g_flx53_r_used_ohm * 1000.0f + 0.5f) % 1000,
                               (int)g_flx53_vdt_used_mv,
                               (unsigned)g_flx53_pts_done,
                               (int)g_flx53_elapsed_ms);
-                    FLX53_DBG("  vendor psi=%d/1000mWb alt_psi(R=%dmohm)=%d/1000mWb",
+                    FLX53_DBG("  vendor psi=%d/1000mWb alt_psi(R=%d.%03dohm)=%d/1000mWb",
                               (int)(FOC_MOTOR_FLUX_VS * 1000000.0f),
-                              (int)(FOC_MOTOR_RS_OHM * 1000.0f),
+                              (int)(FOC_MOTOR_RS_OHM * 1000.0f + 0.5f) / 1000,
+                              (int)(FOC_MOTOR_RS_OHM * 1000.0f + 0.5f) % 1000,
                               (int)(g_flx53_psi_alt_mwb * 1000.0f));
                     if (n > FOC53_MAX_POINTS) { n = FOC53_MAX_POINTS; }
                     for (k = 0u; k < n; k++) {

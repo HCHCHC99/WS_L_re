@@ -291,6 +291,23 @@ void Foc_Core_ClampOpenLoopVolt(void)
     }
 }
 
+/* 母线电压取用（说明见 foc_core.h 的 FOC_VBUS_MEAS_* 段） */
+volatile uint8_t g_foc_vbus_use_meas = 1u;   /* 1 = 用实测（默认），0 = 强制回退 */
+
+float Foc_Vbus_GetV(void)
+{
+    float v;
+
+    if (g_foc_vbus_use_meas == 0u) {
+        return FOC_VBUS_V;
+    }
+    v = g_vbus_v;
+    if ((v < FOC_VBUS_MEAS_MIN_V) || (v > FOC_VBUS_MEAS_MAX_V)) {
+        return FOC_VBUS_V;      /* 未就绪 / 越界 → 回退缺省值 */
+    }
+    return v;
+}
+
 float Foc_Core_CurLoopTheta(void)
 {
     int32_t diff = Foc_Core_ModPos(((int32_t)g_enc_count * (int32_t)g_foc_enc_dir) - s_align_offset,

@@ -110,12 +110,14 @@ static void Rs51_ClearResults(void)
     }
 }
 
-/* 输出固定电压矢量到静止 α 轴（vα = v, vβ = 0） */
+/* 输出固定电压矢量到静止 α 轴（vα = v, vβ = 0）
+ * vbus 走实测母线电压（Foc_Vbus_GetV，不可用时回退 FOC_VBUS_V），
+ * 这样 v 与拟合出的 R_eff / V_dead 都落在"真实电压"域，无需事后 ×Vbus/12 折算。 */
 static void Rs51_OutputAlpha(float v)
 {
     float du, dv, dw;
 
-    Foc_Svpwm(v, 0.0f, FOC_VBUS_V, &du, &dv, &dw);
+    Foc_Svpwm(v, 0.0f, Foc_Vbus_GetV(), &du, &dv, &dw);
     TMR4_PWM_SetDuty3Phase(du, dv, dw);
     g_foc_valpha = v;
     g_foc_vbeta  = 0.0f;

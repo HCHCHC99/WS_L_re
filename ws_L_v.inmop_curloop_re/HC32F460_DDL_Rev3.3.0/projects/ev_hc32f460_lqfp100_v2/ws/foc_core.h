@@ -172,6 +172,21 @@ void Foc_Core_UpdateAngleObs(void);
  *   故 mode 0 下这三条曲线含残余零偏 —— 这正是观测用途。 */
 void Foc_Core_UpdateCurrentObs(void);
 
+/* 母线电压取用 —— 所有把"指令电压"折算成占空比的调用（Foc_Svpwm 的 vbus 入参）
+ * 都应走这里，而不是直接用 motor_config.h 的 FOC_VBUS_V：
+ *   实测来源 = Adp/Hardware.c 的 g_vbus_v（PA4 / ADC1_CH4，20k/3k 分压，
+ *   主循环 100ms 刷新 + EMA α=0.25）。FOC_VBUS_V 已从"真值"降级为"缺省值"。
+ * 返回：实测 Vbus (V)；未就绪或越界时回退 FOC_VBUS_V。
+ * [!] 必须回退 —— g_vbus_v 初值为 0（上电头 100ms 才首次有效），而
+ *     Foc_Svpwm 对 vbus<=0 只兜到 1.0f，0V 会算出爆炸占空比；分压断线
+ *     或 ADC 未接同样被 [MIN,MAX] 窗口挡掉。
+ * ISR 可调用：只读一个 32 位对齐 float，Cortex-M4 上不会撕裂。 */
+#define FOC_VBUS_MEAS_MIN_V     (4.0f)    /* 实测有效性窗口下限 (V) */
+#define FOC_VBUS_MEAS_MAX_V     (30.0f)   /* 上限 (V)；20k/3k 满量程约 25.3V */
+
+extern volatile uint8_t g_foc_vbus_use_meas;   /* 1 = 用实测（默认），0 = 强制回退 FOC_VBUS_V */
+float Foc_Vbus_GetV(void);
+
 /*******************************************************************************
  * 原有对外 API（实现移自 foc.c，名称不变）
  ******************************************************************************/

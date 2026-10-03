@@ -282,7 +282,9 @@ static float LdLq52_RotorAngle(void)
     return (float)cnt * (FOC_MATH_2PI / (float)ENCODER_CPR) * (float)FOC_POLE_PAIRS;
 }
 
-/* 按转子坐标系 (vd, vq) 输出 */
+/* 按转子坐标系 (vd, vq) 输出
+ * vbus 走实测母线电压（Foc_Vbus_GetV，不可用时回退 FOC_VBUS_V），
+ * 于是方波幅值 s_v_amp 就是真实电压，反推的 L 无需事后 ×Vbus/12 折算。 */
 static void LdLq52_OutputDq(float vd, float vq, float theta)
 {
     float c = Foc_Math_Cos(theta);
@@ -291,7 +293,7 @@ static void LdLq52_OutputDq(float vd, float vq, float theta)
     float vbeta  = vd * s + vq * c;
     float du, dv, dw;
 
-    Foc_Svpwm(valpha, vbeta, FOC_VBUS_V, &du, &dv, &dw);
+    Foc_Svpwm(valpha, vbeta, Foc_Vbus_GetV(), &du, &dv, &dw);
     TMR4_PWM_SetDuty3Phase(du, dv, dw);
     g_foc_valpha    = valpha;
     g_foc_vbeta     = vbeta;

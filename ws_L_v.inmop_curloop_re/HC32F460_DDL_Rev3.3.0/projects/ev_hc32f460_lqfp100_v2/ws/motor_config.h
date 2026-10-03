@@ -93,6 +93,9 @@
  * ==========================================================================*/
 #define MOTOR_FOC_ENABLE        1
 #define FOC_POLE_PAIRS          10
+/* 母线电压缺省值 (V)：现在只作"实测不可用时的回退值"（上电头 100ms、
+ * 分压断线、ADC 未接）。实际取用一律走 Foc_Vbus_GetV()（读 PA4 实测值，
+ * 见 foc_core.h），不要再拿它当"真值"去算电压/占空比。 */
 #define FOC_VBUS_V              12.0f
 #define FOC_DEADTIME_NS         500u
 

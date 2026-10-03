@@ -12,7 +12,8 @@
  *      分母是整窗平均转速，没有 5ms 速度窗的量化噪声。
  *   4) 求解取**斜率**：对 y = vq - R_eff·iq 做二参数最小二乘 y = psi_f·omega_e + V_dt。
  *      斜率对常数偏置免疫（R·iq 偏置、电流零偏、Vcc 增益误差、V_dt 都只影响截距）。
- *   5) Vbus 假设误差是本模式最大系统性误差源：拟合时电压用 vq × g_flx53_vbus_scale。
+ *   5) Vbus 已改为读 PA4 实测值（Foc_Vbus_GetV，20k/3k 分压），故 vq 本身就是
+ *      真实电压；g_flx53_vbus_scale 降级为残差微调，正常固定 1.000。
  *******************************************************************************
  */
 
@@ -256,7 +257,7 @@ static void Flx53_StopPwm(void)
 {
     float du, dv, dw;
 
-    Foc_Svpwm(0.0f, 0.0f, FOC_VBUS_V, &du, &dv, &dw);
+    Foc_Svpwm(0.0f, 0.0f, FOC_VBUS_V, &du, &dv, &dw);   /* 零矢量：vbus 不参与占空比 */
     TMR4_PWM_SetDuty3Phase(du, dv, dw);
     if (g_foc_active) {
         g_foc_active = 0u;
@@ -370,7 +371,7 @@ static void Flx53_StartAvg(void)
     g_flx53_state = FOC53_STEP_AVG;
 }
 
-/* 平均窗逐拍累加（在 Step 内调用，vq 已折算 vbus_scale） */
+/* 平均窗逐拍累加（在 Step 内调用，vq 已是真实电压：实测 Vbus 折算） */
 static void Flx53_AccumSample(void)
 {
     if (s_avg_skip < s_avg_skip_ticks) {
@@ -623,11 +624,12 @@ void Foc_FlxId_Start(void)
     g_flx53_state   = FOC53_STEP_SPINUP;
     Foc_Core_PwmStart();
 
-    FLX53_DBG("start: n=%u r0=%drpm r1=%drpm r2=%drpm r3=%drpm R=%dmohm avg=%ums fit_vdt=%u",
+    FLX53_DBG("start: n=%u r0=%drpm r1=%drpm r2=%drpm r3=%drpm R=%d.%03dohm avg=%ums fit_vdt=%u",
               (unsigned)g_flx53_points,
               (int)g_flx53_rpm[0], (int)g_flx53_rpm[1],
               (int)g_flx53_rpm[2], (int)g_flx53_rpm[3],
-              (int)(g_flx53_r_used_ohm * 1000.0f),
+              (int)(g_flx53_r_used_ohm * 1000.0f + 0.5f) / 1000,
+              (int)(g_flx53_r_used_ohm * 1000.0f + 0.5f) % 1000,
               (unsigned)g_flx53_avg_ms, (unsigned)g_flx53_fit_vdt);
 }
 
@@ -735,7 +737,10 @@ void Foc_FlxId_Step(const stc_i_data_t *pData)
 
     vd = PID_UpdateUs(&s_pid_id, 0.0f, id, FOC53_ISR_DT_US);
     vq = PID_UpdateUs(&s_pid_iq, s_speed_out_ma * 0.001f, iq, FOC53_ISR_DT_US);
-    vq_eff = vq * g_flx53_vbus_scale;    /* Vbus 假设误差的校正：拟合用"真实电压" */
+    /* vq 已是"真实电压"——输出侧 Foc_Svpwm 用了实测 Vbus（PA4）。
+     * 故 g_flx53_vbus_scale 已从"Vbus 主校正"降级为残差微调（VREF/分压容差、
+     * 高频损耗），正常固定 1.000；不要再填 实测Vbus/12.0，那会二次校正。 */
+    vq_eff = vq * g_flx53_vbus_scale;
     g_foc_vd = vd;
     g_foc_vq = vq;
     g_flx53_vq = vq_eff;
@@ -812,7 +817,9 @@ void Foc_FlxId_Step(const stc_i_data_t *pData)
     sin_r = Foc_Math_Sin(rotor_rad);
     valpha = vd * cos_r - vq * sin_r;
     vbeta  = vd * sin_r + vq * cos_r;
-    Foc_Svpwm(valpha, vbeta, FOC_VBUS_V, &du, &dv, &dw);
+    /* vbus 走实测母线电压（Foc_Vbus_GetV，不可用时回退 FOC_VBUS_V）：
+     * 于是 PI 输出的 vq 就是真实电压，拟合不再依赖"12V 假设" */
+    Foc_Svpwm(valpha, vbeta, Foc_Vbus_GetV(), &du, &dv, &dw);
     TMR4_PWM_SetDuty3Phase(du, dv, dw);
 
     g_foc_valpha = valpha;

@@ -37,7 +37,7 @@ void Hardware_Init(void);
 #define VBUS_ADC_PIN            (GPIO_PIN_04)
 
 /* 分压电阻（欧姆）：Vbus 侧 R_HIGH，地侧 R_LOW */
-#define VBUS_DIV_R_HIGH_OHM     (10000.0F)
+#define VBUS_DIV_R_HIGH_OHM     (20000.0F)
 #define VBUS_DIV_R_LOW_OHM      (3000.0F)
 
 /* ADC 参考电压与满量程码值（12bit） */
@@ -74,5 +74,3 @@ void Pa6_Adc_Process(void);
 #endif
 
 #endif /* __HARDWARE_H__ */
-
-		

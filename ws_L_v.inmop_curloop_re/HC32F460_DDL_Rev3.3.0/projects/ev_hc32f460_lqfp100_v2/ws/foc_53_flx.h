@@ -66,14 +66,14 @@
  *   [!] g_flx53_rpm_max             4000    rpm      超速保护阈值；滤波转速超它
  *                                                    立即停机置 evt=5。须低于
  *                                                    12V 极对数的电压墙转速
- *   [!] g_flx53_vbus_scale          1.000   -        Vbus 校正系数 = 实测 Vbus /
- *                                                    12.0；本模式最大系统性误差
- *                                                    源，psi 随它线性比例
+ *   [!] g_flx53_vbus_scale          1.000   -        残差微调系数，正常固定 1.000
+ *                                                    （Vbus 已改读 PA4 实测值，
+ *                                                    勿填 实测Vbus/12.0）
  *   (*) 上十二行为本轮可调项。全程约 4~6s（4 点 x 爬速约 1s + 稳态 0.3s + 窗
  *       0.3s，加收尾）。
- *   [!] g_flx53_r_used_ohm 与 g_flx53_vbus_scale 是两个系统性输入：前者错 10%
- *       约使 psi 差 1~2%，后者错多少 psi
- *       就错多少。二者都不随转速变，故只进截距/缩放、不被斜率吸收。
+ *   [!] g_flx53_r_used_ohm 是系统性输入：错 10% 约使 psi 差 1~2%，且不随转速
+ *       变，故只进截距、不被斜率吸收。g_flx53_vbus_scale 同理，但已降级为
+ *       残差微调。
  *   [!] 转速序列必须单调、点间拉开（建议间隔 >=
  *       800rpm）。点太近则斜率被噪声放大；最慢点决定信噪比下限。
  * ------------------------------------------------------------------------------
@@ -123,7 +123,7 @@
  *       ch0   状态码                 -        见状态机表
  *       ch1   目标转速               rpm      当前点给定
  *   (*) ch2   实际转速               rpm      PI 反馈滤波值
- *   (*) ch3   vq                     V        已折算 vbus_scale 的 q 轴电压
+ *   (*) ch3   vq                     V        真实 q 轴电压（实测 Vbus 折算）
  *   (*) ch4   iq                     A        测量侧 EMA 后
  *   (*) ch5   psi 实时               mWb      当前点估计，逐点阶跃
  *   (*) ch6   psi 最终               mWb      拟合完成后为定值
@@ -148,9 +148,9 @@
  *   (*) 为什么必须变转速：单点测量无法分离 R 与
  *       psi_f（都乘在电流/转速上），至少两个转速点才能定出斜率。转速点要拉开，斜
  *       率才不被噪声放大。
- *   [!] 最大系统性误差是 Vbus 假设：vq 指令按 12.0V 折算，Vbus
- *       实际偏差多少，psi_f 就同比例偏多少。用 g_flx53_vbus_scale 校正（实测
- *       Vbus / 12.0）。电流采样噪声（Vcc 3.3V 抖动）经 EMA+长窗后仅
+ *   [!] Vbus 已改读 PA4 实测值（20k/3k 分压，Foc_Vbus_GetV），"12.0V 假设"
+ *       这一最大系统性误差源已消除；残余的 VREF/分压容差用 g_flx53_vbus_scale
+ *       微调（正常 1.000）。电流采样噪声（Vcc 3.3V 抖动）经 EMA+长窗后仅
  *       <1%，不是主导。
  *   [!] 抗噪组合：测量侧 iq/vq EMA（alpha=0.05，tau 约 1ms，绝不进 PI 反馈链）+
  *       长窗平均（300ms）+ 窗内前 20ms 丢弃 + 斜率对常数偏置免疫。可选 3sigma
@@ -161,7 +161,7 @@
  *       全部点完后二参数最小二乘 -> 减速关 PWM。
  *   [!] 判读：r2 >= 0.99 且离散度 < 10% psi 才算合格；psi_diff
  *       与主结果应接近；Vdt 应与 mode 51 的 160mV 接近；ratio 接近 1
- *       说明与手册吻合。任一不符先查 vbus_scale / r_used / 是否 Vsat。
+ *       说明与手册吻合。任一不符先查 r_used / 是否 Vsat（vbus_scale 应为 1.0）。
  *   [!] 本模式只输出观测量：不写 Flash、不改
  *       motor_config.h。用途是验证辨识思路，并与 mode 45 的 SMO
  *       反电动势数据交叉对比。
@@ -215,7 +215,7 @@ extern "C" {
 #define FOC53_IQ_SLOW_ALPHA    0.01f    /* 稳态判据慢 EMA (τ 约 5ms)，只判稳不测量 */
 #define FOC53_SPREAD_LIMIT_PCT 10.0f    /* 各点 psi_f 离散度合格线 (%) */
 #define FOC53_RPM_MAX_HARD     7800.0f  /* 超速阈值硬上限 (rpm) = FOC_MOTOR_MAX_SPEED_RPM */
-#define FOC53_VBUS_SCALE_MIN   0.5f     /* Vbus 校正系数护栏 */
+#define FOC53_VBUS_SCALE_MIN   0.5f     /* 残差微调系数护栏（正常 1.0） */
 #define FOC53_VBUS_SCALE_MAX   1.5f
 
 /* 环路参数（镜像 mode 40 已验证值，同电机同硬件；模块自持便于单独调） */
@@ -272,7 +272,7 @@ extern volatile float    g_flx53_rpm_tol;     /* 稳态转速容差 (rpm, 默认
 extern volatile float    g_flx53_iq_filt_alpha; /* 测量侧 iq EMA (默认 0.05, τ 约 1ms, 不进环路) */
 extern volatile uint32_t g_flx53_reject_en;   /* 3σ 离群剔除开关 (默认 0 关) */
 extern volatile float    g_flx53_rpm_max;     /* 超速保护阈值 (rpm, 默认 4000) */
-extern volatile float    g_flx53_vbus_scale;  /* Vbus 校正系数 (默认 1.000, = 实测 Vbus / 12.0) */
+extern volatile float    g_flx53_vbus_scale;  /* 残差微调系数 (默认 1.000；Vbus 已改实测，勿填 实测Vbus/12.0) */
 
 /*=============================================================================
  * 观测量（Watch / VOFA）
@@ -294,7 +294,7 @@ extern volatile float    g_flx53_psi_live_mwb;/* 当前点实时 psi_f (mWb) */
 extern volatile float    g_flx53_target_rpm;  /* 当前转速给定 (rpm) */
 extern volatile float    g_flx53_rpm_meas;    /* PI 真实反馈转速 (rpm) */
 extern volatile float    g_flx53_rpm_disp;    /* 显示强滤波转速 (rpm, α=0.05, 只看趋势) */
-extern volatile float    g_flx53_vq;          /* q 轴电压（实测电压 = 指令 × vbus_scale）(V) */
+extern volatile float    g_flx53_vq;          /* 真实 q 轴电压（实测 Vbus 折算 × 残差刻度）(V) */
 extern volatile float    g_flx53_iq;          /* q 轴电流反馈原始值 (mA) */
 extern volatile float    g_flx53_iq_filt;     /* q 轴电流测量侧 EMA (mA, 不进环路) */
 extern volatile uint8_t  g_flx53_vsat;        /* 1 = vd/vq 贴限幅（撞电压墙） */
