@@ -66,12 +66,69 @@
       "desc": "1 = 抓取并打印原始波形（9 行，排查用）；默认 0，日志保持精简"
     },
     {
+      "mk": "",
+      "name": "g_ldlq52_cur_set",
+      "val": "0",
+      "unit": "-",
+      "desc": "电流组: 0 = 现有组(bias 0.7 / 纹波 1.0); 1 = 低电流组(防磁饱和)"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_bias2_a",
+      "val": "0.30",
+      "unit": "A",
+      "desc": "低电流组直流偏置(仅 cur_set=1 时装载)"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_di2_a",
+      "val": "0.30",
+      "unit": "A",
+      "desc": "低电流组纹波峰峰值(仅 cur_set=1 时装载)"
+    },
+    {
       "mk": "(*)",
-      "note": "上七行为本轮可调项；全程约 0.5s（零偏窗 200ms + 每轴约 20ms + 间隔 200ms）。"
+      "name": "g_ldlq52_sweep_en",
+      "val": "0",
+      "unit": "-",
+      "desc": "1 = d 轴多档电流扫描（一次跑完全部档位，给出 Ld-电流曲线）"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_sw_n",
+      "val": "4",
+      "unit": "-",
+      "desc": "扫描档数（1~6，只用到 bias_a 数组的前这么多项）"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_sw_di_a",
+      "val": "0.30",
+      "unit": "A",
+      "desc": "扫描各档统一的纹波峰峰值（AC 激励不变，只变 DC 工作点才可比）"
+    },
+    {
+      "mk": "",
+      "name": "g_ldlq52_sw_bias_a",
+      "val": "",
+      "unit": "A",
+      "desc": "各档直流偏置(A)，默认 {0.3, 0.6, 1.2, 2.0}；只读前 sw_n 项"
+    },
+    {
+      "mk": "(*)",
+      "note": "上十四行为本轮可调项（含电流组三行与扫描四行）；不开扫描全程约 0.5s（零偏窗 200ms + 每轴约 20ms + 间隔 200ms），开扫描每多一档多约 60ms。"
     },
     {
       "mk": "[!]",
       "note": "bias 是这套方法成立的前提：电流必须**始终同号**，才让死区等效电压在两极性平台上同号、从而在平台内采样差里精确抵消。启动护栏会自动把 bias 抬到 1.3 倍纹波半幅 + 0.05A，所以调小 di_target 时 bias 也会跟着变小。"
+    },
+    {
+      "mk": "[!]",
+      "note": "电流组（g_ldlq52_cur_set）：0 = 现有组（偏置 0.7A / 纹波峰峰 1.0A，瞬时 0.2~1.2A）；1 = 低电流组（默认 偏置 0.30A / 纹波 0.30A，瞬时 0.15~0.45A）。切换在进入 mode 52 时装载，0 组的值会先存快照、切回时还原。低电流组的用处：SPM 电机本应 Ld 约等于 Lq，若现有组测出 Lq > Ld，很可能是 d 轴大电流把铁心推到饱和、Ld 被压低；把工作点压到额定电流 10%~20% 的小信号区重测即可验证。改 bias2_a / di2_a 后重跑 52 就生效。"
+    },
+    {
+      "mk": "(*)",
+      "note": "d 轴多档电流扫描（g_ldlq52_sweep_en）：写入 1 后，本轮 d 轴不再只测一次，而是依次用 g_ldlq52_sw_bias_a[0..sw_n-1] 当直流偏置各测一次 Ld，**一次跑完就得到 Ld-电流曲线**，饱和与否直接看趋势，不必先知道额定电流是多少。各档纹波统一用 sw_di_a（AC 激励不变、只变 DC 工作点，增量电感才可比），每档都会重新自适应方波幅值。结果落在 g_ldlq52_sw_ld_uh / g_ldlq52_sw_ibias_ma（同索引配对，0 = 该档没过判据），RTT 的 done 段会逐档打印。扫描期间 g_ldlq52_bias_a / di_target_a 由扫描逐档接管（Watch 里会看到它们在变），关闭扫描（sweep_en 写 0）后下一次 Start 自动还原。判据：Ld 随偏置单调下降且降幅超过 10% => d 轴确实在饱和，Lq > Ld 是工作点不同造成的假凸极；Ld 基本不变 => SPM 本色，Lq > Ld 另有原因（多半是 mode 24 零点或采样结构）。q 轴仍走原路径（do_q=1 时扫完 d 档再测 q），且扫描结束时偏置会自动还原成扫描前的值，q 轴不会被末档那个大电流带跑；Lq/Ld 的分母则取扫描里偏置最小的那个有效档，避免拿被饱和压低的 Ld 当分母。所以配合 cur_set=1（低电流组）跑，Ld 与 Lq 就是同一小信号工作点上的可比对。"
     },
     {
       "mk": "[!]",
@@ -227,6 +284,26 @@
       "mk": "",
       "name": "g_ldlq52_elapsed_ms",
       "desc": "累计耗时 (ms)"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_sw_idx",
+      "desc": "当前扫描档号 (0 起) ---- 运行时在变，说明扫描在推进"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_sw_done",
+      "desc": "已完成扫描档数 ---- 等于 sw_n 表示整条曲线跑完"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_sw_ld_uh",
+      "desc": "各档 Ld (uH)，索引 0..sw_done-1 ---- 0 = 该档无效；单调下降即饱和"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_ldlq52_sw_ibias_ma",
+      "desc": "各档实测偏置电流 (mA)，与 sw_ld_uh 同索引 ---- 直接当曲线的横轴用"
     }
   ],
   "vofa": {
@@ -355,7 +432,7 @@
     },
     {
       "mk": "(*)",
-      "text": "RTT 输出（开关 FOC_LDLQ52_DBG）：每次成功跑完共 6~9 行 -- start（含 do_q，确认本轮会不会测 q）；每个轴的 probe 两行（配置/偏置 + cons/path/env/pair）；d done 一行（do_q=0/1 都会打，d 轴结果位置固定）；done 一行（Ld/Lq/Lq/Ld/vs_vendor/vdead）；last axis 一行；moved 一行。失败时只多打一条原因行（OC / bias not established / rotor moving / pair mismatch / implausible / no ripple）。原始波形默认不打印，要看就把 g_ldlq52_wave_en 写 1。"
+      "text": "RTT 输出（开关 FOC_LDLQ52_DBG）：每次成功跑完共 6~9 行 -- start（含 set / sweep / sw_n / do_q，确认用的是哪组电流、有没有开扫描、本轮会不会测 q）；每个轴的 probe 两行（配置/偏置 + cons/path/env/pair）；d done 一行（do_q=0/1 都会打，d 轴结果位置固定）；done 一行（Ld/Lq/Lq/Ld/vs_vendor/vdead）；last axis 一行；moved 一行；开了扫描则在 done 之后多打一条 sweep 汇总 + 每档一行 sw#k bias/Ld。失败时只多打一条原因行（OC / bias not established / rotor moving / pair mismatch / implausible / no ripple）。原始波形默认不打印，要看就把 g_ldlq52_wave_en 写 1。"
     },
     {
       "mk": "[!]",
@@ -398,53 +475,67 @@
     "g_ldlq52_cycles": "foc_52_ldlq.c:45",
     "g_ldlq52_do_q": "foc_52_ldlq.c:46",
     "g_ldlq52_r_used_ohm": "foc_52_ldlq.c:48",
-    "g_ldlq52_running": "foc_52_ldlq.c:53",
-    "g_ldlq52_state": "foc_52_ldlq.c:54",
-    "g_ldlq52_evt": "foc_52_ldlq.c:55",
-    "g_ldlq52_axis": "foc_52_ldlq.c:56",
-    "g_ldlq52_ld_uh": "foc_52_ldlq.c:57",
-    "g_ldlq52_lq_uh": "foc_52_ldlq.c:58",
-    "g_ldlq52_ratio": "foc_52_ldlq.c:59",
-    "g_ldlq52_ratio_vs_vendor": "foc_52_ldlq.c:60",
-    "g_ldlq52_di_pp_a": "foc_52_ldlq.c:61",
-    "g_ldlq52_v_inj_v": "foc_52_ldlq.c:62",
-    "g_ldlq52_i_bias_ma": "foc_52_ldlq.c:63",
-    "g_ldlq52_vdead_v": "foc_52_ldlq.c:64",
-    "g_ldlq52_d_scatter_pct": "foc_52_ldlq.c:65",
-    "g_ldlq52_dcnt": "foc_52_ldlq.c:66",
-    "g_ldlq52_moved_cnts": "foc_52_ldlq.c:90",
-    "g_ldlq52_elapsed_ms": "foc_52_ldlq.c:91",
-    "Foc_LdLqId_Start": "foc_52_ldlq.c:529",
-    "Foc_LdLqId_Stop": "foc_52_ldlq.c:608",
-    "Foc_LdLqId_Step": "foc_52_ldlq.c:626",
-    "Foc_LdLqId_VofaFill": "foc_52_ldlq.c:798",
-    "LdLq52_SquareStep": "foc_52_ldlq.c:268",
-    "LdLq52_FinishMeasure": "foc_52_ldlq.c:437",
-    "LdLq52_PhaseReset": "foc_52_ldlq.c:385",
-    "LdLq52_RotorAngle": "foc_52_ldlq.c:205",
-    "LdLq52_AxisCurrent": "foc_52_ldlq.c:236",
-    "LdLq52_OutputAxis": "foc_52_ldlq.c:249",
-    "FOC_LDLQ52_DBG": "foc_52_ldlq.h:271",
-    "LDLQ52_DBG": "foc_52_ldlq.h:273",
-    "FOC52_ZERO_SAMPLES": "foc_52_ldlq.h:281",
-    "FOC52_SETTLE_CYCLES": "foc_52_ldlq.h:282",
-    "FOC52_HALF_ISRS": "foc_52_ldlq.h:283",
-    "FOC52_PROBE_V": "foc_52_ldlq.h:284",
-    "FOC52_PROBE_CYCLES": "foc_52_ldlq.h:285",
-    "FOC52_GAP_MS": "foc_52_ldlq.h:286",
-    "FOC52_BIAS_CYCLES": "foc_52_ldlq.h:287",
-    "FOC52_BIAS_SKIP": "foc_52_ldlq.h:288",
-    "FOC52_BIAS_MARGIN": "foc_52_ldlq.h:289",
-    "FOC52_VDEAD_PRIOR_V": "foc_52_ldlq.h:293",
-    "FOC52_DI_HARD_MAX_A": "foc_52_ldlq.h:294",
-    "FOC52_V_HARD_MAX_V": "foc_52_ldlq.h:295",
-    "FOC52_VBIAS_HARD_MAX_V": "foc_52_ldlq.h:296",
-    "FOC52_STEP_ZERO": "foc_52_ldlq.h:308",
-    "FOC52_STEP_PROBE": "foc_52_ldlq.h:309",
-    "FOC52_STEP_MEAS": "foc_52_ldlq.h:310",
-    "FOC52_STEP_GAP": "foc_52_ldlq.h:311",
-    "FOC52_EVT_DONE": "foc_52_ldlq.h:317",
-    "FOC52_EVT_BIAS_FAIL": "foc_52_ldlq.h:320",
+    "g_ldlq52_cur_set": "foc_52_ldlq.c:51",
+    "g_ldlq52_bias2_a": "foc_52_ldlq.c:52",
+    "g_ldlq52_di2_a": "foc_52_ldlq.c:53",
+    "g_ldlq52_sweep_en": "foc_52_ldlq.c:58",
+    "g_ldlq52_sw_n": "foc_52_ldlq.c:59",
+    "g_ldlq52_sw_di_a": "foc_52_ldlq.c:60",
+    "g_ldlq52_sw_bias_a": "foc_52_ldlq.c:61",
+    "g_ldlq52_sw_idx": "foc_52_ldlq.c:116",
+    "g_ldlq52_sw_done": "foc_52_ldlq.c:117",
+    "g_ldlq52_sw_ld_uh": "foc_52_ldlq.c:118",
+    "g_ldlq52_sw_ibias_ma": "foc_52_ldlq.c:119",
+    "LdLq52_LoadSweepLevel": "foc_52_ldlq.c:236",
+    "LdLq52_SweepPickSmall": "foc_52_ldlq.c:258",
+    "g_ldlq52_running": "foc_52_ldlq.c:76",
+    "g_ldlq52_state": "foc_52_ldlq.c:77",
+    "g_ldlq52_evt": "foc_52_ldlq.c:78",
+    "g_ldlq52_axis": "foc_52_ldlq.c:79",
+    "g_ldlq52_ld_uh": "foc_52_ldlq.c:80",
+    "g_ldlq52_lq_uh": "foc_52_ldlq.c:81",
+    "g_ldlq52_ratio": "foc_52_ldlq.c:82",
+    "g_ldlq52_ratio_vs_vendor": "foc_52_ldlq.c:83",
+    "g_ldlq52_di_pp_a": "foc_52_ldlq.c:84",
+    "g_ldlq52_v_inj_v": "foc_52_ldlq.c:85",
+    "g_ldlq52_i_bias_ma": "foc_52_ldlq.c:86",
+    "g_ldlq52_vdead_v": "foc_52_ldlq.c:87",
+    "g_ldlq52_d_scatter_pct": "foc_52_ldlq.c:88",
+    "g_ldlq52_dcnt": "foc_52_ldlq.c:89",
+    "g_ldlq52_moved_cnts": "foc_52_ldlq.c:113",
+    "g_ldlq52_elapsed_ms": "foc_52_ldlq.c:114",
+    "Foc_LdLqId_Start": "foc_52_ldlq.c:600",
+    "Foc_LdLqId_Stop": "foc_52_ldlq.c:721",
+    "Foc_LdLqId_Step": "foc_52_ldlq.c:739",
+    "Foc_LdLqId_VofaFill": "foc_52_ldlq.c:943",
+    "LdLq52_SquareStep": "foc_52_ldlq.c:339",
+    "LdLq52_FinishMeasure": "foc_52_ldlq.c:508",
+    "LdLq52_PhaseReset": "foc_52_ldlq.c:456",
+    "LdLq52_RotorAngle": "foc_52_ldlq.c:276",
+    "LdLq52_AxisCurrent": "foc_52_ldlq.c:307",
+    "LdLq52_OutputAxis": "foc_52_ldlq.c:320",
+    "FOC_LDLQ52_DBG": "foc_52_ldlq.h:325",
+    "LDLQ52_DBG": "foc_52_ldlq.h:327",
+    "FOC52_ZERO_SAMPLES": "foc_52_ldlq.h:335",
+    "FOC52_SETTLE_CYCLES": "foc_52_ldlq.h:336",
+    "FOC52_HALF_ISRS": "foc_52_ldlq.h:337",
+    "FOC52_PROBE_V": "foc_52_ldlq.h:338",
+    "FOC52_PROBE_CYCLES": "foc_52_ldlq.h:339",
+    "FOC52_GAP_MS": "foc_52_ldlq.h:340",
+    "FOC52_BIAS_CYCLES": "foc_52_ldlq.h:341",
+    "FOC52_BIAS_SKIP": "foc_52_ldlq.h:342",
+    "FOC52_BIAS_MARGIN": "foc_52_ldlq.h:343",
+    "FOC52_VDEAD_PRIOR_V": "foc_52_ldlq.h:347",
+    "FOC52_DI_HARD_MAX_A": "foc_52_ldlq.h:348",
+    "FOC52_V_HARD_MAX_V": "foc_52_ldlq.h:349",
+    "FOC52_VBIAS_HARD_MAX_V": "foc_52_ldlq.h:350",
+    "FOC52_SWEEP_MAX": "foc_52_ldlq.h:357",
+    "FOC52_STEP_ZERO": "foc_52_ldlq.h:363",
+    "FOC52_STEP_PROBE": "foc_52_ldlq.h:364",
+    "FOC52_STEP_MEAS": "foc_52_ldlq.h:365",
+    "FOC52_STEP_GAP": "foc_52_ldlq.h:366",
+    "FOC52_EVT_DONE": "foc_52_ldlq.h:372",
+    "FOC52_EVT_BIAS_FAIL": "foc_52_ldlq.h:375",
     "FOC_MOTOR_LS_UH": "motor_config.h:74",
     "FOC_MOTOR_RS_OHM": "motor_config.h:73",
     "FOC_ISR_HZ": "I.h:108",

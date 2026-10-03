@@ -112,7 +112,9 @@ static void CommRunner_StopFocModes(void)
     if (g_ldlq52_running) {
         Foc_LdLqId_Stop();
     }
-    /* mode 53 接入时在此追加各自的 Stop */
+    if (g_flx53_running) {
+        Foc_FlxId_Stop();
+    }
 }
 
 /*=============================================================================
@@ -236,6 +238,13 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         Commutation_Stop();
         Foc_LdLqId_Start();
         RUNNER_DBG("LDLQ52 (mode 52, Ld/Lq identification)");
+        break;
+
+    case COMM_RUNNER_FLX53:
+        CommRunner_StopFocModes();
+        Commutation_Stop();
+        Foc_FlxId_Start();
+        RUNNER_DBG("FLX53 (mode 53, flux identification)");
         break;
 
     default:

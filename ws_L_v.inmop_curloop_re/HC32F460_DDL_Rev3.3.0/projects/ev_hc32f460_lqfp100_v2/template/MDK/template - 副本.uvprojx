@@ -1019,6 +1019,11 @@
               <FilePath>..\..\ws\foc_52_ldlq.c</FilePath>
             </File>
             <File>
+              <FileName>foc_53_flx.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_53_flx.c</FilePath>
+            </File>
+            <File>
               <FileName>foc_24_dcal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_24_dcal.c</FilePath>
@@ -2093,6 +2098,11 @@
               <FileName>foc_52_ldlq.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_52_ldlq.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_53_flx.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_53_flx.c</FilePath>
             </File>
             <File>
               <FileName>foc_24_dcal.c</FileName>

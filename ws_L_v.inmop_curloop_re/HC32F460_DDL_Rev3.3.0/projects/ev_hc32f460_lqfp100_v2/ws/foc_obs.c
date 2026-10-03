@@ -31,6 +31,7 @@
 #include "foc_calib.h"
 #include "foc_51_rs.h"
 #include "foc_52_ldlq.h"
+#include "foc_53_flx.h"
 #include "dev_comm_runner.h"   /* CommRunner_SetMode（mode 20 完成自动回 mode 0） */
 #include "encoder.h"
 #include "motor_config.h"
@@ -776,6 +777,19 @@ void Foc_Obs_Task(void)
                 LDLQ52_DBG("  moved d=%d q=%d path=%u t=%dms",
                            (int)g_ldlq52_moved_d_cnts, (int)g_ldlq52_moved_q_cnts,
                            (unsigned)g_ldlq52_path_cnts, (int)g_ldlq52_elapsed_ms);
+                /* d 轴多档电流扫描：逐档打出偏置 -> Ld，Ld 随偏置单调下降即磁饱和 */
+                if (g_ldlq52_sweep_en != 0u) {
+                    uint32_t k;
+
+                    LDLQ52_DBG("  sweep n=%u done=%u (pp=%dmA, Ld=0 means level invalid)",
+                               (unsigned)g_ldlq52_sw_n, (unsigned)g_ldlq52_sw_done,
+                               (int)(g_ldlq52_sw_di_a * 1000.0f));
+                    for (k = 0u; k < g_ldlq52_sw_done; k++) {
+                        LDLQ52_DBG("    sw#%u bias=%dmA Ld=%duH",
+                                   (unsigned)k, (int)g_ldlq52_sw_ibias_ma[k],
+                                   (int)(g_ldlq52_sw_ld_uh[k] + 0.5f));
+                    }
+                }
                 if (g_ldlq52_q_skipped != 0u) {
                     LDLQ52_DBG("  [info] q skipped (do_q was 0 at Start)");
                 }
@@ -834,6 +848,113 @@ void Foc_Obs_Task(void)
         s_ldlq52_released      = 0u;      /* 下一次 Start 后允许再释放模式号 */
     }
     }   /* mode 52 打印段 */
+
+    /* ---- mode 53 永磁磁链辨识：逐点进度 + 拟合结果 ----
+     * ISR 只动 g_flx53_pts_done/state/evt，打印全部在本段（RTT 打印规范：ISR 内不打印；
+     * 禁止 %f 与中文，物理量一律缩放为整型 mV/mA，psi 用 1/1000 mWb，比值 x1000）。
+     * 去重标记放在 if 之外：未运行分支要用它们同步，避免下次 Start 打出幽灵行。 */
+    {
+        static uint32_t s_flx53_pt_printed   = 0u;
+        static uint8_t  s_flx53_evt_printed  = 0u;
+        static uint8_t  s_flx53_released     = 0u;
+
+        if (g_flx53_running != 0u) {
+            /* 每完成一个转速点打一行 */
+            if (g_flx53_pts_done != s_flx53_pt_printed) {
+                uint32_t done = g_flx53_pts_done;
+
+                if ((done > 0u) && (done <= FOC53_MAX_POINTS)) {
+                    uint32_t k = done - 1u;
+                    FLX53_DBG("pt%u: rpm=%d vq=%dmV iq=%dmA we=%d/100rad tgt=%drpm",
+                              (unsigned)k, (int)g_flx53_pts_rpm[k],
+                              (int)(g_flx53_pts_vq[k] * 1000.0f),
+                              (int)(g_flx53_pts_iq[k] * 1000.0f),
+                              (int)(g_flx53_pts_we[k] * 100.0f),
+                              (int)g_flx53_rpm[k]);
+                    FLX53_DBG("  psi=%d/1000mWb", (int)(g_flx53_psi_pts[k] * 1000.0f));
+                }
+                s_flx53_pt_printed = done;
+            }
+
+            if (g_flx53_evt == 0u) {
+                s_flx53_evt_printed = 0u;   /* Start 会清 evt，据此复位去重标记 */
+                s_flx53_released    = 0u;
+            } else if (g_flx53_evt_seq != s_flx53_evt_printed) {
+                uint8_t evt = g_flx53_evt;
+
+                s_flx53_evt_printed = g_flx53_evt_seq;
+                switch (evt) {
+                case FOC53_EVT_DONE_OK:
+                case FOC53_EVT_DONE_POOR: {
+                    uint32_t k, n = g_flx53_points;
+
+                    FLX53_DBG("done: psi=%d/1000mWb diff=%d/1000 Vdt=%dmV r2=%d/1000 ratio=%d/1000",
+                              (int)(g_flx53_psi_mwb * 1000.0f),
+                              (int)(g_flx53_psi_diff_mwb * 1000.0f),
+                              (int)g_flx53_vdt_fit_mv,
+                              (int)(g_flx53_r2 * 1000.0f),
+                              (int)(g_flx53_ratio * 1000.0f));
+                    FLX53_DBG("  spread=%d/1000mWb win_split=%d/1000 R_used=%dmohm Vdt_used=%dmV pts=%u t=%dms",
+                              (int)(g_flx53_psi_spread_mwb * 1000.0f),
+                              (int)(g_flx53_win_split_pct * 1000.0f),
+                              (int)(g_flx53_r_used_ohm * 1000.0f),
+                              (int)g_flx53_vdt_used_mv,
+                              (unsigned)g_flx53_pts_done,
+                              (int)g_flx53_elapsed_ms);
+                    FLX53_DBG("  vendor psi=%d/1000mWb alt_psi(R=%dmohm)=%d/1000mWb",
+                              (int)(FOC_MOTOR_FLUX_VS * 1000000.0f),
+                              (int)(FOC_MOTOR_RS_OHM * 1000.0f),
+                              (int)(g_flx53_psi_alt_mwb * 1000.0f));
+                    if (n > FOC53_MAX_POINTS) { n = FOC53_MAX_POINTS; }
+                    for (k = 0u; k < n; k++) {
+                        FLX53_DBG("  pt%u rpm=%d vq=%dmV iq=%dmA we=%d/100rad psi=%d/1000mWb",
+                                  (unsigned)k, (int)g_flx53_pts_rpm[k],
+                                  (int)(g_flx53_pts_vq[k] * 1000.0f),
+                                  (int)(g_flx53_pts_iq[k] * 1000.0f),
+                                  (int)(g_flx53_pts_we[k] * 100.0f),
+                                  (int)(g_flx53_psi_pts[k] * 1000.0f));
+                    }
+                    if (evt == FOC53_EVT_DONE_POOR) {
+                        FLX53_DBG("  [warn] spread>=10 -> check R_used / vbus_scale / steady state");
+                    }
+                    if (g_flx53_win_split_pct > 1.0f) {
+                        FLX53_DBG("  [warn] win_split=%d/1000 high -> noise/drift in window",
+                                  (int)(g_flx53_win_split_pct * 1000.0f));
+                    }
+                    if (g_flx53_vsat != 0u) {
+                        FLX53_DBG("  [warn] Vsat=1 at finish -> hit voltage wall, vq clipped");
+                    }
+                    /* 跑完把模式号放回 STOP，否则 Keil 里再写 53 会被 SetMode 的
+                     * "同模式早退"吃掉、必须手动经过 0 才能重测。 */
+                    if (s_flx53_released == 0u) {
+                        s_flx53_released = 1u;
+                        CommRunner_ReleaseMode();
+                    }
+                    break;
+                }
+                case FOC53_EVT_TIMEOUT:
+                    FLX53_DBG("timeout: tgt=%drpm filt=%drpm -> skip point",
+                              (int)g_flx53_target_rpm, (int)g_flx53_rpm_meas);
+                    break;
+                case FOC53_EVT_OC:
+                    FLX53_DBG("FAULT_OC at state=%u i=%dmA", (unsigned)g_flx53_state,
+                              (int)g_foc_fault_i_ma);
+                    break;
+                case FOC53_EVT_OVRPM:
+                    FLX53_DBG("FAULT_OVRPM: filt=%drpm > limit=%drpm",
+                              (int)g_flx53_rpm_meas, (int)g_flx53_rpm_max);
+                    break;
+                default:
+                    break;
+                }
+            }
+        } else {
+            /* 未运行：同步去重标记（全局在 Start 里清零，静态量还停在上次的值） */
+            s_flx53_pt_printed  = g_flx53_pts_done;
+            s_flx53_evt_printed = 0u;
+            s_flx53_released    = 0u;
+        }
+    }   /* mode 53 打印段 */
 
     /* ---- ZIZENG 状态打印（200ms 高频调试） ---- */
     if (g_zizeng_running) {

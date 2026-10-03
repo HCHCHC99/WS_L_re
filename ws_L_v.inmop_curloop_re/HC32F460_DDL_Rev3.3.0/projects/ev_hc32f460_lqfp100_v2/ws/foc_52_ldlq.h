@@ -68,12 +68,56 @@
  *       g_ldlq52_wave_en            0       -        1 = 抓取并打印原始波形（9
  *                                                    行，排查用）；默认
  *                                                    0，日志保持精简
- *   (*) 上七行为本轮可调项；全程约 0.5s（零偏窗 200ms + 每轴约 20ms + 间隔
- *       200ms）。
+ *       g_ldlq52_cur_set            0       -        电流组: 0 = 现有组(bias 0.7
+ *                                                    / 纹波 1.0); 1 =
+ *                                                    低电流组(防磁饱和)
+ *       g_ldlq52_bias2_a            0.30    A        低电流组直流偏置(仅
+ *                                                    cur_set=1 时装载)
+ *       g_ldlq52_di2_a              0.30    A        低电流组纹波峰峰值(仅
+ *                                                    cur_set=1 时装载)
+ *   (*) g_ldlq52_sweep_en           0       -        1 = d
+ *                                                    轴多档电流扫描（一次跑完全
+ *                                                    部档位，给出 Ld-电流曲线）
+ *       g_ldlq52_sw_n               4       -        扫描档数（1~6，只用到
+ *                                                    bias_a 数组的前这么多项）
+ *       g_ldlq52_sw_di_a            0.30    A        扫描各档统一的纹波峰峰值
+ *                                                    （AC 激励不变，只变 DC
+ *                                                    工作点才可比）
+ *       g_ldlq52_sw_bias_a                  A        各档直流偏置(A)，默认 {0.3,
+ *                                                    0.6, 1.2, 2.0}；只读前 sw_n
+ *                                                    项
+ *   (*) 上十四行为本轮可调项（含电流组三行与扫描四行）；不开扫描全程约
+ *       0.5s（零偏窗 200ms + 每轴约 20ms + 间隔 200ms），开扫描每多一档多约
+ *       60ms。
  *   [!] bias
  *       是这套方法成立的前提：电流必须**始终同号**，才让死区等效电压在两极性平台
  *       上同号、从而在平台内采样差里精确抵消。启动护栏会自动把 bias 抬到 1.3
  *       倍纹波半幅 + 0.05A，所以调小 di_target 时 bias 也会跟着变小。
+ *   [!] 电流组（g_ldlq52_cur_set）：0 = 现有组（偏置 0.7A / 纹波峰峰 1.0A，瞬时
+ *       0.2~1.2A）；1 = 低电流组（默认 偏置 0.30A / 纹波 0.30A，瞬时
+ *       0.15~0.45A）。切换在进入 mode 52 时装载，0
+ *       组的值会先存快照、切回时还原。低电流组的用处：SPM 电机本应 Ld 约等于
+ *       Lq，若现有组测出 Lq > Ld，很可能是 d 轴大电流把铁心推到饱和、Ld
+ *       被压低；把工作点压到额定电流 10%~20% 的小信号区重测即可验证。改 bias2_a
+ *       / di2_a 后重跑 52 就生效。
+ *   (*) d 轴多档电流扫描（g_ldlq52_sweep_en）：写入 1 后，本轮 d
+ *       轴不再只测一次，而是依次用 g_ldlq52_sw_bias_a[0..sw_n-1]
+ *       当直流偏置各测一次 Ld，**一次跑完就得到
+ *       Ld-电流曲线**，饱和与否直接看趋势，不必先知道额定电流是多少。各档纹波统
+ *       一用 sw_di_a（AC 激励不变、只变 DC
+ *       工作点，增量电感才可比），每档都会重新自适应方波幅值。结果落在
+ *       g_ldlq52_sw_ld_uh / g_ldlq52_sw_ibias_ma（同索引配对，0 =
+ *       该档没过判据），RTT 的 done 段会逐档打印。扫描期间 g_ldlq52_bias_a /
+ *       di_target_a 由扫描逐档接管（Watch 里会看到它们在变），关闭扫描（sweep_en
+ *       写 0）后下一次 Start 自动还原。判据：Ld 随偏置单调下降且降幅超过 10% =>
+ *       d 轴确实在饱和，Lq > Ld 是工作点不同造成的假凸极；Ld 基本不变 => SPM
+ *       本色，Lq > Ld 另有原因（多半是 mode 24 零点或采样结构）。q
+ *       轴仍走原路径（do_q=1 时扫完 d 档再测
+ *       q），且扫描结束时偏置会自动还原成扫描前的值，q
+ *       轴不会被末档那个大电流带跑；Lq/Ld
+ *       的分母则取扫描里偏置最小的那个有效档，避免拿被饱和压低的 Ld
+ *       当分母。所以配合 cur_set=1（低电流组）跑，Ld 与 Lq
+ *       就是同一小信号工作点上的可比对。
  *   [!] 注入幅值不要随手加大：3V 加在 42uH 上、100us 平台内会摆 7A。默认 0.5V
  *       探测后自适应到约 0.42V（对应纹波峰峰值 1A、峰值电流 0.5A）；若实测 L 是
  *       260uH，自适应会升到约 2.6V。
@@ -137,6 +181,14 @@
  *                                      ---- d 轴就不该动
  *       g_ldlq52_moved_cnts            全程净位移 (counts，已解回绕)
  *       g_ldlq52_elapsed_ms            累计耗时 (ms)
+ *   (*) g_ldlq52_sw_idx                当前扫描档号 (0 起) ----
+ *                                      运行时在变，说明扫描在推进
+ *   (*) g_ldlq52_sw_done               已完成扫描档数 ---- 等于 sw_n
+ *                                      表示整条曲线跑完
+ *   (*) g_ldlq52_sw_ld_uh              各档 Ld (uH)，索引 0..sw_done-1 ---- 0 =
+ *                                      该档无效；单调下降即饱和
+ *   (*) g_ldlq52_sw_ibias_ma           各档实测偏置电流 (mA)，与 sw_ld_uh 同索引
+ *                                      ---- 直接当曲线的横轴用
  * ------------------------------------------------------------------------------
  *   VOFA 通道 -- 12ch，填充见 Foc_LdLqId_VofaFill
  * ------------------------------------------------------------------------------
@@ -198,12 +250,14 @@
  *   [!] 本模式只输出观测量：不写 Flash、不改
  *       motor_config.h。用途是与商家参数对比、验证辨识思路本身。测到 260uH
  *       也不会自动改环路，需要人工决定。
- *   (*) RTT 输出（开关 FOC_LDLQ52_DBG）：每次成功跑完共 6~9 行 -- start（含
- *       do_q，确认本轮会不会测 q）；每个轴的 probe 两行（配置/偏置 +
- *       cons/path/env/pair）；d done 一行（do_q=0/1 都会打，d
- *       轴结果位置固定）；done 一行（Ld/Lq/Lq/Ld/vs_vendor/vdead）；last axis
- *       一行；moved 一行。失败时只多打一条原因行（OC / bias not established /
- *       rotor moving / pair mismatch / implausible / no
+ *   (*) RTT 输出（开关 FOC_LDLQ52_DBG）：每次成功跑完共 6~9 行 -- start（含 set
+ *       / sweep / sw_n / do_q，确认用的是哪组电流、有没有开扫描、本轮会不会测
+ *       q）；每个轴的 probe 两行（配置/偏置 + cons/path/env/pair）；d done
+ *       一行（do_q=0/1 都会打，d 轴结果位置固定）；done
+ *       一行（Ld/Lq/Lq/Ld/vs_vendor/vdead）；last axis 一行；moved
+ *       一行；开了扫描则在 done 之后多打一条 sweep 汇总 + 每档一行 sw#k
+ *       bias/Ld。失败时只多打一条原因行（OC / bias not established / rotor
+ *       moving / pair mismatch / implausible / no
  *       ripple）。原始波形默认不打印，要看就把 g_ldlq52_wave_en 写 1。
  *   [!] 相位免疫的关键规则：平台长度正好是 2 个采样周期 =>
  *       每个平台内有两对相邻采样；翻转是按 ISR
@@ -300,6 +354,7 @@ extern "C" {
 #define FOC52_WAVE_N           64u     /* 波形抓取长度（ISR 逐拍记录被测轴电流与平台极性） */
 #define FOC52_L_MIN_UH         3.0f    /* 纹波反推的电感合理下限 (uH)：低于它判数据异常、停止抬偏置 */
 #define FOC52_L_MAX_UH         3000.0f /* 合理上限 (uH)，高于它同样判异常 */
+#define FOC52_SWEEP_MAX        6u      /* d 轴多档电流扫描的最大档数 */
 
 /*=============================================================================
  * 状态机（g_ldlq52_state）
@@ -333,6 +388,16 @@ extern volatile uint32_t g_ldlq52_cycles;        /* 正式测量周期数 (默�
 extern volatile uint32_t g_ldlq52_do_q;          /* 是否测 q 轴 (1=测, 0=只测 d) */
 extern volatile uint32_t g_ldlq52_wave_en;       /* 1 = 抓取并打印原始波形（排查用，默认 0 关） */
 extern volatile float    g_ldlq52_r_used_ohm;    /* 反推 V_dead 用的 R (默认 0.098, 填 mode 51 实测值) */
+extern volatile uint32_t g_ldlq52_cur_set;       /* 电流组选择: 0 = 现有组(bias 0.7 / 纹波 1.0), 1 = 低电流组 */
+extern volatile float    g_ldlq52_bias2_a;       /* 低电流组直流偏置 (A, 默认 0.30, 防磁饱和) */
+extern volatile float    g_ldlq52_di2_a;         /* 低电流组纹波峰峰值 (A, 默认 0.30) */
+/* d 轴多档电流扫描：一次跑完各档偏置，直接看 Ld 随偏置电流的变化（饱和可判）。
+ * 开启后 g_ldlq52_bias_a / g_ldlq52_di_target_a 由扫描逐档接管，扫描前先存快照，
+ * 关闭扫描后在下一次 Start 还原。 */
+extern volatile uint32_t g_ldlq52_sweep_en;      /* 1 = 启用 d 轴多档电流扫描 (默认 0) */
+extern volatile uint32_t g_ldlq52_sw_n;          /* 扫描档数 (1..FOC52_SWEEP_MAX, 默认 4) */
+extern volatile float    g_ldlq52_sw_di_a;       /* 扫描各档统一的纹波峰峰值 (A, 默认 0.30) */
+extern volatile float    g_ldlq52_sw_bias_a[FOC52_SWEEP_MAX];   /* 各档直流偏置 (A, 默认 0.3/0.6/1.2/2.0) */
 
 /*=============================================================================
  * 观测量（Watch / VOFA）
@@ -378,6 +443,12 @@ extern volatile int32_t  g_ldlq52_moved_d_cnts;  /* d 轴测量期间的净位�
 extern volatile int32_t  g_ldlq52_moved_q_cnts;  /* q 轴测量期间的净位移 (counts, 已解回绕) */
 extern volatile int32_t  g_ldlq52_moved_cnts;    /* 全程编码器净位移 (counts, 已解回绕) */
 extern volatile uint32_t g_ldlq52_elapsed_ms;
+/* d 轴多档电流扫描结果：sw_ld_uh[k] / sw_ibias_ma[k] 是第 k 档的 Ld 与实测偏置，
+ * 0 = 该档无效（未跑到或判据没过）。sw_idx = 当前档号，sw_done = 已完成档数。 */
+extern volatile uint32_t g_ldlq52_sw_idx;
+extern volatile uint32_t g_ldlq52_sw_done;
+extern volatile float    g_ldlq52_sw_ld_uh[FOC52_SWEEP_MAX];
+extern volatile float    g_ldlq52_sw_ibias_ma[FOC52_SWEEP_MAX];
 
 /*=============================================================================
  * API

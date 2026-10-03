@@ -37,6 +37,7 @@ typedef enum {
     COMM_RUNNER_LOCK_IQ_PI = 32, /* 自锁偏移 + 自动交接 mode 31（不依赖 mode 30） */
     COMM_RUNNER_RS51       = 51, /* 定子电阻辨识（静止直流注入 + 多电平最小二乘） */
     COMM_RUNNER_LDLQ52     = 52, /* d/q 轴电感辨识（直流偏置方波 + 单极性纹波，需先跑 mode 24） */
+    COMM_RUNNER_FLX53      = 53, /* 永磁磁链 psi_f 辨识（编码器速度环 + 变转速 vq/omega_e 最小二乘，需先跑 mode 24） */
 } comm_runner_mode_t;
 
 /* 配置结构（精简版） */
@@ -60,7 +61,7 @@ typedef struct {
  *     mode 0/通用 20ch | 20 14ch | 24 16ch | 25 16ch | 26 16ch
  *     mode 27 17ch | 28 17ch | 29 19ch | 30 15ch | 31 16ch
  *     mode 32 16ch | 40 18ch | 41 21ch | 45 16/8/16ch（随 wave_mode）
- *     mode 51 12ch
+ *     mode 51 12ch | 52 12ch | 53 16ch
  *
  *   ⚠ 通道数可变 ⇒ 切模式时 VOFA+ 上位机的通道数必须同步修改。
  *   ⚠ 硬上限 USART3_VOFA_MAX_CHANNELS(24)；main.c 内部缓冲 cur[32]。

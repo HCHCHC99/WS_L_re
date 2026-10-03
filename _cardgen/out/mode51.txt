@@ -49,6 +49,7 @@
  *       g_rs51_v_now_v                 当前注入电压 (V)
  *       g_rs51_i_now_a                 当前电流矢量幅值 (A)
  *       g_rs51_elapsed_ms              累计注入时间 (ms)
+ *       g_rs51_fs_meas_hz              实测 ISR 频率 (Hz)：Timer6 计数测得
  *       g_rs51_pts_done                已完成档位数（RTT 进度打印靠它）
  *   [!] g_rs51_v_scale                 运行时电压缩放；<1 说明护栏降过档
  *   [!] g_rs51_scale_hits              电流护栏触发次数；>0 说明探测值偏大

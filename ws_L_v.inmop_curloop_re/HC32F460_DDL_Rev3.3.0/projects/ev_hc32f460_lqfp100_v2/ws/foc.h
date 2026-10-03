@@ -20,6 +20,8 @@
  *          foc_calib.h    相电流 DC 零偏自校准（各模式启动时复用）
  *          foc_scope.h    MotorScope RTT 遥测
  *          foc_51_rs.h    模式51 定子电阻辨识（静止直流注入 + 多电平最小二乘）
+ *          foc_52_ldlq.h  模式52 d/q 轴电感辨识（直流偏置方波 + 单极性纹波）
+ *          foc_53_flx.h   模式53 永磁磁链 psi_f 辨识（编码器速度环 + 变转速 vq/omega_e 最小二乘）
  *
  *        依赖方向：各模式模块 -> foc_core；本文件仅聚合头文件与
  *        Foc_Init/Foc_Isr 分发入口。main.c / dev_comm_runner.c 等
@@ -54,6 +56,7 @@
 #include "foc_scope.h"
 #include "foc_51_rs.h"
 #include "foc_52_ldlq.h"
+#include "foc_53_flx.h"
 
 #ifdef __cplusplus
 extern "C" {

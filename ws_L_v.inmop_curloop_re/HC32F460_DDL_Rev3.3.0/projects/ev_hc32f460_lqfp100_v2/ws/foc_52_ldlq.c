@@ -46,6 +46,29 @@ volatile uint32_t g_ldlq52_cycles      = 32u;      /* 正式测量周期数 */
 volatile uint32_t g_ldlq52_do_q        = 1u;       /* 是否测 q 轴 */
 volatile uint32_t g_ldlq52_wave_en     = 0u;       /* 1 = 抓取并打印原始波形（排查用） */
 volatile float    g_ldlq52_r_used_ohm  = 0.098f;   /* 反推 V_dead 用的 R（mode 51 实测） */
+/* 电流组：0 = 现有组（偏置 0.7A / 纹波 1.0A），1 = 低电流组（默认 偏置 0.30A / 纹波 0.30A）。
+ * 低电流组的目的是把工作点压到小信号区，避开磁饱和（SPM 电机不该出现 Lq > Ld）。 */
+volatile uint32_t g_ldlq52_cur_set    = 0u;       /* 0 = 现有组, 1 = 低电流组 */
+volatile float    g_ldlq52_bias2_a    = 0.30f;    /* 低电流组直流偏置 (A) */
+volatile float    g_ldlq52_di2_a      = 0.30f;    /* 低电流组纹波峰峰值 (A) */
+/* d 轴多档电流扫描：依次把 g_ldlq52_sw_bias_a[0..sw_n-1] 当直流偏置各测一次 Ld，
+ * 直接给出 Ld-电流曲线 —— 是否磁饱和看趋势即可，不依赖"额定电流是多少"这个假设。
+ * 各档纹波峰峰值统一用 g_ldlq52_sw_di_a：AC 激励不变、只变 DC 工作点，
+ * 这样各档的增量电感才可比。 */
+volatile uint32_t g_ldlq52_sweep_en  = 0u;        /* 1 = 启用扫描 */
+volatile uint32_t g_ldlq52_sw_n      = 4u;        /* 档数 */
+volatile float    g_ldlq52_sw_di_a   = 0.30f;     /* 各档纹波峰峰值 (A) */
+volatile float    g_ldlq52_sw_bias_a[FOC52_SWEEP_MAX] = { 0.30f, 0.60f, 1.20f, 2.00f, 0.0f, 0.0f };
+
+/* 扫描接管 bias/di 前的快照（关闭扫描后在下一次 Start 还原，避免 Watch 里的值被改花） */
+static uint8_t  s_sweep_applied      = 0u;
+static float    s_saved_sw_bias      = 0.7f;
+static float    s_saved_sw_di        = 1.0f;
+
+/* 电流组切换：进入 1 组前保存 0 组当前值，切回 0 组时还原（首次默认 0 组，不动） */
+static uint32_t s_cur_set_applied     = 0u;
+static float    s_saved_bias0         = 0.7f;
+static float    s_saved_di0           = 1.0f;
 
 /*=============================================================================
  * 观测量（Watch / VOFA）
@@ -89,6 +112,11 @@ volatile int32_t  g_ldlq52_moved_d_cnts = 0;
 volatile int32_t  g_ldlq52_moved_q_cnts = 0;
 volatile int32_t  g_ldlq52_moved_cnts = 0;
 volatile uint32_t g_ldlq52_elapsed_ms = 0u;
+/* d 轴多档电流扫描结果（0 = 该档无效） */
+volatile uint32_t g_ldlq52_sw_idx   = 0u;
+volatile uint32_t g_ldlq52_sw_done  = 0u;
+volatile float    g_ldlq52_sw_ld_uh[FOC52_SWEEP_MAX];
+volatile float    g_ldlq52_sw_ibias_ma[FOC52_SWEEP_MAX];
 
 /*=============================================================================
  * 内部状态
@@ -200,6 +228,48 @@ static void LdLq52_ClearResults(void)
     g_ldlq52_moved_q_cnts = 0;
     g_ldlq52_moved_cnts = 0;
     g_ldlq52_elapsed_ms = 0u;
+}
+
+/* 装载扫描第 idx 档：把 bias/di 摆到该档并做与单次测量同口径的护栏，
+ * 顺带把注入幅值退回探测值（每档都要重新自适应定幅值）。
+ * 纹波按 |I_bias| > 半幅 的单极性前提抬到下限，抬过的实际值会在结果里如实记录。 */
+static void LdLq52_LoadSweepLevel(uint32_t idx)
+{
+    float di = g_ldlq52_sw_di_a;
+    float b  = g_ldlq52_sw_bias_a[idx];
+    float bias_min;
+
+    if (di < 0.1f) { di = 0.1f; }
+    if (di > FOC52_DI_HARD_MAX_A) { di = FOC52_DI_HARD_MAX_A; }
+    bias_min = 0.5f * di * FOC52_BIAS_MARGIN + 0.05f;
+    if (b < bias_min) { b = bias_min; }
+    if (b > FOC52_DI_HARD_MAX_A) { b = FOC52_DI_HARD_MAX_A; }
+
+    g_ldlq52_bias_a      = b;
+    g_ldlq52_di_target_a = di;
+    s_v_bias = g_ldlq52_r_used_ohm * b + FOC52_VDEAD_PRIOR_V;
+    if (s_v_bias > FOC52_VBIAS_HARD_MAX_V) { s_v_bias = FOC52_VBIAS_HARD_MAX_V; }
+    s_v_amp          = FOC52_PROBE_V;
+    g_ldlq52_v_inj_v = FOC52_PROBE_V;
+}
+
+/* 扫描全部跑完：把第一个有效档（偏置最小 = 最接近小信号）的 Ld 作为主结果。
+ * 这样 q 轴的 Lq/Ld 分母不会被大电流档被饱和压低的 Ld 带偏。 */
+static void LdLq52_SweepPickSmall(void)
+{
+    uint32_t k;
+
+    for (k = 0u; k < g_ldlq52_sw_done; k++) {
+        if (g_ldlq52_sw_ld_uh[k] > 0.0f) {
+            s_ld           = g_ldlq52_sw_ld_uh[k] * 1.0e-6f;
+            g_ldlq52_ld_uh = g_ldlq52_sw_ld_uh[k];
+            if (FOC_MOTOR_LS_UH > 0.0f) {
+                g_ldlq52_ratio_vs_vendor = g_ldlq52_ld_uh / FOC_MOTOR_LS_UH;
+            }
+            g_ldlq52_evt = 0u;    /* 有档有效即算本轮成功（末档失败不掩盖整条曲线） */
+            return;
+        }
+    }
 }
 
 /* 本拍转子电角度（编码器计数 - mode 24 零点） */
@@ -531,6 +601,7 @@ void Foc_LdLqId_Start(void)
 {
     foc_dcal24_result_t cal;
     float d_target, bias_min;
+    uint32_t k;
 
     Foc_Core_ClearFault();
     g_foc_mode        = FOC_MODE_ALIGN;   /* 复用 ALIGN 分发路径（按 g_ldlq52_running 区分） */
@@ -554,6 +625,46 @@ void Foc_LdLqId_Start(void)
         return;
     }
     s_offset = cal.offset;
+
+    /* ---- 电流组选择（g_ldlq52_cur_set: 0 = 现有组, 1 = 低电流组） ---- */
+    if (g_ldlq52_cur_set != s_cur_set_applied) {
+        if (g_ldlq52_cur_set != 0u) {
+            /* 记住 0 组当前值，装载 1 组（低电流，避磁饱和） */
+            s_saved_bias0 = g_ldlq52_bias_a;
+            s_saved_di0   = g_ldlq52_di_target_a;
+            g_ldlq52_bias_a      = g_ldlq52_bias2_a;
+            g_ldlq52_di_target_a = g_ldlq52_di2_a;
+        } else {
+            /* 还原 0 组 */
+            g_ldlq52_bias_a      = s_saved_bias0;
+            g_ldlq52_di_target_a = s_saved_di0;
+        }
+        s_cur_set_applied = g_ldlq52_cur_set;
+    }
+
+    /* ---- d 轴多档电流扫描（g_ldlq52_sweep_en: 1 = 启用）----
+     * 开启时由扫描接管 bias/di（先存快照、装第 0 档）；关闭时把快照还原，
+     * 免得 Watch 里的 g_ldlq52_bias_a / g_ldlq52_di_target_a 停在被扫描改过的值上。 */
+    if (g_ldlq52_sweep_en != 0u) {
+        if (s_sweep_applied == 0u) {
+            s_saved_sw_bias = g_ldlq52_bias_a;
+            s_saved_sw_di   = g_ldlq52_di_target_a;
+            s_sweep_applied = 1u;
+        }
+        if (g_ldlq52_sw_n == 0u)             { g_ldlq52_sw_n = 1u; }
+        if (g_ldlq52_sw_n > FOC52_SWEEP_MAX) { g_ldlq52_sw_n = FOC52_SWEEP_MAX; }
+        g_ldlq52_sw_idx  = 0u;
+        g_ldlq52_sw_done = 0u;
+        for (k = 0u; k < FOC52_SWEEP_MAX; k++) {
+            g_ldlq52_sw_ld_uh[k]    = 0.0f;
+            g_ldlq52_sw_ibias_ma[k] = 0.0f;
+        }
+        LdLq52_LoadSweepLevel(0u);
+    } else if (s_sweep_applied != 0u) {
+        g_ldlq52_bias_a      = s_saved_sw_bias;
+        g_ldlq52_di_target_a = s_saved_sw_di;
+        s_sweep_applied = 0u;
+    }
 
     /* ---- 参数护栏 ---- */
     if (g_ldlq52_di_target_a < 0.1f) { g_ldlq52_di_target_a = 0.1f; }
@@ -597,8 +708,9 @@ void Foc_LdLqId_Start(void)
 
     Foc_Core_PwmStart();
 
-    LDLQ52_DBG("start: do_q=%u pp=%d mA bias=%d mA cyc=%u v=%d mV vbias=%d mV",
-               (unsigned)g_ldlq52_do_q,
+    LDLQ52_DBG("start: set=%u sweep=%u sw_n=%u do_q=%u pp=%dmA bias=%dmA cyc=%u v=%dmV vbias=%dmV",
+               (unsigned)g_ldlq52_cur_set, (unsigned)g_ldlq52_sweep_en,
+               (unsigned)g_ldlq52_sw_n, (unsigned)g_ldlq52_do_q,
                (int)(g_ldlq52_di_target_a * 1000.0f), (int)(g_ldlq52_bias_a * 1000.0f),
                (unsigned)g_ldlq52_cycles, (int)(s_v_amp * 1000.0f), (int)(s_v_bias * 1000.0f));
 }
@@ -758,8 +870,34 @@ void Foc_LdLqId_Step(const stc_i_data_t *pData)
     /* ---------- 正式测量 ---------- */
     case FOC52_STEP_MEAS:
         if (LdLq52_SquareStep(pData, g_ldlq52_cycles) != 0u) {
-            (void)LdLq52_FinishMeasure();
+            uint8_t okm = LdLq52_FinishMeasure();
+
             if (g_ldlq52_axis == 0u) {
+                if (g_ldlq52_sweep_en != 0u) {
+                    /* 记下本档结果（无效档记 0，曲线上一眼看得出哪档没过判据） */
+                    g_ldlq52_sw_ld_uh[g_ldlq52_sw_idx]    = (okm != 0u) ? g_ldlq52_ld_uh : 0.0f;
+                    g_ldlq52_sw_ibias_ma[g_ldlq52_sw_idx] = (okm != 0u) ? g_ldlq52_i_bias_ma : 0.0f;
+                    g_ldlq52_sw_done = g_ldlq52_sw_idx + 1u;
+                    if ((g_ldlq52_sw_idx + 1u) < g_ldlq52_sw_n) {
+                        /* 还有档位：换 bias 回探测（仍是 d 轴，每档都重新自适应定幅值） */
+                        g_ldlq52_sw_idx++;
+                        LdLq52_LoadSweepLevel(g_ldlq52_sw_idx);
+                        LdLq52_PhaseReset();
+                        g_ldlq52_wave_n   = 0u;
+                        g_ldlq52_wave_arm = (g_ldlq52_wave_en != 0u) ? 1u : 0u;
+                        g_ldlq52_evt      = 0u;   /* 清掉中间档的失败码，避免日志误报整轮失败 */
+                        g_ldlq52_state    = FOC52_STEP_PROBE;
+                        break;
+                    }
+                    /* 末档：挑最小偏置的有效档当主结果 */
+                    LdLq52_SweepPickSmall();
+                    /* 扫描只管 d 轴：偏置还原成扫描前的值，q 轴才不会被动不动就用末档那个大电流。
+                     * 配合 cur_set 选同一个工作点，Lq 与扫描里最小偏置那档的 Ld 就是可比的小信号对。 */
+                    g_ldlq52_bias_a      = s_saved_sw_bias;
+                    g_ldlq52_di_target_a = s_saved_sw_di;
+                    s_v_bias = g_ldlq52_r_used_ohm * g_ldlq52_bias_a + FOC52_VDEAD_PRIOR_V;
+                    if (s_v_bias > FOC52_VBIAS_HARD_MAX_V) { s_v_bias = FOC52_VBIAS_HARD_MAX_V; }
+                }
                 g_ldlq52_ld_done_seq++;     /* d 轴测完就记一次：do_q=0/1 都会打 d done 行 */
             }
             if ((g_ldlq52_axis == 0u) && (g_ldlq52_do_q != 0u)) {

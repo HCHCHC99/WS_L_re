@@ -1,0 +1,415 @@
+{
+  "mode": 53,
+  "title": "永磁磁链 psi_f 辨识（编码器速度环 + 变转速 vq/omega_e 最小二乘）",
+  "entry": "comm_mode = 53（Watch 直接写）",
+  "pre": "必须先跑 mode 24（编码器零点）；无零点时 Start 拒绝启动并置 evt=6。电机需能自由空载自转（自带速度环拖动）",
+  "end": "自动：拟合 -> 减速 -> 关 PWM，state=DONE；不写 Flash、不改 motor_config.h",
+  "files": {
+    "h": "foc_53_flx.h",
+    "c": "foc_53_flx.c"
+  },
+  "watch": [
+    {
+      "mk": "(*)",
+      "name": "g_flx53_rpm",
+      "val": "800/",
+      "unit": "rpm",
+      "desc": "转速序列；默认 800 1600 2400 3200，取前 points 个。低于 100 无信噪比"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_flx53_points",
+      "val": "4",
+      "unit": "-",
+      "desc": "取点数 2~6（斜率至少需 2 点，建议 4 点覆盖大转速差）"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_flx53_r_used_ohm",
+      "val": "0.098",
+      "unit": "ohm",
+      "desc": "算 psi_f 用的 R；填 mode 51 实测 R_eff。R 与 psi_f 共线，必须固定不可同时辨识"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_vdead_v",
+      "val": "0.160",
+      "unit": "V",
+      "desc": "死区先验 V_dt；fit_vdt=0 时用它，fit_vdt=1 时只作对照"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_flx53_fit_vdt",
+      "val": "1",
+      "unit": "-",
+      "desc": "1 = V_dt 与 psi_f 一起拟合（取截距）；0 = 用固定先验。斜率两法相同"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_flx53_avg_ms",
+      "val": "300",
+      "unit": "ms",
+      "desc": "每点平均窗口 100~1000；越长越抗噪，但转子拖动时间越长"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_settle_ms",
+      "val": "300",
+      "unit": "ms",
+      "desc": "稳态持续判据：|ramp-filt|<tol 且 |diq|<20mA 连续这么久才开窗"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_rpm_tol",
+      "val": "15",
+      "unit": "rpm",
+      "desc": "稳态转速容差（爬速到位与稳态判据共用）"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_flx53_iq_filt_alpha",
+      "val": "0.05",
+      "unit": "-",
+      "desc": "测量侧 iq/vq EMA（tau 约 1ms）；只滤测量副本，不进电流 PI 反馈链"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_reject_en",
+      "val": "0",
+      "unit": "-",
+      "desc": "3sigma 离群剔除（默认关）；采样噪声大时再开"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_flx53_rpm_max",
+      "val": "4000",
+      "unit": "rpm",
+      "desc": "超速保护阈值；滤波转速超它立即停机置 evt=5。须低于 12V 极对数的电压墙转速"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_flx53_vbus_scale",
+      "val": "1.000",
+      "unit": "-",
+      "desc": "Vbus 校正系数 = 实测 Vbus / 12.0；本模式最大系统性误差源，psi 随它线性比例"
+    },
+    {
+      "mk": "(*)",
+      "note": "上十二行为本轮可调项。全程约 4~6s（4 点 x 爬速约 1s + 稳态 0.3s + 窗 0.3s，加收尾）。"
+    },
+    {
+      "mk": "[!]",
+      "note": "g_flx53_r_used_ohm 与 g_flx53_vbus_scale 是两个系统性输入：前者错 10% 约使 psi 差 1~2%，后者错多少 psi 就错多少。二者都不随转速变，故只进截距/缩放、不被斜率吸收。"
+    },
+    {
+      "mk": "[!]",
+      "note": "转速序列必须单调、点间拉开（建议间隔 >= 800rpm）。点太近则斜率被噪声放大；最慢点决定信噪比下限。"
+    }
+  ],
+  "obs": [
+    {
+      "mk": "(*)",
+      "name": "g_flx53_psi_mwb",
+      "desc": "psi_f 主结果（拟合斜率）---- mWb，与手册 0.84 对比"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_flx53_ratio",
+      "desc": "psi_f / FOC_MOTOR_FLUX_VS ---- 与商家参数直接对比"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_flx53_psi_diff_mwb",
+      "desc": "端点差分校验值（首末两点斜率）---- 与主结果应接近"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_flx53_vdt_fit_mv",
+      "desc": "拟合截距 V_dt (mV) ---- 应与 mode 51 的 160mV 互证"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_flx53_r2",
+      "desc": "二参数拟合优度；>= 0.99 才说明线性模型成立"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_psi_spread_mwb",
+      "desc": "各点 psi_f 离散度 (max-min, mWb)；< 10% psi 为合格"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_psi_alt_mwb",
+      "desc": "用 FOC_MOTOR_RS_OHM(0.1) 重算的 psi_f ---- 看对 R 的敏感度"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_win_split_pct",
+      "desc": "窗内前/后半均值相对差 (%)；大则说明窗内有漂移或噪声"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_psi_live_mwb",
+      "desc": "当前点实时 psi_f 估计 (mWb)"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_target_rpm",
+      "desc": "当前转速给定 (rpm)"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_rpm_meas",
+      "desc": "PI 真实反馈转速 (rpm)"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_omega_e",
+      "desc": "当前点电角频率 (rad/s)；窗内编码器计数 + Timer6 us 时基直算"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_state",
+      "desc": "0 IDLE / 1 爬速 / 2 稳态 / 3 平均窗 / 4 推进 / 5 拟合 / 6 减速 / 7 DONE / 8 OC / 9 超速"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_evt",
+      "desc": "1 OC / 2 完成OK / 3 完成离散度大 / 4 超时跳过 / 5 超速 / 6 无 mode24 校准"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_pts_done",
+      "desc": "已完成点数（RTT 进度打印靠它）"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_flx53_vsat",
+      "desc": "1 = vd/vq 贴限幅（撞电压墙）；此时该点 vq 被削平，数据不可用"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_psi_pts",
+      "desc": "各点 psi_f 数组 (mWb)"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_pts_vq",
+      "desc": "各点 vq 数组 (V)；画 vq-R*iq 对 omega_e 的直线用"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_pts_iq",
+      "desc": "各点 iq 数组 (A)"
+    },
+    {
+      "mk": "",
+      "name": "g_flx53_pts_we",
+      "desc": "各点 omega_e 数组 (rad/s)"
+    }
+  ],
+  "vofa": {
+    "n": 16,
+    "fn": "Foc_FlxId_VofaFill",
+    "shared": false,
+    "rows": [
+      {
+        "mk": "",
+        "ch": "ch0",
+        "what": "状态码",
+        "unit": "-",
+        "desc": "见状态机表"
+      },
+      {
+        "mk": "",
+        "ch": "ch1",
+        "what": "目标转速",
+        "unit": "rpm",
+        "desc": "当前点给定"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch2",
+        "what": "实际转速",
+        "unit": "rpm",
+        "desc": "PI 反馈滤波值"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch3",
+        "what": "vq",
+        "unit": "V",
+        "desc": "已折算 vbus_scale 的 q 轴电压"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch4",
+        "what": "iq",
+        "unit": "A",
+        "desc": "测量侧 EMA 后"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch5",
+        "what": "psi 实时",
+        "unit": "mWb",
+        "desc": "当前点估计，逐点阶跃"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch6",
+        "what": "psi 最终",
+        "unit": "mWb",
+        "desc": "拟合完成后为定值"
+      },
+      {
+        "mk": "",
+        "ch": "ch7",
+        "what": "离散度",
+        "unit": "mWb",
+        "desc": "各点 max-min"
+      },
+      {
+        "mk": "",
+        "ch": "ch8",
+        "what": "完成点数",
+        "unit": "-",
+        "desc": "0..points"
+      },
+      {
+        "mk": "",
+        "ch": "ch9",
+        "what": "r2",
+        "unit": "-",
+        "desc": ">= 0.99 合格"
+      },
+      {
+        "mk": "",
+        "ch": "ch10",
+        "what": "窗内前后半差",
+        "unit": "%",
+        "desc": "> 1 说明窗内有漂移"
+      },
+      {
+        "mk": "",
+        "ch": "ch11",
+        "what": "Vdead 用值",
+        "unit": "V",
+        "desc": "拟合值或先验"
+      },
+      {
+        "mk": "",
+        "ch": "ch12",
+        "what": "psi 差分校验",
+        "unit": "mWb",
+        "desc": "首末两点斜率"
+      },
+      {
+        "mk": "",
+        "ch": "ch13",
+        "what": "psi / 手册",
+        "unit": "-",
+        "desc": "接近 1 说明吻合"
+      },
+      {
+        "mk": "[!]",
+        "ch": "ch14",
+        "what": "Vsat",
+        "unit": "-",
+        "desc": "1 = 撞电压墙"
+      },
+      {
+        "mk": "",
+        "ch": "ch15",
+        "what": "累计时间",
+        "unit": "ms",
+        "desc": "全程约 4000~6000"
+      }
+    ]
+  },
+  "notes": [
+    {
+      "mk": "(*)",
+      "text": "原理：稳态、id 约 0、diq/dt 约 0 时 vq = R_eff*iq + omega_e*psi_f + V_dt。把 R 固定取 mode 51 实测值，对 y = vq - R_eff*iq 做二参数最小二乘 y = psi_f*omega_e + V_dt，斜率即 psi_f（主结果）、截距即 V_dt。"
+    },
+    {
+      "mk": "(*)",
+      "text": "为什么取斜率：R*iq 的偏差、电流零偏、Vcc 增益误差、死区 V_dt 里凡不随转速变化的部分全被截距吸收，只有随 omega_e 增长的项才进斜率。故电流采样偏置不污染主结果。"
+    },
+    {
+      "mk": "(*)",
+      "text": "为什么必须变转速：单点测量无法分离 R 与 psi_f（都乘在电流/转速上），至少两个转速点才能定出斜率。转速点要拉开，斜率才不被噪声放大。"
+    },
+    {
+      "mk": "[!]",
+      "text": "最大系统性误差是 Vbus 假设：vq 指令按 12.0V 折算，Vbus 实际偏差多少，psi_f 就同比例偏多少。用 g_flx53_vbus_scale 校正（实测 Vbus / 12.0）。电流采样噪声（Vcc 3.3V 抖动）经 EMA+长窗后仅 <1%，不是主导。"
+    },
+    {
+      "mk": "[!]",
+      "text": "抗噪组合：测量侧 iq/vq EMA（alpha=0.05，tau 约 1ms，绝不进 PI 反馈链）+ 长窗平均（300ms）+ 窗内前 20ms 丢弃 + 斜率对常数偏置免疫。可选 3sigma 离群剔除。"
+    },
+    {
+      "mk": "(*)",
+      "text": "流程：校验 mode24 -> 逐点：速度环爬速（斜坡限幅）-> 判稳态（|ramp-filt|<tol 且 |diq|<20mA 连续 300ms）-> 300ms 平均窗（Timer6 us 时基 + 窗内编码器计数直算 omega_e）-> 全部点完后二参数最小二乘 -> 减速关 PWM。"
+    },
+    {
+      "mk": "[!]",
+      "text": "判读：r2 >= 0.99 且离散度 < 10% psi 才算合格；psi_diff 与主结果应接近；Vdt 应与 mode 51 的 160mV 接近；ratio 接近 1 说明与手册吻合。任一不符先查 vbus_scale / r_used / 是否 Vsat。"
+    },
+    {
+      "mk": "[!]",
+      "text": "本模式只输出观测量：不写 Flash、不改 motor_config.h。用途是验证辨识思路，并与 mode 45 的 SMO 反电动势数据交叉对比。"
+    },
+    {
+      "mk": "(*)",
+      "text": "RTT 输出（开关 FOC_FLX53_DBG，定义在 foc_53_flx.h；打印点在 foc_obs 事件段，ISR 内不打印，符合 RTT 打印规范）：进入时打一行配置；每完成一点打 rpm/vq/iq/we/psi；结束时打 psi/R2/ratio/spread/win_split/Vdt 与全部原始点，并对离散度大或 Vsat 追行 warn；超时/OC/超速各一行。"
+    }
+  ],
+  "evidence": {
+    "g_flx53_rpm": "foc_53_flx.c:41",
+    "g_flx53_points": "foc_53_flx.c:42",
+    "g_flx53_r_used_ohm": "foc_53_flx.c:43",
+    "g_flx53_vdead_v": "foc_53_flx.c:44",
+    "g_flx53_fit_vdt": "foc_53_flx.c:45",
+    "g_flx53_avg_ms": "foc_53_flx.c:46",
+    "g_flx53_settle_ms": "foc_53_flx.c:47",
+    "g_flx53_rpm_tol": "foc_53_flx.c:48",
+    "g_flx53_iq_filt_alpha": "foc_53_flx.c:49",
+    "g_flx53_reject_en": "foc_53_flx.c:50",
+    "g_flx53_rpm_max": "foc_53_flx.c:51",
+    "g_flx53_vbus_scale": "foc_53_flx.c:52",
+    "g_flx53_psi_mwb": "foc_53_flx.c:61",
+    "g_flx53_ratio": "foc_53_flx.c:65",
+    "g_flx53_psi_diff_mwb": "foc_53_flx.c:62",
+    "g_flx53_vdt_fit_mv": "foc_53_flx.c:63",
+    "g_flx53_r2": "foc_53_flx.c:68",
+    "g_flx53_psi_spread_mwb": "foc_53_flx.c:67",
+    "g_flx53_psi_alt_mwb": "foc_53_flx.c:66",
+    "g_flx53_win_split_pct": "foc_53_flx.c:69",
+    "g_flx53_psi_live_mwb": "foc_53_flx.c:70",
+    "g_flx53_target_rpm": "foc_53_flx.c:71",
+    "g_flx53_omega_e": "foc_53_flx.c:78",
+    "g_flx53_state": "foc_53_flx.c:58",
+    "g_flx53_evt": "foc_53_flx.c:59",
+    "g_flx53_pts_done": "foc_53_flx.c:79",
+    "g_flx53_vsat": "foc_53_flx.c:77",
+    "g_flx53_psi_pts": "foc_53_flx.c:81",
+    "g_flx53_pts_vq": "foc_53_flx.c:83",
+    "g_flx53_pts_iq": "foc_53_flx.c:84",
+    "g_flx53_pts_we": "foc_53_flx.c:85",
+    "FOC53_STEP_AVG": "foc_53_flx.h:243",
+    "FOC53_EVT_TIMEOUT": "foc_53_flx.h:257",
+    "FOC_FLX53_DBG": "foc_53_flx.h:193",
+    "Foc_FlxId_Start": "foc_53_flx.c:557",
+    "Foc_FlxId_Step": "foc_53_flx.c:651",
+    "Foc_FlxId_Stop": "foc_53_flx.c:637",
+    "Foc_FlxId_VofaFill": "foc_53_flx.c:830",
+    "g_flx53_rpm_meas": "foc_53_flx.c:72",
+    "FOC_MOTOR_FLUX_VS": "motor_config.h:75",
+    "FOC_MOTOR_RS_OHM": "motor_config.h:73",
+    "FOC_ISR_HZ": "I.h:108",
+    "Timer6_Timebase_GetCounter": "timer6_timebase.h:1",
+    "Foc_Core_GetDq": "foc_core.c:302",
+    "Foc_Dcal_GetResult": "foc_24_dcal.c:159"
+  }
+}

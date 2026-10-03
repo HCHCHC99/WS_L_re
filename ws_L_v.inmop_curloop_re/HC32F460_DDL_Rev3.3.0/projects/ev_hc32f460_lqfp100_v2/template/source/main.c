@@ -384,7 +384,7 @@ int main(void)
          *     mode 29  19ch     mode 30  15ch     mode 31  16ch
          *     mode 32  16ch     mode 40  18ch     mode 41  21ch
          *     mode 45  16/8/16ch（随 g_smo45_wave_mode）
-         *     mode 51  12ch     mode 52  12ch
+         *     mode 51  12ch     mode 52  12ch     mode 53  16ch
          *     通用/mode 0 → 本文件下方 Foc_Common_VofaFill（20ch，见其注释）
          *   只有六步方波模式（comm_mode 1~11）与空闲态才回落到通用布局。
          *
@@ -415,6 +415,7 @@ int main(void)
             else if (g_iqpi_running)      { n = Foc_IqPi_VofaFill(cur); }    /* 16ch */
             else if (g_rs51_running)      { n = Foc_RsId_VofaFill(cur); }    /* 12ch */
             else if (g_ldlq52_running)    { n = Foc_LdLqId_VofaFill(cur); }  /* 12ch */
+            else if (g_flx53_running)     { n = Foc_FlxId_VofaFill(cur); }   /* 16ch */
             else                          { n = 0; }   /* mode 0 及空闲态 */
 
             if (n <= 0) {

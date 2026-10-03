@@ -192,6 +192,8 @@ void Foc_Isr(const stc_i_data_t *pData)
             Foc_RsId_Step(pData);
         } else if (g_ldlq52_running) {
             Foc_LdLqId_Step(pData);
+        } else if (g_flx53_running) {
+            Foc_FlxId_Step(pData);
         }
         /* else：无模式认领 —— 不做任何输出（原 mode 23 兜底已随该模式删除） */
         return;
