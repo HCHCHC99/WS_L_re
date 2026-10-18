@@ -104,9 +104,9 @@ extern "C" {
 #endif
 
 #define FOC24_ZERO_SKIP_SAMPLES  200u
-#define FOC24_ZERO_AVG_SAMPLES   4000u
-#define FOC24_BETA_MS            2000u
-#define FOC24_ALPHA_MS           2000u
+#define FOC24_ZERO_AVG_SAMPLES   400u
+#define FOC24_BETA_MS            200u
+#define FOC24_ALPHA_MS           200u
 
 #define FOC24_STEP_IDLE       0u
 #define FOC24_STEP_ZERO       1u

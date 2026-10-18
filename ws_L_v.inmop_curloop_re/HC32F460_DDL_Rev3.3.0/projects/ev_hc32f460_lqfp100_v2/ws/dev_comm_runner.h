@@ -39,6 +39,7 @@ typedef enum {
     COMM_RUNNER_LDLQ52     = 52, /* d/q 轴电感辨识（直流偏置方波 + 单极性纹波，需先跑 mode 24） */
     COMM_RUNNER_FLX53      = 53, /* 永磁磁链 psi_f 辨识（编码器速度环 + 变转速 vq/omega_e 最小二乘，需先跑 mode 24） */
     COMM_RUNNER_LUEN60     = 60, /* 龙伯格观测器无感（复刻 mode 45，观测器内核换龙伯格） */
+    COMM_RUNNER_SMO47      = 47, /* 开环强拖 + SMO/PLL 纯程序自检（无编码器/无 PI，程序给定值当裁判） */
 } comm_runner_mode_t;
 
 /* 配置结构（精简版） */
@@ -63,6 +64,7 @@ typedef struct {
  *     mode 27 17ch | 28 17ch | 29 19ch | 30 15ch | 31 16ch
  *     mode 32 16ch | 40 18ch | 41 21ch | 45 16/8/16ch（随 wave_mode）
  *     mode 51 12ch | 52 12ch | 53 16ch | 60 16/8/16ch（随 g_luen60_wave_mode）
+ *     mode 47 16ch
  *
  *   ⚠ 通道数可变 ⇒ 切模式时 VOFA+ 上位机的通道数必须同步修改。
  *   ⚠ 硬上限 USART3_VOFA_MAX_CHANNELS(24)；main.c 内部缓冲 cur[32]。

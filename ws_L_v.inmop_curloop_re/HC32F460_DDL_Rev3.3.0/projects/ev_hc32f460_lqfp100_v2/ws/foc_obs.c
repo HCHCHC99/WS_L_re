@@ -34,6 +34,7 @@
 #include "foc_53_flx.h"
 #include "foc_luen.h"
 #include "foc_60_luen.h"
+#include "foc_47_smoif.h"
 #include "dev_comm_runner.h"   /* CommRunner_SetMode（mode 20 完成自动回 mode 0） */
 #include "encoder.h"
 #include "motor_config.h"
@@ -258,6 +259,103 @@ void Foc_Obs_Task(void)
         }
     }
 
+    /* ---- mode47 开环强拖 + SMO/PLL 纯程序自检（主循环聚合判定层） ----
+     * 裁判 = 程序给定值：θ_syn/ω_syn（角度已在 ISR 同拍 Foc_Pll_Compare）。
+     * Diag 传拖动磁场角与给定电角速度 -> e_expect=ω_syn·ψf 即"给定频率理论值"，
+     * SMO 内建判定（J2 幅值/J4）参照自动换成程序给定值。
+     * 聚合判定（g_smo47_jdg_ok/fail 的事实源在这里）：
+     *   bit0 未稳态（未达 f_run 或 2s 稳定窗未过）—— 前提，未稳态不评 J1/J3
+     *   bit1 J1 转速：|ω_out−ω_ref| > ω_ref×g_smo47_jdg_omega_err_pct%
+     *   bit2 J3 相位：g_pll_diag_theta_err_filt_deg 越出
+     *        [g_smo47_jdg_theta_min_deg, g_smo47_jdg_theta_max_deg]
+     *        （g_pll_comp_en=0 默认 [-60,+5]；开补偿后应收紧窗）
+     *   bit3 J4 SMO：g_smo_emf_ok 未过（含 J2 ratio 窗 [0.85,1.08]）
+     */
+    if (g_smo47_running) {
+        Foc_Smo_Diag((float)g_smo47_theta_syn_deg,
+                     g_smo47_f_cmd_hz * 6.2831853f);   /* ω_syn = 2π·f_cmd */
+
+        /* ---- mode47 PLL 旁观诊断（只滤波；角度比较已在 ISR 同拍完成） ---- */
+        Foc_Pll_Diag();
+
+        /* ---- mode47 数据快照 RTT 打印（5ms 节流，供复制粘贴判读） ----
+         * st=状态 f=指令电频率 wR=给定转速 wO=PLL 转速估计 dW=转速差(判据 J1)
+         * e=|e_hat|/理论幅值(判据 J2) th=PLL角差滤波(判据 J3) jdg=聚合判定 */
+        {
+            static uint32_t s_smo47_print_t0 = 0;
+            uint32_t now = (uint32_t)tickTimer_GetCount();
+            char b1[14], b2[14], b3[14], b4[14];
+
+            if ((uint32_t)(now - s_smo47_print_t0) >= 5u) {
+                s_smo47_print_t0 = now;
+                OBS_DBG("[SMO47] t=%u st=%u f=%d mHz wR=%d rpm wO=%s rpm"
+                        " dW=%d mrpm e=%s/%s V th=%s deg jdg=%u fail=0x%02X",
+                        (unsigned)now,
+                        (unsigned)g_smo47_state,
+                        (int)(g_smo47_f_cmd_hz * 1000.0f),
+                        (int)g_smo47_omega_ref_rpm,
+                        Pll_Fmt1000(b1, g_pll_omega_out_rpm),
+                        (int)((g_pll_omega_out_rpm - g_smo47_omega_ref_rpm)
+                              * 1000.0f),
+                        Pll_Fmt1000(b2, g_smo_diag_e_mag_v),
+                        Pll_Fmt1000(b3, g_smo_diag_e_expect_v),
+                        Pll_Fmt1000(b4, g_pll_diag_theta_err_filt_deg),
+                        (unsigned)g_smo47_jdg_ok,
+                        (unsigned)g_smo47_jdg_fail);
+            }
+        }
+
+        /* ---- 聚合判定 + 跳变事件打印 ---- */
+        {
+            static uint8_t s_smo47_jdg_prev = 0u;
+            uint8_t fail = 0u;
+            float w_err;
+
+            if (g_smo47_steady == 0u) {
+                fail |= 0x01u;
+            } else {
+                w_err = (g_pll_omega_out_rpm - g_smo47_omega_ref_rpm) * 100.0f
+                      / ((g_smo47_omega_ref_rpm != 0.0f)
+                         ? g_smo47_omega_ref_rpm : 1.0f);
+                if (w_err < 0.0f) {
+                    w_err = -w_err;
+                }
+                if (w_err > g_smo47_jdg_omega_err_pct) {
+                    fail |= 0x02u;
+                }
+                if ((g_pll_diag_theta_err_filt_deg < g_smo47_jdg_theta_min_deg)
+                        || (g_pll_diag_theta_err_filt_deg
+                            > g_smo47_jdg_theta_max_deg)) {
+                    fail |= 0x04u;
+                }
+            }
+            if (g_smo_emf_ok == 0u) {
+                fail |= 0x08u;
+            }
+
+            g_smo47_jdg_fail = fail;
+            g_smo47_jdg_ok = (uint8_t)(fail == 0u);
+
+            if (g_smo47_jdg_ok != s_smo47_jdg_prev) {
+                s_smo47_jdg_prev = g_smo47_jdg_ok;
+                if (g_smo47_jdg_ok) {
+                    char j1[14], j2[14];
+                    OBS_DBG("SMO47 judge: OK (wR=%d wO=%s rpm th=%s deg)",
+                            (int)g_smo47_omega_ref_rpm,
+                            Pll_Fmt1000(j1, g_pll_omega_out_rpm),
+                            Pll_Fmt1000(j2, g_pll_diag_theta_err_filt_deg));
+                } else if (g_smo47_jdg_fail != 0u) {
+                    OBS_DBG("SMO47 judge: FAIL mask=0x%02X%s%s%s%s",
+                            (int)g_smo47_jdg_fail,
+                            ((g_smo47_jdg_fail & 0x01u) ? " [not-steady]" : ""),
+                            ((g_smo47_jdg_fail & 0x02u) ? " [omega]" : ""),
+                            ((g_smo47_jdg_fail & 0x04u) ? " [theta]" : ""),
+                            ((g_smo47_jdg_fail & 0x08u) ? " [emf]" : ""));
+                }
+            }
+        }
+    }
+
     /* ---- FOC 故障打印 ---- */
     {
         static uint8_t s_foc_fault_printed = 0;
@@ -466,6 +564,31 @@ void Foc_Obs_Task(void)
             break;
         case FOC24_EVT_OC:
             FOC24_LOG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
+            CommRunner_SetMode(COMM_RUNNER_STOP);
+            break;
+        default:
+            break;
+        }
+    }
+
+    /* ---- mode 47 开环强拖+SMO/PLL 自检事件（ISR 置 evt；仅 OC 自动回 mode 0） ---- */
+    if (g_smo47_evt != 0u) {
+        uint8_t evt = g_smo47_evt;
+        g_smo47_evt = 0u;
+        switch (evt) {
+        case FOC47_EVT_CALIB_DONE:
+            FOC47_LOG("zero-offset locked iu=%d iv=%d iw=%d mA",
+                      (int)g_calib_iu_off_ma, (int)g_calib_iv_off_ma,
+                      (int)g_calib_iw_off_ma);
+            break;
+        case FOC47_EVT_RAMP_DONE:
+            FOC47_LOG("ramp done f=%d mHz (%d rpm) -> steady %d ms then judge",
+                      (int)(g_smo47_f_run_hz * 1000.0f),
+                      (int)((g_smo47_f_run_hz * 60.0f) / (float)FOC_POLE_PAIRS),
+                      (int)FOC47_STEADY_MS);
+            break;
+        case FOC47_EVT_OC:
+            FOC47_LOG("FAULT_OC i=%d mA", (int)g_foc_fault_i_ma);
             CommRunner_SetMode(COMM_RUNNER_STOP);
             break;
         default:

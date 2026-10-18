@@ -23,6 +23,8 @@
  *          foc_52_ldlq.h  模式52 d/q 轴电感辨识（直流偏置方波 + 单极性纹波）
  *          foc_53_flx.h   模式53 永磁磁链 psi_f 辨识（编码器速度环 + 变转速 vq/omega_e 最小二乘）
  *          foc_60_luen.h  模式60 龙伯格观测器无感（复刻 mode 45，观测器内核换龙伯格）
+ *          foc_47_smoif.h 模式47 开环强拖 + SMO/PLL 纯程序自检（无编码器/无 PI，
+ *                         程序给定值 θ_syn/ω_syn 当裁判）
  *
  *        依赖方向：各模式模块 -> foc_core；本文件仅聚合头文件与
  *        Foc_Init/Foc_Isr 分发入口。main.c / dev_comm_runner.c 等
@@ -60,6 +62,7 @@
 #include "foc_53_flx.h"
 #include "foc_luen.h"
 #include "foc_60_luen.h"
+#include "foc_47_smoif.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -88,7 +91,8 @@ void Foc_Init(void);
  *                        : (g_speed40_running ? Foc_Speed_Step
  *                        : (g_smo45_running ? Foc_Smo45_Step
  *                        : (g_luen60_running ? Foc_Luen60_Step
- *                        : 无（不输出）)))))))))
+ *                        : (g_smo47_running ? Foc_Smo47_Step
+ *                        : 无（不输出）)))))))))))
  *   FOC_MODE_CURLOOP  -> Foc_CurLoop_Step（内部再按状态机分派）
  *   g_zizeng_running  -> Foc_Ramp_Step
  *   g_lockiq_running  -> Foc_LockIqPi_Step（锁定后由 main.c 交接 mode 31）

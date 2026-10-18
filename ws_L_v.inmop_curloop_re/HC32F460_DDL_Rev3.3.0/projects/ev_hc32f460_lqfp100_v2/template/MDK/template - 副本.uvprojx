@@ -1093,6 +1093,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_45_smo.c</FilePath>
             </File>
+            <File>
+              <FileName>foc_47_smoif.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_47_smoif.c</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>
@@ -2183,6 +2188,11 @@
               <FileName>foc_45_smo.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_45_smo.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_47_smoif.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_47_smoif.c</FilePath>
             </File>
           </Files>
         </Group>

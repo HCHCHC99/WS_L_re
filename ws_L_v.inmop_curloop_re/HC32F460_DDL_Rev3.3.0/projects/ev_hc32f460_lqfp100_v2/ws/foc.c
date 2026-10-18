@@ -191,6 +191,8 @@ void Foc_Isr(const stc_i_data_t *pData)
             Foc_Smo45_Step(pData);
         } else if (g_luen60_running) {
             Foc_Luen60_Step(pData);
+        } else if (g_smo47_running) {
+            Foc_Smo47_Step(pData);   /* mode 47 开环强拖+SMO/PLL 自检（无编码器） */
         } else if (g_rs51_running) {
             Foc_RsId_Step(pData);
         } else if (g_ldlq52_running) {

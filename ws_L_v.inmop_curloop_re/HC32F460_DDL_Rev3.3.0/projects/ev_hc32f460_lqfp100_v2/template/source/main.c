@@ -389,6 +389,7 @@ int main(void)
          *     mode 45  16/8/16ch（随 g_smo45_wave_mode）
          *     mode 51  12ch     mode 52  12ch     mode 53  16ch
          *     mode 60  16/8/16ch（随 g_luen60_wave_mode）
+         *     mode 47  16ch
          *     通用/mode 0 → 本文件下方 Foc_Common_VofaFill（20ch，见其注释）
          *   只有六步方波模式（comm_mode 1~11）与空闲态才回落到通用布局。
          *
@@ -406,6 +407,7 @@ int main(void)
              *   必须先把已拆出的独立模块（24/29/41）判掉，最后才轮到 28。 */
             if      (g_smo45_running)     { n = Foc_Smo45_VofaFill(cur); }   /* 16/8/16ch */
             else if (g_luen60_running)    { n = Foc_Luen60_VofaFill(cur); }  /* 16/8/16ch */
+            else if (g_smo47_running)     { n = Foc_Smo47_VofaFill(cur); }   /* 16ch */
             else if (g_speed40_running)   { n = Foc_Speed_VofaFill(cur); }   /* 18ch */
             else if (g_dcal24_running)    { n = Foc_Dcal_VofaFill(cur); }    /* 16ch */
             else if (g_drun29_running)    { n = Foc_Drun_VofaFill(cur); }    /* 19ch */

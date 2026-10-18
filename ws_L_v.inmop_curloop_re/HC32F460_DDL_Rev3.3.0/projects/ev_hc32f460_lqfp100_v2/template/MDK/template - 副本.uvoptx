@@ -120,7 +120,7 @@
         <SetRegEntry>
           <Number>0</Number>
           <Key>DLGUARM</Key>
-          <Name>8f?</Name>
+          <Name></Name>
         </SetRegEntry>
         <SetRegEntry>
           <Number>0</Number>
@@ -556,6 +556,11 @@
           <count>51</count>
           <WinNumber>2</WinNumber>
           <ItemText>g_luen60_sl_active</ItemText>
+        </Ww>
+        <Ww>
+          <count>52</count>
+          <WinNumber>2</WinNumber>
+          <ItemText>g_zizeng_freq_hz</ItemText>
         </Ww>
       </WatchWindow2>
       <Tracepoint>
@@ -2422,6 +2427,18 @@
       <bDave2>0</bDave2>
       <PathWithFileName>..\..\ws\foc_45_smo.c</PathWithFileName>
       <FilenameWithoutPath>foc_45_smo.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>10</GroupNumber>
+      <FileNumber>134</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>..\..\ws\foc_47_smoif.c</PathWithFileName>
+      <FilenameWithoutPath>foc_47_smoif.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>

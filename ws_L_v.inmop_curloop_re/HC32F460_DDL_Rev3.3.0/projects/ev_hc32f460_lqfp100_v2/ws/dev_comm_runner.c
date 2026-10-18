@@ -97,6 +97,9 @@ static void CommRunner_StopFocModes(void)
     if (g_luen60_running) {
         Foc_Luen60_Stop();
     }
+    if (g_smo47_running) {
+        Foc_Smo47_Stop();
+    }
     if (g_foc_mode == FOC_MODE_ALIGN) {
         Foc_Stop();
     }
@@ -255,6 +258,13 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         Commutation_Stop();
         Foc_Luen60_Start();
         RUNNER_DBG("LUEN60 (mode 60, Luenberger sensorless)");
+        break;
+
+    case COMM_RUNNER_SMO47:
+        CommRunner_StopFocModes();
+        Commutation_Stop();
+        Foc_Smo47_Start();
+        RUNNER_DBG("SMO47 (mode 47, open-loop drag + SMO/PLL self-test)");
         break;
 
     default:
