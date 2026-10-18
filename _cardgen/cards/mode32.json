@@ -229,7 +229,7 @@
     "Foc_LockIq_VofaFill": "foc_32_lockiq.c:389",
     "Foc_LockIqPi_Start": "foc_32_lockiq.c:167",
     "Foc_IqPi_Start": "foc_31_iqpi.h:243",
-    "FOC_ALIGN_VOLT_V": "motor_config.h:103",
+    "FOC_ALIGN_VOLT_V": "motor_config.h:106",
     "FOC32_TIMEOUT_MS": "foc_32_lockiq.h:168",
     "FOC32_WIN_TOL_CNTS": "foc_32_lockiq.h:169",
     "FOC32_QUIET_NEED": "foc_32_lockiq.h:170",

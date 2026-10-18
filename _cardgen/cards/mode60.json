@@ -1,0 +1,773 @@
+{
+  "mode": 60,
+  "title": "龙伯格观测器无感 FOC 速度/电流双闭环（编码器角作裁判）",
+  "entry": "comm_mode = 60",
+  "pre": "必须先跑 mode 24 校准；否则 Foc_Luen60_Start 直接拒绝（RTT 打 ERROR），g_luen60_running 保持 0",
+  "end": "持续运行不自动停；过流自动停（g_luen60_state=2 / evt=1）；手动停 comm_mode = 0",
+  "watch": [
+    {
+      "mk": "",
+      "name": "g_luen60_speed_target_rpm",
+      "val": "0",
+      "unit": "rpm",
+      "desc": "目标转速；自动爬坡期间被覆盖"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_auto_ramp",
+      "val": "1",
+      "unit": "-",
+      "desc": "启动自动爬坡；0=纯手动给目标"
+    },
+    {
+      "mk": "(*)",
+      "note": "自动爬坡 profile：秒 0/1/2/3 -> 0/200/500/1000 rpm（表 s_auto_rpm）。t < 4s 期间固件每拍写目标，Watch 改值会被立刻覆盖；t >= 4s 起停止写入，交还 Watch。要全程手动就在进模式前把 g_luen60_auto_ramp 置 0。"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_sensorless",
+      "val": "0",
+      "unit": "-",
+      "desc": "1=切无感（需 g_luen_emf_ok=1）"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_ang_lead_ticks",
+      "val": "1.5",
+      "unit": "tick",
+      "desc": "有感角度超前补偿拍数，0=关"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_iq_filt_alpha",
+      "val": "0.10",
+      "unit": "-",
+      "desc": "iq 反馈滤波系数（显示用）"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_wave_mode",
+      "val": "0",
+      "unit": "-",
+      "desc": "VOFA 布局选择（见通道表）"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_pid_speed_cfg.kp",
+      "val": "0.8",
+      "unit": "mA/rpm",
+      "desc": "速度环 P（Watch 改立即生效）"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_pid_speed_cfg.ki",
+      "val": "0.03",
+      "unit": "mA/rpm/s",
+      "desc": "速度环 I"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_pid_id_cfg.kp",
+      "val": "0.1",
+      "unit": "V/A",
+      "desc": "电流环 P（d 轴）"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_pid_iq_cfg.kp",
+      "val": "0.1",
+      "unit": "V/A",
+      "desc": "电流环 P（q 轴）"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_pid_id_cfg.ki",
+      "val": "300",
+      "unit": "V/A/s",
+      "desc": "电流环 I（d 轴）"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_pid_iq_cfg.ki",
+      "val": "300",
+      "unit": "V/A/s",
+      "desc": "电流环 I（q 轴）"
+    },
+    {
+      "mk": "(*)",
+      "note": "上 6 行与 mode 40 / mode 45 同源定稿值（电流 kp 0.1 / ki 300、速度 kp 0.8 / ki 0.03），便于两种观测器直接 A/B 对比。id / iq 两个 kp 必须同步改。"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_model_r_ohm",
+      "val": "0.1",
+      "unit": "ohm",
+      "desc": "模型定子电阻 R；错则幅值/相位偏"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_model_l_h",
+      "val": "42.3e-6",
+      "unit": "H",
+      "desc": "模型电感 L（表贴式 Ld=Lq）"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_model_psi_wb",
+      "val": "0.00084",
+      "unit": "Wb",
+      "desc": "模型磁链 psi_f；理论幅值用它"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_luen_omega_o",
+      "val": "4712",
+      "unit": "rad/s",
+      "desc": "观测器带宽 Omega_o（极点 -Omega_o）"
+    },
+    {
+      "mk": "(*)",
+      "note": "Omega_o 是龙伯格唯一的核心旋钮：建议取电流环带宽 kp/L 约 2364 rad/s 的 2~5 倍，默认 4712（= 2pi x 750）。连续极点全转速都在左半平面，无硬上限；固件 e_hat 旋转项已改用精确旋转 R(omega_hat*Ts)（模恒为 1），离散极点由 -l2*err 修正项压进单位圆内，7800rpm 下谱半径约 0.985<1，全转速段稳定，详见 foc_luen.h。过大 = 高频抖动/噪声；过小 = 收敛慢、相位滞后大。"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_emax_v",
+      "val": "20",
+      "unit": "V",
+      "desc": "反电动势发散保护上限 |e_hat|"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_ih_clamp_a",
+      "val": "40",
+      "unit": "A",
+      "desc": "观测器电流数值钳位"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_jdg_rpm_min",
+      "val": "900",
+      "unit": "rpm",
+      "desc": "反电动势判定生效转速下限"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_jdg_ratio_min",
+      "val": "0.85",
+      "unit": "-",
+      "desc": "C1 幅值比下限"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_jdg_ratio_max",
+      "val": "1.08",
+      "unit": "-",
+      "desc": "C1 幅值比上限"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_jdg_phase_min_deg",
+      "val": "-45",
+      "unit": "deg",
+      "desc": "C2 相位下限"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_jdg_phase_max_deg",
+      "val": "5",
+      "unit": "deg",
+      "desc": "C2 相位上限"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_jdg_hold_ms",
+      "val": "1000",
+      "unit": "ms",
+      "desc": "判定连续满足时长"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_jdg_filt_alpha",
+      "val": "0.02",
+      "unit": "-",
+      "desc": "判定级慢速 EMA 系数"
+    },
+    {
+      "mk": "",
+      "name": "g_pll_comp_en",
+      "val": "0",
+      "unit": "-",
+      "desc": "1=PLL 补偿角生效（默认关）"
+    },
+    {
+      "mk": "[!]",
+      "note": "PLL 补偿公式（g_pll_comp_en=1 时）按 SMO 的 LPF 迟滞口径推导，对龙伯格不适用；默认关，确实要补相位请只调 g_pll_comp_bias_deg 手填。"
+    }
+  ],
+  "obs": [
+    {
+      "mk": "(*)",
+      "name": "g_luen60_speed_filt_rpm",
+      "desc": "PI 真实反馈；判超调/抖动只认它（ch14/ch1）"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_speed_disp_rpm",
+      "desc": "显示强滤波 a=0.05，约 100ms 滞后"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_speed_ramp_rpm",
+      "desc": "斜坡整形后给定 = PI setpoint"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_speed_meas_rpm",
+      "desc": "速度原始测量（未滤波）"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_speed_err_rpm",
+      "desc": "速度误差 = ramp - 反馈"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_speed_out_ma",
+      "desc": "速度环输出 = iq 参考 (mA)"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_id_ma",
+      "desc": "d 轴电流反馈 (mA)"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_iq_ma",
+      "desc": "q 轴电流反馈 (mA)"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_iq_filt_ma",
+      "desc": "滤波后 iq (mA)"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_vd",
+      "desc": "电流环输出 vd (V)"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_vq",
+      "desc": "电流环输出 vq (V)；贴 6.2V = 撞电压墙"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_luen60_vsat",
+      "desc": "=1 时输出贴限幅，此段调参数据作废"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_sl_active",
+      "desc": "无感锁存：1=Park 角与速度反馈已用 PLL"
+    },
+    {
+      "mk": "",
+      "name": "g_pll_omega_out_rpm",
+      "desc": "无感锁存后喂速度环的转速估计 (rpm)"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_emf_ok",
+      "desc": "龙伯格判定通过=1；无感切换的前置条件"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_jdg_fail",
+      "desc": "失败掩码 bit0 转速/bit1 幅值/bit2 相位"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_jdg_ratio_filt",
+      "desc": "幅值比慢速均值；龙伯格无滑模跌落应约 1.0"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_luen_diag_theta_err_filt_deg",
+      "desc": "龙伯格相位差滤波均值（极点滞后，非零正常）"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_pll_diag_theta_err_filt_deg",
+      "desc": "PLL 角差均值；comp_en=1 后应约 0"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_diag_e_mag_v",
+      "desc": "|e_hat| 实测幅值 (V)"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_diag_e_expect_v",
+      "desc": "理论 |e| = |omega_e| psi_f (V)"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_diag_e_ratio",
+      "desc": "实测/理论，收敛良好约 1.0"
+    },
+    {
+      "mk": "(*)",
+      "name": "g_luen_diag_e_on_q_v",
+      "desc": "e_on_q 投影 (V)；匀速下必须是常数"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_diag_e_on_d_v",
+      "desc": "e_on_d 投影 (V)；负常数 = 滞后体现"
+    },
+    {
+      "mk": "",
+      "name": "g_luen_diag_e_err_v",
+      "desc": "总误差范数 (V)，约 omega psi delta(rad)"
+    },
+    {
+      "mk": "[!]",
+      "name": "g_luen_diverge",
+      "desc": "发散保护触发次数；>0 说明 |e_hat| 越限被复位"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_state",
+      "desc": "状态机：0 空闲 / 1 运行 / 2 过流"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_evt",
+      "desc": "事件码（evt=1 过流）"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_rotor_deg",
+      "desc": "转子电角（编码器角，裁判用）(deg)"
+    },
+    {
+      "mk": "",
+      "name": "g_luen60_running",
+      "desc": "1=本 mode 已起转，VOFA 走自持布局"
+    }
+  ],
+  "vofa": {
+    "n": 16,
+    "fn": "Foc_Luen60_VofaFill",
+    "shared": false,
+    "rows": [
+      {
+        "mk": "",
+        "ch": "ch0",
+        "what": "iq 反馈",
+        "unit": "A",
+        "desc": "q 轴电流实际值"
+      },
+      {
+        "mk": "",
+        "ch": "ch1",
+        "what": "iq 滤波",
+        "unit": "A",
+        "desc": "滤波后 iq，alpha 由 Watch 调"
+      },
+      {
+        "mk": "",
+        "ch": "ch2",
+        "what": "iq 给定",
+        "unit": "A",
+        "desc": "速度环输出 = iq 参考"
+      },
+      {
+        "mk": "",
+        "ch": "ch3",
+        "what": "理论 e_alpha",
+        "unit": "V",
+        "desc": "编码器角生成的基准正弦"
+      },
+      {
+        "mk": "",
+        "ch": "ch4",
+        "what": "理论 e_beta",
+        "unit": "V",
+        "desc": "编码器角生成的基准正弦"
+      },
+      {
+        "mk": "",
+        "ch": "ch5",
+        "what": "观测器 i_alpha_hat",
+        "unit": "A",
+        "desc": "龙伯格电流状态，应跟随真实 i"
+      },
+      {
+        "mk": "",
+        "ch": "ch6",
+        "what": "观测器 i_beta_hat",
+        "unit": "A",
+        "desc": "龙伯格电流状态，应跟随真实 i"
+      },
+      {
+        "mk": "",
+        "ch": "ch7",
+        "what": "反电动势 e_alpha_hat",
+        "unit": "V",
+        "desc": "应与 ch3 逐点重叠"
+      },
+      {
+        "mk": "",
+        "ch": "ch8",
+        "what": "反电动势 e_beta_hat",
+        "unit": "V",
+        "desc": "应与 ch4 逐点重叠"
+      },
+      {
+        "mk": "",
+        "ch": "ch9",
+        "what": "相位误差",
+        "unit": "deg",
+        "desc": "原始值抖动；读均值请用 ch15"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch10",
+        "what": "e_on_q 投影",
+        "unit": "V",
+        "desc": "主判据：0.9*ch13，匀速平直"
+      },
+      {
+        "mk": "",
+        "ch": "ch11",
+        "what": "e_on_d 投影",
+        "unit": "V",
+        "desc": "负值恒定 = 滞后体现"
+      },
+      {
+        "mk": "",
+        "ch": "ch12",
+        "what": "总误差范数",
+        "unit": "V",
+        "desc": "约 omega psi delta(rad)"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch13",
+        "what": "理论幅值",
+        "unit": "V",
+        "desc": "主判据：omega psi_f"
+      },
+      {
+        "mk": "",
+        "ch": "ch14",
+        "what": "实际转速",
+        "unit": "rpm",
+        "desc": "= speed_filt_rpm，PI 反馈"
+      },
+      {
+        "mk": "(*)",
+        "ch": "ch15",
+        "what": "相位差滤波",
+        "unit": "deg",
+        "desc": "主判据：匀速下均值恒定"
+      }
+    ],
+    "variants": [
+      {
+        "cond": "g_luen60_wave_mode = 1 时",
+        "n": 8,
+        "title": "波形窄帧（32B 窄帧，921600 下帧率约 2.9kHz）",
+        "rows": [
+          {
+            "mk": "",
+            "ch": "ch0",
+            "what": "e_alpha_hat",
+            "unit": "V",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch1",
+            "what": "e_beta_hat",
+            "unit": "V",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch2",
+            "what": "理论 e_alpha",
+            "unit": "V",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch3",
+            "what": "理论 e_beta",
+            "unit": "V",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch4",
+            "what": "相位差原始",
+            "unit": "deg",
+            "desc": ""
+          },
+          {
+            "mk": "(*)",
+            "ch": "ch5",
+            "what": "相位差滤波",
+            "unit": "deg",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch6",
+            "what": "观测器 i_alpha_hat",
+            "unit": "A",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch7",
+            "what": "观测器 i_beta_hat",
+            "unit": "A",
+            "desc": ""
+          }
+        ],
+        "note": "这 8 个通道与主布局的 ch0..ch7 含义完全不同，不是前缀关系；切过来时上位机通道数必须改成 8。"
+      },
+      {
+        "cond": "g_luen60_wave_mode = 2 时",
+        "n": 16,
+        "title": "PLL / 无感验收面板",
+        "rows": [
+          {
+            "mk": "",
+            "ch": "ch0",
+            "what": "编码器原始转速",
+            "unit": "rpm",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch1",
+            "what": "编码器滤波转速",
+            "unit": "rpm",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch2",
+            "what": "omega_hat 原始",
+            "unit": "rpm",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch3",
+            "what": "omega_out 低通",
+            "unit": "rpm",
+            "desc": "无感时喂速度环"
+          },
+          {
+            "mk": "",
+            "ch": "ch4",
+            "what": "转速差原始",
+            "unit": "rpm",
+            "desc": ""
+          },
+          {
+            "mk": "(*)",
+            "ch": "ch5",
+            "what": "转速差滤波",
+            "unit": "rpm",
+            "desc": "主判据：无感滞后量"
+          },
+          {
+            "mk": "",
+            "ch": "ch6",
+            "what": "角差原始",
+            "unit": "deg",
+            "desc": ""
+          },
+          {
+            "mk": "(*)",
+            "ch": "ch7",
+            "what": "角差滤波",
+            "unit": "deg",
+            "desc": "主判据"
+          },
+          {
+            "mk": "",
+            "ch": "ch8",
+            "what": "iq 滤波",
+            "unit": "A",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch9",
+            "what": "补偿角 delta_hat",
+            "unit": "deg",
+            "desc": "comp_en=1 才真正进 Park 角"
+          },
+          {
+            "mk": "",
+            "ch": "ch10",
+            "what": "无感锁存",
+            "unit": "0/1",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch11",
+            "what": "|e_hat|",
+            "unit": "V",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch12",
+            "what": "龙伯格同拍角差",
+            "unit": "deg",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch13",
+            "what": "目标转速",
+            "unit": "rpm",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch14",
+            "what": "显示滤波转速",
+            "unit": "rpm",
+            "desc": ""
+          },
+          {
+            "mk": "",
+            "ch": "ch15",
+            "what": "斜坡输出转速",
+            "unit": "rpm",
+            "desc": ""
+          }
+        ],
+        "note": "ch9 的补偿角只有 g_pll_comp_en=1 时才真正加进 Park 角（默认 0，此时 ch9 照算但不生效）。"
+      }
+    ]
+  },
+  "notes": [
+    {
+      "mk": "(*)",
+      "text": "定位：与 mode 45（SMO+PLL）同源，只把观测器内核从滑模换成龙伯格，便于直接 A/B 对比。电机由自带编码器速度/电流双闭环拖动，龙伯格观测器纯旁观；Watch 置 g_luen60_sensorless=1 且 g_luen_emf_ok=1 后，Park 角换 PLL 补偿外推角、速度反馈换 PLL 低通转速估计。"
+    },
+    {
+      "mk": "(*)",
+      "text": "主判据（wave_mode=0 面板）是四条直流判据恒定：ch10 e_on_q 约 0.9*ch13、ch11 e_on_d 负值恒定、ch12 总误差约 omega psi delta(rad)、ch15 相位差滤波均值。与 SMO 的差别：龙伯格 e_hat 是观测器状态量、无滑模 LPF 跌落，故幅值比 g_luen_jdg_ratio_filt 应更贴近 1.0（SMO 约 0.98）。匀速下这四条必须是平直线；出现电频率纹波 = 死区签名。"
+    },
+    {
+      "mk": "[!]",
+      "text": "无感切换前置：g_luen60_sensorless=1 只是申请，必须 g_luen_emf_ok=1 才锁存（g_luen60_sl_active 变 1；置回 0 才退出）。判定要求转速 >= g_luen_jdg_rpm_min（当前 900rpm）且幅值/相位连续满足 1000ms；自动爬坡顶档正好 1000rpm，所以到速后还要约 1.5-2s 才出 OK（慢速 EMA a=0.02 收敛 + hold 1s）。失败原因看 g_luen_jdg_fail：bit0 转速未达（爬坡途中正常）/bit1 幅值/bit2 相位。"
+    },
+    {
+      "mk": "[!]",
+      "text": "调参顺序：先确认有感段速度环（kp 0.8 / ki 0.03）与电流环（kp 0.1 / ki 300）已稳定，再调观测器。观测器看 g_luen_omega_o（默认 4712 rad/s，2~5 倍电流环带宽）与三个模型参数 R/L/psi_f；omega_o 过大先出高频抖动甚至 g_luen_diverge++。模型参数不准表现为 g_luen_diag_e_ratio 偏离 1.0（幅值）与相位均值偏离（L/R 比例）。"
+    },
+    {
+      "mk": "[!]",
+      "text": "本 mode 是变长帧：wave_mode=0/2 为 16ch，wave_mode=1 为 8ch。切布局时 VOFA+ 上位机通道数必须跟着改，否则整帧错位。未先跑 mode 24 时 mode 60 起不来（g_luen60_running=0），固件回落到通用 20ch 帧而 VOFA 仍按 16ch 解析，看起来像观测器炸了。"
+    },
+    {
+      "mk": "",
+      "text": "发散保护：Foc_Luen_Step 内若 |e_hat| 平方超过 g_luen_emax_v 平方即复位观测器状态并累加 g_luen_diverge（ISR 内不用 sqrtf）。静止阶段反电动势为零、不可观测，e_hat 由电流误差注入起振，故必须靠有感段先跑到 900rpm 以上才谈锁定。"
+    }
+  ],
+  "evidence": {
+    "Foc_Luen60_Start": "foc_60_luen.c:327",
+    "Foc_Luen60_VofaFill": "foc_60_luen.c:557",
+    "g_luen60_running": "foc_60_luen.h:282",
+    "g_luen60_state": "foc_60_luen.h:283",
+    "g_luen60_evt": "foc_60_luen.h:284",
+    "g_luen60_auto_ramp": "foc_60_luen.h:285",
+    "g_luen60_wave_mode": "foc_60_luen.h:286",
+    "g_luen60_sensorless": "foc_60_luen.h:288",
+    "g_luen60_ang_lead_ticks": "foc_60_luen.h:291",
+    "g_luen60_speed_target_rpm": "foc_60_luen.h:292",
+    "g_luen60_speed_ramp_rpm": "foc_60_luen.h:293",
+    "g_luen60_speed_meas_rpm": "foc_60_luen.h:294",
+    "g_luen60_speed_filt_rpm": "foc_60_luen.h:295",
+    "g_luen60_speed_disp_rpm": "foc_60_luen.h:296",
+    "g_luen60_speed_err_rpm": "foc_60_luen.h:299",
+    "g_luen60_speed_out_ma": "foc_60_luen.h:300",
+    "g_luen60_rotor_deg": "foc_60_luen.h:302",
+    "g_luen60_id_ref_ma": "foc_60_luen.h:303",
+    "g_luen60_iq_ref_ma": "foc_60_luen.h:304",
+    "g_luen60_id_ma": "foc_60_luen.h:305",
+    "g_luen60_iq_ma": "foc_60_luen.h:306",
+    "g_luen60_iq_filt_ma": "foc_60_luen.h:307",
+    "g_luen60_iq_filt_alpha": "foc_60_luen.h:308",
+    "g_luen60_vd": "foc_60_luen.h:309",
+    "g_luen60_vq": "foc_60_luen.h:310",
+    "g_luen60_vsat": "foc_60_luen.h:311",
+    "g_luen60_sl_active": "foc_60_luen.h:312",
+    "g_luen60_pid_speed_cfg.kp": "foc_60_luen.c:70",
+    "g_luen60_pid_speed_cfg.ki": "foc_60_luen.c:71",
+    "g_luen60_pid_id_cfg.kp": "foc_60_luen.c:85",
+    "g_luen60_pid_id_cfg.ki": "foc_60_luen.c:86",
+    "g_luen60_pid_iq_cfg.kp": "foc_60_luen.c:100",
+    "g_luen60_pid_iq_cfg.ki": "foc_60_luen.c:101",
+    "g_luen_model_r_ohm": "foc_luen.c:28",
+    "g_luen_model_l_h": "foc_luen.c:29",
+    "g_luen_model_psi_wb": "foc_luen.c:30",
+    "g_luen_omega_o": "foc_luen.c:31",
+    "g_luen_emax_v": "foc_luen.c:34",
+    "g_luen_ih_clamp_a": "foc_luen.c:36",
+    "g_luen_e_alpha_hat_v": "foc_luen.c:39",
+    "g_luen_e_beta_hat_v": "foc_luen.c:40",
+    "g_luen_ih_alpha_a": "foc_luen.c:41",
+    "g_luen_ih_beta_a": "foc_luen.c:42",
+    "g_luen_diverge": "foc_luen.c:43",
+    "g_luen_diag_e_mag_v": "foc_luen.c:46",
+    "g_luen_diag_e_expect_v": "foc_luen.c:47",
+    "g_luen_diag_e_ratio": "foc_luen.c:48",
+    "g_luen_diag_theta_err_deg": "foc_luen.c:50",
+    "g_luen_diag_theta_err_filt_deg": "foc_luen.c:51",
+    "g_luen_diag_e_on_q_v": "foc_luen.c:53",
+    "g_luen_diag_e_on_d_v": "foc_luen.c:54",
+    "g_luen_diag_e_err_v": "foc_luen.c:55",
+    "g_luen_theory_alpha_v": "foc_luen.c:56",
+    "g_luen_theory_beta_v": "foc_luen.c:57",
+    "g_luen_jdg_rpm_min": "foc_luen.c:60",
+    "g_luen_jdg_ratio_min": "foc_luen.c:61",
+    "g_luen_jdg_ratio_max": "foc_luen.c:62",
+    "g_luen_jdg_phase_min_deg": "foc_luen.c:63",
+    "g_luen_jdg_phase_max_deg": "foc_luen.c:64",
+    "g_luen_jdg_hold_ms": "foc_luen.c:65",
+    "g_luen_jdg_filt_alpha": "foc_luen.c:66",
+    "g_luen_emf_ok": "foc_luen.c:68",
+    "g_luen_jdg_fail": "foc_luen.c:69",
+    "g_luen_jdg_ratio_filt": "foc_luen.c:70",
+    "g_pll_omega_out_rpm": "foc_pll.h:70",
+    "g_pll_comp_en": "foc_pll.h:61",
+    "g_pll_comp_bias_deg": "foc_pll.h:62",
+    "g_pll_comp_deg_out": "foc_pll.h:72",
+    "g_pll_diag_theta_err_deg": "foc_pll.h:89",
+    "g_pll_diag_theta_err_filt_deg": "foc_pll.h:92",
+    "g_pll_diag_smo_err_deg": "foc_pll.h:95",
+    "FOC60_IQ_FILT_ALPHA": "foc_60_luen.h:246",
+    "FOC60_SPD_KP_MA_PER_RPM": "foc_60_luen.h:251",
+    "FOC60_SPD_KI_MA_PER_RPM_S": "foc_60_luen.h:252",
+    "FOC60_SPD_DISP_ALPHA": "foc_60_luen.h:265",
+    "FOC60_PI_KP": "foc_60_luen.h:242",
+    "FOC60_PI_KI": "foc_60_luen.h:243",
+    "FOC60_PI_UMAX_V": "foc_60_luen.h:244",
+    "FOC60_ENC_DELTA_MAX": "foc_60_luen.h:269",
+    "FOC60_AUTO_RAMP_DEFAULT": "foc_60_luen.h:273",
+    "Foc_Common_VofaFill": "main.c:212"
+  }
+}

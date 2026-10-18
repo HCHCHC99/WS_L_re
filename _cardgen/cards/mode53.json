@@ -91,7 +91,7 @@
       "name": "g_flx53_vbus_scale",
       "val": "1.000",
       "unit": "-",
-      "desc": "Vbus 校正系数 = 实测 Vbus / 12.0；本模式最大系统性误差源，psi 随它线性比例"
+      "desc": "残差微调系数，正常固定 1.000（Vbus 已改读 PA4 实测值，勿填 实测Vbus/12.0）"
     },
     {
       "mk": "(*)",
@@ -99,7 +99,7 @@
     },
     {
       "mk": "[!]",
-      "note": "g_flx53_r_used_ohm 与 g_flx53_vbus_scale 是两个系统性输入：前者错 10% 约使 psi 差 1~2%，后者错多少 psi 就错多少。二者都不随转速变，故只进截距/缩放、不被斜率吸收。"
+      "note": "g_flx53_r_used_ohm 是系统性输入：错 10% 约使 psi 差 1~2%，且不随转速变，故只进截距、不被斜率吸收。g_flx53_vbus_scale 同理，但已降级为残差微调。"
     },
     {
       "mk": "[!]",
@@ -239,7 +239,7 @@
         "ch": "ch3",
         "what": "vq",
         "unit": "V",
-        "desc": "已折算 vbus_scale 的 q 轴电压"
+        "desc": "真实 q 轴电压（实测 Vbus 折算）"
       },
       {
         "mk": "(*)",
@@ -342,7 +342,7 @@
     },
     {
       "mk": "[!]",
-      "text": "最大系统性误差是 Vbus 假设：vq 指令按 12.0V 折算，Vbus 实际偏差多少，psi_f 就同比例偏多少。用 g_flx53_vbus_scale 校正（实测 Vbus / 12.0）。电流采样噪声（Vcc 3.3V 抖动）经 EMA+长窗后仅 <1%，不是主导。"
+      "text": "Vbus 已改读 PA4 实测值（20k/3k 分压，Foc_Vbus_GetV），\"12.0V 假设\"这一最大系统性误差源已消除；残余的 VREF/分压容差用 g_flx53_vbus_scale 微调（正常 1.000）。电流采样噪声（Vcc 3.3V 抖动）经 EMA+长窗后仅 <1%，不是主导。"
     },
     {
       "mk": "[!]",
@@ -354,7 +354,7 @@
     },
     {
       "mk": "[!]",
-      "text": "判读：r2 >= 0.99 且离散度 < 10% psi 才算合格；psi_diff 与主结果应接近；Vdt 应与 mode 51 的 160mV 接近；ratio 接近 1 说明与手册吻合。任一不符先查 vbus_scale / r_used / 是否 Vsat。"
+      "text": "判读：r2 >= 0.99 且离散度 < 10% psi 才算合格；psi_diff 与主结果应接近；Vdt 应与 mode 51 的 160mV 接近；ratio 接近 1 说明与手册吻合。任一不符先查 r_used / 是否 Vsat（vbus_scale 应为 1.0）。"
     },
     {
       "mk": "[!]",
@@ -366,50 +366,50 @@
     }
   ],
   "evidence": {
-    "g_flx53_rpm": "foc_53_flx.c:41",
-    "g_flx53_points": "foc_53_flx.c:42",
-    "g_flx53_r_used_ohm": "foc_53_flx.c:43",
-    "g_flx53_vdead_v": "foc_53_flx.c:44",
-    "g_flx53_fit_vdt": "foc_53_flx.c:45",
-    "g_flx53_avg_ms": "foc_53_flx.c:46",
-    "g_flx53_settle_ms": "foc_53_flx.c:47",
-    "g_flx53_rpm_tol": "foc_53_flx.c:48",
-    "g_flx53_iq_filt_alpha": "foc_53_flx.c:49",
-    "g_flx53_reject_en": "foc_53_flx.c:50",
-    "g_flx53_rpm_max": "foc_53_flx.c:51",
-    "g_flx53_vbus_scale": "foc_53_flx.c:52",
-    "g_flx53_psi_mwb": "foc_53_flx.c:61",
-    "g_flx53_ratio": "foc_53_flx.c:65",
-    "g_flx53_psi_diff_mwb": "foc_53_flx.c:62",
-    "g_flx53_vdt_fit_mv": "foc_53_flx.c:63",
-    "g_flx53_r2": "foc_53_flx.c:68",
-    "g_flx53_psi_spread_mwb": "foc_53_flx.c:67",
-    "g_flx53_psi_alt_mwb": "foc_53_flx.c:66",
-    "g_flx53_win_split_pct": "foc_53_flx.c:69",
-    "g_flx53_psi_live_mwb": "foc_53_flx.c:70",
-    "g_flx53_target_rpm": "foc_53_flx.c:71",
-    "g_flx53_omega_e": "foc_53_flx.c:78",
-    "g_flx53_state": "foc_53_flx.c:58",
-    "g_flx53_evt": "foc_53_flx.c:59",
-    "g_flx53_pts_done": "foc_53_flx.c:79",
-    "g_flx53_vsat": "foc_53_flx.c:77",
-    "g_flx53_psi_pts": "foc_53_flx.c:81",
-    "g_flx53_pts_vq": "foc_53_flx.c:83",
-    "g_flx53_pts_iq": "foc_53_flx.c:84",
-    "g_flx53_pts_we": "foc_53_flx.c:85",
-    "FOC53_STEP_AVG": "foc_53_flx.h:243",
-    "FOC53_EVT_TIMEOUT": "foc_53_flx.h:257",
-    "FOC_FLX53_DBG": "foc_53_flx.h:193",
-    "Foc_FlxId_Start": "foc_53_flx.c:557",
-    "Foc_FlxId_Step": "foc_53_flx.c:651",
-    "Foc_FlxId_Stop": "foc_53_flx.c:637",
-    "Foc_FlxId_VofaFill": "foc_53_flx.c:830",
-    "g_flx53_rpm_meas": "foc_53_flx.c:72",
+    "g_flx53_rpm": "foc_53_flx.c:42",
+    "g_flx53_points": "foc_53_flx.c:43",
+    "g_flx53_r_used_ohm": "foc_53_flx.c:44",
+    "g_flx53_vdead_v": "foc_53_flx.c:45",
+    "g_flx53_fit_vdt": "foc_53_flx.c:46",
+    "g_flx53_avg_ms": "foc_53_flx.c:47",
+    "g_flx53_settle_ms": "foc_53_flx.c:48",
+    "g_flx53_rpm_tol": "foc_53_flx.c:49",
+    "g_flx53_iq_filt_alpha": "foc_53_flx.c:50",
+    "g_flx53_reject_en": "foc_53_flx.c:51",
+    "g_flx53_rpm_max": "foc_53_flx.c:52",
+    "g_flx53_vbus_scale": "foc_53_flx.c:53",
+    "g_flx53_psi_mwb": "foc_53_flx.c:62",
+    "g_flx53_ratio": "foc_53_flx.c:66",
+    "g_flx53_psi_diff_mwb": "foc_53_flx.c:63",
+    "g_flx53_vdt_fit_mv": "foc_53_flx.c:64",
+    "g_flx53_r2": "foc_53_flx.c:69",
+    "g_flx53_psi_spread_mwb": "foc_53_flx.c:68",
+    "g_flx53_psi_alt_mwb": "foc_53_flx.c:67",
+    "g_flx53_win_split_pct": "foc_53_flx.c:70",
+    "g_flx53_psi_live_mwb": "foc_53_flx.c:71",
+    "g_flx53_target_rpm": "foc_53_flx.c:72",
+    "g_flx53_omega_e": "foc_53_flx.c:79",
+    "g_flx53_state": "foc_53_flx.c:59",
+    "g_flx53_evt": "foc_53_flx.c:60",
+    "g_flx53_pts_done": "foc_53_flx.c:80",
+    "g_flx53_vsat": "foc_53_flx.c:78",
+    "g_flx53_psi_pts": "foc_53_flx.c:90",
+    "g_flx53_pts_vq": "foc_53_flx.c:92",
+    "g_flx53_pts_iq": "foc_53_flx.c:93",
+    "g_flx53_pts_we": "foc_53_flx.c:94",
+    "FOC53_STEP_AVG": "foc_53_flx.h:247",
+    "FOC53_EVT_TIMEOUT": "foc_53_flx.h:261",
+    "FOC_FLX53_DBG": "foc_53_flx.h:194",
+    "Foc_FlxId_Start": "foc_53_flx.c:589",
+    "Foc_FlxId_Step": "foc_53_flx.c:684",
+    "Foc_FlxId_Stop": "foc_53_flx.c:670",
+    "Foc_FlxId_VofaFill": "foc_53_flx.c:892",
+    "g_flx53_rpm_meas": "foc_53_flx.c:73",
     "FOC_MOTOR_FLUX_VS": "motor_config.h:75",
     "FOC_MOTOR_RS_OHM": "motor_config.h:73",
     "FOC_ISR_HZ": "I.h:108",
     "Timer6_Timebase_GetCounter": "timer6_timebase.h:1",
-    "Foc_Core_GetDq": "foc_core.c:302",
+    "Foc_Core_GetDq": "foc_core.c:319",
     "Foc_Dcal_GetResult": "foc_24_dcal.c:159"
   }
 }

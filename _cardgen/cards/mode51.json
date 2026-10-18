@@ -287,7 +287,7 @@
     },
     {
       "mk": "(*)",
-      "text": "RTT 输出（开关 FOC_RS51_DBG，定义在 foc_51_rs.h；打印点在 foc_obs 事件段，ISR 内不打印，符合 RTT 打印规范）：进入时打一行配置；每完成一档打 pt+v/i；护栏触发时打 current clamp；结束时打 R(mohm)/Vdead(mV)/R2(x10000)/ratio(x1000)/位移/耗时/clamp 次数/v_scale + 全部原始点，并对 R2<0.99 或位移>8 各追一行 warn。"
+      "text": "RTT 输出（开关 FOC_RS51_DBG，定义在 foc_51_rs.h；打印点在 foc_obs 事件段，ISR 内不打印，符合 RTT 打印规范）：进入时打一行配置；每完成一档打 pt+v/i；护栏触发时打 current clamp；结束时打 R(ohm)/Vdead(mV)/R2(x10000)/ratio(x1000)/位移/耗时/clamp 次数/v_scale + 全部原始点，并对 R2<0.99 或位移>8 各追一行 warn。"
     },
     {
       "mk": "[!]",
@@ -327,10 +327,10 @@
     "g_rs51_elapsed_ms": "foc_51_rs.c:64",
     "g_rs51_pts_v": "foc_51_rs.c:70",
     "g_rs51_pts_i": "foc_51_rs.c:71",
-    "Foc_RsId_Start": "foc_51_rs.c:190",
-    "Foc_RsId_Step": "foc_51_rs.c:280",
-    "Foc_RsId_Stop": "foc_51_rs.c:263",
-    "Foc_RsId_VofaFill": "foc_51_rs.c:488",
+    "Foc_RsId_Start": "foc_51_rs.c:192",
+    "Foc_RsId_Step": "foc_51_rs.c:282",
+    "Foc_RsId_Stop": "foc_51_rs.c:265",
+    "Foc_RsId_VofaFill": "foc_51_rs.c:490",
     "FOC_MOTOR_RS_OHM": "motor_config.h:73",
     "Foc_Svpwm": "foc_math.c:151",
     "Foc_Core_OverCurrent": "foc_core.c:208",

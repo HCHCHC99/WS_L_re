@@ -271,7 +271,7 @@
     "g_foc_elec_deg": "foc_core.h:103",
     "g_foc_fault": "foc_core.h:77",
     "g_foc_fault_i_ma": "foc_core.h:81",
-    "FOC_OC_LIMIT_A": "motor_config.h:108",
+    "FOC_OC_LIMIT_A": "motor_config.h:111",
     "Foc_Common_VofaFill": "main.c:212",
     "COMM_RUNNER_DCAL": "dev_comm_runner.h:30",
     "g_i_iu_ma": "I.h:214",

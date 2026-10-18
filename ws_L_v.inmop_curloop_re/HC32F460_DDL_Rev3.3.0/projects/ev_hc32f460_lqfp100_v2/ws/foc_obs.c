@@ -32,6 +32,8 @@
 #include "foc_51_rs.h"
 #include "foc_52_ldlq.h"
 #include "foc_53_flx.h"
+#include "foc_luen.h"
+#include "foc_60_luen.h"
 #include "dev_comm_runner.h"   /* CommRunner_SetMode（mode 20 完成自动回 mode 0） */
 #include "encoder.h"
 #include "motor_config.h"
@@ -193,6 +195,63 @@ void Foc_Obs_Task(void)
                             ((g_smo_jdg_fail & 0x01u) ? " [rpm<min]" : ""),
                             ((g_smo_jdg_fail & 0x02u) ? " [ratio]" : ""),
                             ((g_smo_jdg_fail & 0x04u) ? " [phase]" : ""));
+                }
+                /* fail==0 的掉零 = Stop/Reset 路径，不打印 */
+            }
+        }
+    }
+
+    /* ---- mode60 龙伯格观测器旁观诊断（sqrtf/atan2f 只在主循环，不进 ISR）----
+     * 与 mode45 同结构，唯一区别：观测器内核换龙伯格（ê 为状态量，无滑模 LPF）。 */
+    if (g_luen60_running) {
+        float luen_omega_e = g_luen60_speed_filt_rpm * 0.10472f
+                           * (float)FOC_POLE_PAIRS;
+        Foc_Luen_Diag((float)g_luen60_rotor_deg, luen_omega_e);
+
+        /* ---- mode60 PLL 旁观诊断（只滤波；角度比较已在 ISR 同拍完成） ---- */
+        Foc_Pll_Diag();
+
+        /* ---- mode60 PLL 数据快照 RTT 打印（5ms 节流，供复制粘贴判读） ---- */
+        {
+            static uint32_t s_luen_print_t0 = 0;
+            uint32_t now = (uint32_t)tickTimer_GetCount();
+            char b1[14], b2[14], b3[14], b4[14], b5[14], b6[14], b7[14], b8[14];
+
+            if ((uint32_t)(now - s_luen_print_t0) >= 5u) {
+                s_luen_print_t0 = now;
+                OBS_DBG("[LUEN] t=%u e=%s sE=%s th=%s ec=%s wE=%s enc=%s iq=%s d=%s sl=%u",
+                        (unsigned)now,
+                        Pll_Fmt1000(b1, g_pll_diag_theta_err_deg),
+                        Pll_Fmt1000(b2, g_pll_diag_smo_err_deg),
+                        Pll_Fmt1000(b3, g_pll_theta_rotor_deg),
+                        Pll_Fmt1000(b4, (float)g_luen60_rotor_deg),
+                        Pll_Fmt1000(b5, g_pll_omega_hat_rpm),
+                        Pll_Fmt1000(b6, g_luen60_speed_filt_rpm),
+                        Pll_Fmt1000(b7, (float)g_luen60_iq_filt_ma),
+                        Pll_Fmt1000(b8, g_pll_comp_deg_out),
+                        (unsigned)g_luen60_sl_active);
+            }
+        }
+
+        /* ---- 龙伯格反电动势判定结果跳变事件（ok/fail 由 foc_luen.c 维护，
+         *      mode60 每次 Start 经 Foc_Luen_Reset 重新判定） ---- */
+        {
+            static uint8_t s_luen_emf_ok_prev = 0u;
+
+            if (g_luen_emf_ok != s_luen_emf_ok_prev) {
+                s_luen_emf_ok_prev = g_luen_emf_ok;
+                if (g_luen_emf_ok) {
+                    OBS_DBG("LUEN EMF judge: OK (ratio=%d%% phase=%ddeg hold=%dms div=%u)",
+                            (int)(g_luen_jdg_ratio_filt * 100.0f),
+                            (int)g_luen_jdg_phase_filt_deg,
+                            (int)g_luen_jdg_hold_ms,
+                            (unsigned)g_luen_diverge);
+                } else if (g_luen_jdg_fail != 0u) {
+                    OBS_DBG("LUEN EMF judge: FAIL mask=0x%02X%s%s%s",
+                            (int)g_luen_jdg_fail,
+                            ((g_luen_jdg_fail & 0x01u) ? " [rpm<min]" : ""),
+                            ((g_luen_jdg_fail & 0x02u) ? " [ratio]" : ""),
+                            ((g_luen_jdg_fail & 0x04u) ? " [phase]" : ""));
                 }
                 /* fail==0 的掉零 = Stop/Reset 路径，不打印 */
             }
@@ -937,8 +996,15 @@ void Foc_Obs_Task(void)
                     break;
                 }
                 case FOC53_EVT_TIMEOUT:
-                    FLX53_DBG("timeout: tgt=%drpm filt=%drpm -> skip point",
-                              (int)g_flx53_target_rpm, (int)g_flx53_rpm_meas);
+                    /* 用 ISR 快照（g_flx53_skip_*），不要读 g_flx53_target_rpm：
+                     * SkipPoint 已 s_k++，实时 target 已是下一点，会打出误导的 rpm。 */
+                    FLX53_DBG("timeout: pt%u tgt=%drpm filt=%drpm state=%u",
+                              (unsigned)g_flx53_skip_k, (int)g_flx53_skip_tgt_rpm,
+                              (int)g_flx53_skip_filt_rpm, (unsigned)g_flx53_skip_state);
+                    FLX53_DBG("  settle_max=%ums spd_ok=%ums iq_ok=%ums (1=爬速 2=稳态)",
+                              (unsigned)g_flx53_skip_settle_ms,
+                              (unsigned)g_flx53_skip_spd_ms,
+                              (unsigned)g_flx53_skip_iq_ms);
                     break;
                 case FOC53_EVT_OC:
                     FLX53_DBG("FAULT_OC at state=%u i=%dmA", (unsigned)g_flx53_state,

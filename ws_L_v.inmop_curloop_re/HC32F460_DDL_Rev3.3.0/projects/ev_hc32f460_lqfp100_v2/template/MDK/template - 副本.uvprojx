@@ -1024,6 +1024,16 @@
               <FilePath>..\..\ws\foc_53_flx.c</FilePath>
             </File>
             <File>
+              <FileName>foc_luen.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_luen.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_60_luen.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_60_luen.c</FilePath>
+            </File>
+            <File>
               <FileName>foc_24_dcal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_24_dcal.c</FilePath>
@@ -2103,6 +2113,16 @@
               <FileName>foc_53_flx.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\ws\foc_53_flx.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_luen.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_luen.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_60_luen.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ws\foc_60_luen.c</FilePath>
             </File>
             <File>
               <FileName>foc_24_dcal.c</FileName>

@@ -79,6 +79,14 @@ volatile uint8_t  g_flx53_vsat        = 0u;
 volatile float    g_flx53_omega_e     = 0.0f;
 volatile uint32_t g_flx53_pts_done    = 0u;
 volatile uint32_t g_flx53_elapsed_ms  = 0u;
+/* 超时诊断组：某点被超时跳过时由 ISR 快照，用于判断卡在哪个门 */
+volatile uint32_t g_flx53_skip_k        = 0u;
+volatile float    g_flx53_skip_tgt_rpm  = 0.0f;
+volatile float    g_flx53_skip_filt_rpm = 0.0f;
+volatile uint8_t  g_flx53_skip_state    = 0u;
+volatile uint32_t g_flx53_skip_settle_ms = 0u;
+volatile uint32_t g_flx53_skip_spd_ms   = 0u;
+volatile uint32_t g_flx53_skip_iq_ms    = 0u;
 volatile float    g_flx53_psi_pts[FOC53_MAX_POINTS];
 volatile float    g_flx53_pts_rpm[FOC53_MAX_POINTS];
 volatile float    g_flx53_pts_vq[FOC53_MAX_POINTS];
@@ -130,7 +138,10 @@ static float    s_speed_out_ma;
 
 static uint32_t s_ms_tick;
 static uint32_t s_state_ms;          /* 当前状态已持续 (ms) */
-static uint32_t s_settle_ms_ok;      /* 稳态已连续保持 (ms) */
+static uint32_t s_settle_ms_ok;      /* 稳态信用（漏泄计分）：双门满足 +1、不过扣 penalty */
+static uint32_t s_settle_ms_max;     /* 本点稳态信用峰值 (ms)：诊断卡在哪个门 */
+static uint32_t s_spd_ok_ms;         /* 本点转速门累计通过 (ms)：诊断 */
+static uint32_t s_iq_ok_ms;          /* 本点 iq 门累计通过 (ms)：诊断 */
 static uint8_t  s_fit_poor;          /* 1 = 拟合结果离散度大 */
 static uint8_t  s_iq_stable;         /* 1 = iq 变化率小（稳态判据） */
 static float    s_iq_slow;           /* 稳态判据慢 EMA (mA) */
@@ -181,6 +192,9 @@ static void Flx53_ResetLoopState(void)
     s_ms_tick = 0u;
     s_state_ms = 0u;
     s_settle_ms_ok = 0u;
+    s_settle_ms_max = 0u;
+    s_spd_ok_ms = 0u;
+    s_iq_ok_ms = 0u;
     s_fit_poor = 0u;
     s_iq_stable = 0u;
     s_iq_slow = 0.0f;
@@ -234,6 +248,13 @@ static void Flx53_ClearResults(void)
     g_flx53_omega_e = 0.0f;
     g_flx53_pts_done = 0u;
     g_flx53_elapsed_ms = 0u;
+    g_flx53_skip_k = 0u;
+    g_flx53_skip_tgt_rpm = 0.0f;
+    g_flx53_skip_filt_rpm = 0.0f;
+    g_flx53_skip_state = 0u;
+    g_flx53_skip_settle_ms = 0u;
+    g_flx53_skip_spd_ms = 0u;
+    g_flx53_skip_iq_ms = 0u;
     for (i = 0u; i < FOC53_MAX_POINTS; i++) {
         g_flx53_psi_pts[i] = 0.0f;
         g_flx53_pts_rpm[i] = 0.0f;
@@ -451,9 +472,19 @@ static void Flx53_FinishPoint(void)
     g_flx53_state = FOC53_STEP_NEXT;
 }
 
-/* 某点未稳 -> 跳过（数组留 0，不参与拟合） */
+/* 某点未稳 -> 跳过（数组留 0，不参与拟合）。
+ * 注意：本函数会 s_k++，之后 Step 里 g_flx53_target_rpm 立刻被改成下一点的目标，
+ * 主循环打印时读到的就不是被跳点的目标了。故在 s_k++ 之前把所有诊断量快照下来。 */
 static void Flx53_SkipPoint(void)
 {
+    g_flx53_skip_k         = s_k;
+    g_flx53_skip_tgt_rpm   = g_flx53_rpm[s_k];
+    g_flx53_skip_filt_rpm  = s_speed_filt_rpm;
+    g_flx53_skip_state     = g_flx53_state;
+    g_flx53_skip_settle_ms = s_settle_ms_max;
+    g_flx53_skip_spd_ms    = s_spd_ok_ms;
+    g_flx53_skip_iq_ms     = s_iq_ok_ms;
+
     g_flx53_pts_rpm[s_k] = 0.0f;
     g_flx53_pts_vq[s_k]  = 0.0f;
     g_flx53_pts_iq[s_k]  = 0.0f;
@@ -686,6 +717,9 @@ void Foc_FlxId_Step(const stc_i_data_t *pData)
             g_flx53_target_rpm = g_flx53_rpm[s_k];
             s_state_ms = 0u;
             s_settle_ms_ok = 0u;
+            s_settle_ms_max = 0u;
+            s_spd_ok_ms = 0u;
+            s_iq_ok_ms = 0u;
             g_flx53_state = FOC53_STEP_SPINUP;
         }
         return;
@@ -763,6 +797,14 @@ void Foc_FlxId_Step(const stc_i_data_t *pData)
     /* ===== 状态机 ===== */
     switch (g_flx53_state) {
     case FOC53_STEP_SPINUP:
+        if (ms_tick_flag != 0u) {   /* 爬速段也统计两门，便于超时诊断 */
+            if (fabsf(g_flx53_target_rpm - s_speed_filt_rpm) < g_flx53_rpm_tol) {
+                s_spd_ok_ms++;
+            }
+            if (s_iq_stable != 0u) {
+                s_iq_ok_ms++;
+            }
+        }
         if (fabsf(g_flx53_target_rpm - s_speed_filt_rpm) < g_flx53_rpm_tol) {
             g_flx53_state = FOC53_STEP_SETTLE;
             s_state_ms = 0u;
@@ -772,14 +814,26 @@ void Foc_FlxId_Step(const stc_i_data_t *pData)
         }
         break;
 
-    case FOC53_STEP_SETTLE:
+    case FOC53_STEP_SETTLE: {
+        uint8_t spd_ok, iq_ok;
+
         if (ms_tick_flag != 0u) {
-            if ((s_iq_stable != 0u) &&
-                (fabsf(g_flx53_target_rpm - s_speed_filt_rpm) < g_flx53_rpm_tol)) {
-                s_settle_ms_ok++;
+            spd_ok = (fabsf(g_flx53_target_rpm - s_speed_filt_rpm) < g_flx53_rpm_tol)
+                   ? 1u : 0u;
+            iq_ok  = s_iq_stable;
+            if (spd_ok != 0u) { s_spd_ok_ms++; }
+            if (iq_ok  != 0u) { s_iq_ok_ms++; }
+            /* 漏泄计分：双门同时满足 +1ms；任一不过扣 penalty ms（而非清零）。
+             * 目的：容忍偶发单拍抖动，让"边缘稳态"能真正攒够，而不是被一次
+             * 瞬时越界打回 0（旧实现正是因此永远攒不满、5s 超时跳过）。 */
+            if ((spd_ok != 0u) && (iq_ok != 0u)) {
+                if (s_settle_ms_ok < g_flx53_settle_ms) { s_settle_ms_ok++; }
+            } else if (s_settle_ms_ok > (uint32_t)FOC53_SETTLE_FAIL_PENALTY) {
+                s_settle_ms_ok -= FOC53_SETTLE_FAIL_PENALTY;
             } else {
                 s_settle_ms_ok = 0u;
             }
+            if (s_settle_ms_ok > s_settle_ms_max) { s_settle_ms_max = s_settle_ms_ok; }
         }
         if (s_settle_ms_ok >= g_flx53_settle_ms) {
             Flx53_StartAvg();
@@ -787,6 +841,7 @@ void Foc_FlxId_Step(const stc_i_data_t *pData)
             Flx53_SkipPoint();
         }
         break;
+    }
 
     case FOC53_STEP_AVG: {
         uint16_t now = (uint16_t)Timer6_Timebase_GetCounter();

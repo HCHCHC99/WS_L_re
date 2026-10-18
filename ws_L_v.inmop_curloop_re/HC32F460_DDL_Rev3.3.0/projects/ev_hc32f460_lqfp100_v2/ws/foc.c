@@ -50,6 +50,7 @@ void Foc_Init(void)
     Foc_Drun41_InitPids();
     Foc_Speed_InitPids();
     Foc_Smo45_InitPids();
+    Foc_Luen60_InitPids();
     I_RegisterFocCallback(Foc_Isr);
     s_bInited = 1u;
 }
@@ -188,6 +189,8 @@ void Foc_Isr(const stc_i_data_t *pData)
             Foc_Speed_Step(pData);
         } else if (g_smo45_running) {
             Foc_Smo45_Step(pData);
+        } else if (g_luen60_running) {
+            Foc_Luen60_Step(pData);
         } else if (g_rs51_running) {
             Foc_RsId_Step(pData);
         } else if (g_ldlq52_running) {

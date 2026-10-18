@@ -120,6 +120,7 @@
         <SetRegEntry>
           <Number>0</Number>
           <Key>DLGUARM</Key>
+          <Name>8f?</Name>
         </SetRegEntry>
         <SetRegEntry>
           <Number>0</Number>
@@ -530,6 +531,31 @@
           <count>46</count>
           <WinNumber>2</WinNumber>
           <ItemText>g_ldlq52_cur_set</ItemText>
+        </Ww>
+        <Ww>
+          <count>47</count>
+          <WinNumber>2</WinNumber>
+          <ItemText>g_luen_emf_ok</ItemText>
+        </Ww>
+        <Ww>
+          <count>48</count>
+          <WinNumber>2</WinNumber>
+          <ItemText>g_luen60_sensorless</ItemText>
+        </Ww>
+        <Ww>
+          <count>49</count>
+          <WinNumber>2</WinNumber>
+          <ItemText>g_luen60_speed_target_rpm</ItemText>
+        </Ww>
+        <Ww>
+          <count>50</count>
+          <WinNumber>2</WinNumber>
+          <ItemText>g_pll_comp_en</ItemText>
+        </Ww>
+        <Ww>
+          <count>51</count>
+          <WinNumber>2</WinNumber>
+          <ItemText>g_luen60_sl_active</ItemText>
         </Ww>
       </WatchWindow2>
       <Tracepoint>
@@ -2238,6 +2264,30 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
+      <PathWithFileName>..\..\ws\foc_luen.c</PathWithFileName>
+      <FilenameWithoutPath>foc_luen.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>10</GroupNumber>
+      <FileNumber>121</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
+      <PathWithFileName>..\..\ws\foc_60_luen.c</PathWithFileName>
+      <FilenameWithoutPath>foc_60_luen.c</FilenameWithoutPath>
+      <RteFlg>0</RteFlg>
+      <bShared>0</bShared>
+    </File>
+    <File>
+      <GroupNumber>10</GroupNumber>
+      <FileNumber>122</FileNumber>
+      <FileType>1</FileType>
+      <tvExp>0</tvExp>
+      <tvExpOptDlg>0</tvExpOptDlg>
+      <bDave2>0</bDave2>
       <PathWithFileName>..\..\ws\foc_24_dcal.c</PathWithFileName>
       <FilenameWithoutPath>foc_24_dcal.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
@@ -2245,7 +2295,7 @@
     </File>
     <File>
       <GroupNumber>10</GroupNumber>
-      <FileNumber>121</FileNumber>
+      <FileNumber>123</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -2257,7 +2307,7 @@
     </File>
     <File>
       <GroupNumber>10</GroupNumber>
-      <FileNumber>122</FileNumber>
+      <FileNumber>124</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -2269,7 +2319,7 @@
     </File>
     <File>
       <GroupNumber>10</GroupNumber>
-      <FileNumber>123</FileNumber>
+      <FileNumber>125</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -2281,7 +2331,7 @@
     </File>
     <File>
       <GroupNumber>10</GroupNumber>
-      <FileNumber>124</FileNumber>
+      <FileNumber>126</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -2293,7 +2343,7 @@
     </File>
     <File>
       <GroupNumber>10</GroupNumber>
-      <FileNumber>125</FileNumber>
+      <FileNumber>127</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -2305,7 +2355,7 @@
     </File>
     <File>
       <GroupNumber>10</GroupNumber>
-      <FileNumber>126</FileNumber>
+      <FileNumber>128</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -2317,7 +2367,7 @@
     </File>
     <File>
       <GroupNumber>10</GroupNumber>
-      <FileNumber>127</FileNumber>
+      <FileNumber>129</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -2329,7 +2379,7 @@
     </File>
     <File>
       <GroupNumber>10</GroupNumber>
-      <FileNumber>128</FileNumber>
+      <FileNumber>130</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -2341,7 +2391,7 @@
     </File>
     <File>
       <GroupNumber>10</GroupNumber>
-      <FileNumber>129</FileNumber>
+      <FileNumber>131</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -2353,7 +2403,7 @@
     </File>
     <File>
       <GroupNumber>10</GroupNumber>
-      <FileNumber>130</FileNumber>
+      <FileNumber>132</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
@@ -2365,7 +2415,7 @@
     </File>
     <File>
       <GroupNumber>10</GroupNumber>
-      <FileNumber>131</FileNumber>
+      <FileNumber>133</FileNumber>
       <FileType>1</FileType>
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>

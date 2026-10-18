@@ -94,6 +94,9 @@ static void CommRunner_StopFocModes(void)
     if (g_smo45_running) {
         Foc_Smo45_Stop();
     }
+    if (g_luen60_running) {
+        Foc_Luen60_Stop();
+    }
     if (g_foc_mode == FOC_MODE_ALIGN) {
         Foc_Stop();
     }
@@ -245,6 +248,13 @@ void CommRunner_SetMode(comm_runner_mode_t mode)
         Commutation_Stop();
         Foc_FlxId_Start();
         RUNNER_DBG("FLX53 (mode 53, flux identification)");
+        break;
+
+    case COMM_RUNNER_LUEN60:
+        CommRunner_StopFocModes();
+        Commutation_Stop();
+        Foc_Luen60_Start();
+        RUNNER_DBG("LUEN60 (mode 60, Luenberger sensorless)");
         break;
 
     default:
