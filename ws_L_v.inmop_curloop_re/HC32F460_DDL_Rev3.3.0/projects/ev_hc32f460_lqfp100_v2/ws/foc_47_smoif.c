@@ -15,8 +15,11 @@
  *   旁观   Foc_Smo_Step(前后两拍指令平均, 同源 Clarke 电流)
  *          -> Foc_Pll_Step(e_hat) -> Foc_Pll_Compare(θ_syn)   （RAMP/RUN 才喂）
  *
- * 全程不读编码器、不跑任何 PI；角度/频率/理论反电动势三个参照全部由程序
- * 给定（θ_syn / ω_syn / ω_syn·ψf），这就是"纯程序自检"的含义。
+ * 全程不跑任何 PI；角度/频率/理论反电动势三个参照全部由程序给定
+ * （θ_syn / ω_syn / ω_syn·ψf），这就是"纯程序自检"（判定 1）的含义。
+ * 判定 2（编码器裁判，可选）：RAMP/RUN 期间旁路读 TMRA_1（不参与控制），
+ * 同拍算 PLL 角−编码器电角（mode 24 offset 还原）与编码器增量转速，由
+ * foc_obs.c 聚合为 g_smo47_enc_ok；未跑 mode 24 时自动关闭（enc_avail=0）。
  *******************************************************************************
  */
 
@@ -24,14 +27,23 @@
 #include "foc_smo.h"
 #include "foc_pll.h"
 #include "foc_calib.h"
+#include "foc_24_dcal.h"
 #include "foc_math.h"
 #include "tmr4_pwm.h"
+#include "encoder.h"
 #include "motor_config.h"
+#include "hc32_ll_tmra.h"
 
 #define FOC47_ISR_DT_US     (1000000u / FOC_ISR_HZ)
 #define FOC47_ALIGN_TICKS   ((uint32_t)FOC47_ALIGN_MS * (uint32_t)FOC_ISR_HZ / 1000u)
 #define FOC47_STEADY_TICKS  ((uint32_t)FOC47_STEADY_MS * (uint32_t)FOC_ISR_HZ / 1000u)
 #define FOC47_RAD2DEG       57.2958f
+
+/* 判定 2（编码器裁判）内部参数 */
+#define FOC47_ENC_DELTA_MAX       100     /* 每拍计数增量安全钳位（防毛刺） */
+#define FOC47_ENC_FILT_ALPHA      0.02f   /* 角差 EMA（20kHz 下 τ≈2.5ms） */
+#define FOC47_ENC_RPM_FILT_ALPHA  0.002f  /* 转速 EMA（τ≈25ms，压量化噪声：
+                                           单拍 ±1 计数=±293rpm） */
 
 volatile uint8_t  g_smo47_running           = 0u;
 volatile uint8_t  g_smo47_state             = FOC47_STEP_IDLE;
@@ -61,6 +73,18 @@ volatile uint8_t  g_smo47_steady            = 0u;
 volatile uint8_t  g_smo47_jdg_ok            = 0u;   /* foc_obs.c 主循环维护 */
 volatile uint8_t  g_smo47_jdg_fail          = 0u;
 
+/* 判定 2：编码器裁判（输入 ISR 同拍算，聚合在 foc_obs.c） */
+volatile uint8_t  g_smo47_enc_avail         = 0u;
+volatile uint8_t  g_smo47_enc_ok            = 0u;
+volatile uint8_t  g_smo47_enc_fail          = 0u;
+volatile float    g_smo47_enc_theta_err_deg      = 0.0f;
+volatile float    g_smo47_enc_theta_err_filt_deg = 0.0f;
+volatile float    g_smo47_enc_rpm_filt           = 0.0f;
+volatile float    g_smo47_enc_theta_deg          = 0.0f;
+volatile float    g_smo47_enc_theta_win_deg = FOC47_ENC_THETA_WIN_DEG;
+volatile float    g_smo47_enc_rpm_err_pct   = FOC47_ENC_RPM_ERR_PCT;
+volatile float    g_smo47_enc_theta_bias_deg = FOC47_ENC_THETA_BIAS_DEG;
+
 /* 运行内部状态 */
 static uint32_t s_state_ticks;      /* 当前状态已过拍数 */
 static float    s_theta_syn_rad;    /* 拖动磁场角 (rad, [0,2PI)) */
@@ -70,6 +94,9 @@ static float    s_zero_u_ma;        /* Foc_Calib 锁定的三相零偏 */
 static float    s_zero_v_ma;
 static float    s_zero_w_ma;
 static float    s_f_run_prev;       /* 检测 Watch 改目标 -> 重开稳定窗 */
+static int32_t  s_enc_offset;       /* mode 24 锁定的编码器零位（Start 捕获） */
+static uint16_t s_enc_prev_hw;      /* 上一拍 TMRA_1 原始计数 */
+static uint8_t  s_enc_init;         /* 编码器裁判首拍惰性初始化标记 */
 
 static void Smo47_ResetLoopState(void)
 {
@@ -81,6 +108,7 @@ static void Smo47_ResetLoopState(void)
     s_zero_v_ma = 0.0f;
     s_zero_w_ma = 0.0f;
     s_f_run_prev = g_smo47_f_run_hz;
+    s_enc_init = 0u;
 }
 
 static void Smo47_ClearObservables(void)
@@ -98,6 +126,12 @@ static void Smo47_ClearObservables(void)
     g_smo47_steady = 0u;
     g_smo47_jdg_ok = 0u;
     g_smo47_jdg_fail = 0u;
+    g_smo47_enc_ok = 0u;
+    g_smo47_enc_fail = 0u;
+    g_smo47_enc_theta_err_deg = 0.0f;
+    g_smo47_enc_theta_err_filt_deg = 0.0f;
+    g_smo47_enc_rpm_filt = 0.0f;
+    g_smo47_enc_theta_deg = 0.0f;
 }
 
 static void Smo47_ClearCurrentFeedback(void)
@@ -121,12 +155,26 @@ static stc_i_data_t Smo47_CorrectedData(const stc_i_data_t *pData)
 
 void Foc_Smo47_Start(void)
 {
+    foc_dcal24_result_t calib;
+
     Foc_Core_ClearFault();
     Smo47_ResetLoopState();
     Smo47_ClearObservables();
     Foc_Smo_Reset();   /* SMO 旁观者状态清零（观测电流/e_hat/判定） */
     Foc_Pll_Reset();   /* PLL 旁观者状态清零（θ̂/ω̂/诊断） */
     Foc_Calib_Start(); /* 零偏自校准：CALIB 状态内三相零矢量窗口喂样 */
+
+    /* 判定 2 备妥检查：mode 24 校准结果在（RAM 掉电即失）才启用编码器裁判。
+     * offset 用全局 s_align_offset（mode 24 SetAlignOffset 已写），此处捕获
+     * 一份快照，运行期不被其他模式改写影响。 */
+    if (Foc_Dcal_GetResult(&calib) != 0u) {
+        s_enc_offset = calib.offset;
+        g_smo47_enc_avail = 1u;
+    } else {
+        s_enc_offset = 0;
+        g_smo47_enc_avail = 0u;
+        FOC47_LOG("NOTE: enc judge OFF (run mode 24 first)");
+    }
 
     g_foc_mode      = FOC_MODE_ALIGN;
     g_foc_phase     = 4u;
@@ -142,12 +190,14 @@ void Foc_Smo47_Start(void)
     g_smo47_running = 1u;
     g_smo47_state = FOC47_STEP_CALIB;
     Foc_Core_PwmStart();   /* 50/50/50 零矢量，CALIB 直接复用 */
-    FOC47_LOG("start f=%d mHz ramp=%d mHz/s v0=%d mV kvf=%d mV/khz vmax=%d mV",
+    FOC47_LOG("start f=%d mHz ramp=%d mHz/s v0=%d mV kvf=%d mV/khz vmax=%d mV"
+              " enc=%u",
               (int)(g_smo47_f_run_hz * 1000.0f),
               (int)(g_smo47_f_ramp_hz_s * 1000.0f),
               (int)(g_smo47_v0_v * 1000.0f),
               (int)(g_smo47_kvf_v_khz * 1000.0f),
-              (int)(g_smo47_v_max_v * 1000.0f));
+              (int)(g_smo47_v_max_v * 1000.0f),
+              (unsigned)g_smo47_enc_avail);
 }
 
 void Foc_Smo47_Stop(void)
@@ -291,6 +341,60 @@ void Foc_Smo47_Step(const stc_i_data_t *pData)
         /* 角度比较必须同拍新值（250Hz 时每拍 4.5°，喂上一拍 g_smo47_
          * theta_syn_deg 会引入固定 4.5° 假差），mode 45 同款处理 */
         Foc_Pll_Compare(s_theta_syn_rad * FOC47_RAD2DEG);
+
+        /* ---- 判定 2 输入：编码器裁判（需先跑 mode 24，纯旁观不参与控制）--
+         * 同拍角差 = PLL 角 − 编码器电角（观测误差 + mode 24 锁点残差，不含
+         * 负载角 δ）；转速 = 每拍编码器增量 EMA（mode 45 同款 int16 回绕差）。
+         * 聚合判定在 foc_obs.c。 */
+        if (g_smo47_enc_avail != 0u) {
+            uint16_t hw = TMRA_GetCountValue(CM_TMRA_1);
+            int32_t d_hw;
+            float rpm_raw, enc_deg, err;
+
+            if (s_enc_init == 0u) {
+                s_enc_prev_hw = hw;
+                s_enc_init = 1u;
+                d_hw = 0;
+            } else {
+                d_hw = (int32_t)(int16_t)((uint16_t)(hw - s_enc_prev_hw));
+                s_enc_prev_hw = hw;
+                if (d_hw > FOC47_ENC_DELTA_MAX) {
+                    d_hw = FOC47_ENC_DELTA_MAX;
+                }
+                if (d_hw < -FOC47_ENC_DELTA_MAX) {
+                    d_hw = -FOC47_ENC_DELTA_MAX;
+                }
+                d_hw *= (int32_t)g_foc_enc_dir;
+            }
+            rpm_raw = (float)d_hw * (60.0f * (float)FOC_ISR_HZ
+                                   / (float)ENCODER_CPR);
+            g_smo47_enc_rpm_filt += FOC47_ENC_RPM_FILT_ALPHA
+                                  * (rpm_raw - g_smo47_enc_rpm_filt);
+
+            enc_deg = (float)Foc_Core_ModPos(
+                          ((int32_t)hw * (int32_t)g_foc_enc_dir) - s_enc_offset,
+                          (int32_t)ENCODER_CPR)
+                    * (360.0f * (float)FOC_POLE_PAIRS / (float)ENCODER_CPR);
+            /* 折到 [0,360) 电角域，与 g_pll_theta_park_deg 同域可叠看/作差
+             * （正数域整圈截断，无负半段截断问题） */
+            enc_deg -= 360.0f * (float)((int32_t)(enc_deg * (1.0f / 360.0f)));
+            g_smo47_enc_theta_deg = enc_deg;
+            err = g_pll_theta_park_deg - enc_deg;
+            /* 回绕到 [-180,180]：整圈截断 + 条件修正。C 向零截断会把
+             * (-540,-180) 段漏折（实测 eE 跳出 -378/-227），enc_deg 域
+             * [0,360×PP) 下 while 至多迭代一次。 */
+            err -= 360.0f * (float)((int32_t)((err + 180.0f)
+                                              * (1.0f / 360.0f)));
+            while (err > 180.0f) {
+                err -= 360.0f;
+            }
+            while (err < -180.0f) {
+                err += 360.0f;
+            }
+            g_smo47_enc_theta_err_deg = err;
+            g_smo47_enc_theta_err_filt_deg += FOC47_ENC_FILT_ALPHA
+                    * (err - g_smo47_enc_theta_err_filt_deg);
+        }
     }
     s_v_alpha_prev = valpha;
     s_v_beta_prev = vbeta;
@@ -315,22 +419,28 @@ void Foc_Smo47_Step(const stc_i_data_t *pData)
  *===========================================================================*/
 int Foc_Smo47_VofaFill(int32_t *cur)
 {
-    cur[0]  = (int32_t)(g_smo47_f_cmd_hz * 1000.0f);            /* mHz -> Hz */
-    cur[1]  = (int32_t)(g_smo47_v_drag_v * 1000.0f);            /* mV -> V */
-    cur[2]  = (int32_t)(g_smo47_theta_syn_deg * 1000.0f);       /* mdeg -> deg */
-    cur[3]  = (int32_t)(g_pll_theta_rotor_deg * 1000.0f);       /* mdeg -> deg */
-    cur[4]  = (int32_t)(g_pll_diag_theta_err_deg * 1000.0f);    /* mdeg -> deg */
-    cur[5]  = (int32_t)(g_pll_diag_theta_err_filt_deg * 1000.0f);
-    cur[6]  = (int32_t)(g_pll_omega_hat_rpm * 1000.0f);         /* mrpm -> rpm */
-    cur[7]  = (int32_t)(g_pll_omega_out_rpm * 1000.0f);         /* mrpm -> rpm */
-    cur[8]  = (int32_t)(g_smo47_omega_ref_rpm * 1000.0f);       /* mrpm -> rpm */
-    cur[9]  = (int32_t)((g_pll_omega_out_rpm - g_smo47_omega_ref_rpm)
-                        * 1000.0f);                             /* mrpm -> rpm */
-    cur[10] = (int32_t)(g_smo_diag_e_mag_v * 1000.0f);          /* mV -> V */
-    cur[11] = (int32_t)(g_smo_diag_e_expect_v * 1000.0f);       /* mV -> V */
-    cur[12] = (int32_t)(g_smo_diag_e_on_q_v * 1000.0f);         /* mV -> V */
-    cur[13] = (int32_t)(g_smo_diag_e_on_d_v * 1000.0f);         /* mV -> V */
+    /* ch0-3   PLL / 编码器 转速+电角度（对比四件套）
+     * ch4-6   频率对比：转差 / 给定差 / 给定基准
+     * ch7-9   相位对比：PLL−编码器 原始/滤波(J5)、PLL−拖动磁场(含δ, J3)
+     * ch10-12 幅值对比：实测 |e| / 理论 |e| / 比值
+     * ch13-15 拖动 iq、判定 1、判定 2 */
+    cur[0]  = (int32_t)(g_pll_omega_out_rpm * 1000.0f);         /* mrpm */
+    cur[1]  = (int32_t)(g_pll_theta_park_deg * 1000.0f);        /* mdeg */
+    cur[2]  = (int32_t)(g_smo47_enc_rpm_filt * 1000.0f);        /* mrpm */
+    cur[3]  = (int32_t)(g_smo47_enc_theta_deg * 1000.0f);       /* mdeg */
+    cur[4]  = (int32_t)((g_pll_omega_out_rpm - g_smo47_enc_rpm_filt)
+                        * 1000.0f);                             /* mrpm */
+    cur[5]  = (int32_t)((g_pll_omega_out_rpm - g_smo47_omega_ref_rpm)
+                        * 1000.0f);                             /* mrpm */
+    cur[6]  = (int32_t)(g_smo47_omega_ref_rpm * 1000.0f);       /* mrpm */
+    cur[7]  = (int32_t)(g_smo47_enc_theta_err_deg * 1000.0f);   /* mdeg */
+    cur[8]  = (int32_t)(g_smo47_enc_theta_err_filt_deg * 1000.0f);  /* mdeg */
+    cur[9]  = (int32_t)(g_pll_diag_theta_err_filt_deg * 1000.0f);   /* mdeg */
+    cur[10] = (int32_t)(g_smo_diag_e_mag_v * 1000.0f);          /* mV */
+    cur[11] = (int32_t)(g_smo_diag_e_expect_v * 1000.0f);       /* mV */
+    cur[12] = (int32_t)(g_smo_diag_e_ratio * 1000.0f);          /* x1000 */
+    cur[13] = (int32_t)(g_smo47_iq_ma);                         /* mA */
     cur[14] = (int32_t)(g_smo47_jdg_ok * 1000.0f);              /* 0/1 */
-    cur[15] = (int32_t)(g_smo47_iq_ma);                         /* mA -> A */
+    cur[15] = (int32_t)(g_smo47_enc_ok * 1000.0f);              /* 0/1 */
     return 16;
 }

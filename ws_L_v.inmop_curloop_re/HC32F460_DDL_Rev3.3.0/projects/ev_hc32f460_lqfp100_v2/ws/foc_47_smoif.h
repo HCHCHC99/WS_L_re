@@ -10,28 +10,44 @@
  *   给定角度 θ_syn（Step 内积分 2π·f_cmd·Ts）、给定电角速度 ω_syn=2π·f_cmd、
  *   给定理论反电动势 ω_syn·ψf（ψf 取 SMO 模型值）。
  *
- * 四条判据（全部只依赖程序给定值，不依赖编码器）：
+ * 判定 1（纯程序，不依赖编码器）四条判据（全部只依赖程序给定值）：
  *   J1 转速：g_pll_omega_out_rpm ≈ f_cmd×60/PP（±g_smo47_jdg_omega_err_pct%）
  *   J2 幅值：|e_hat| ≈ ω_syn·ψf —— SMO 内建 C1（e_ratio∈[0.85,1.08]）
  *   J3 相位：PLL 角 − θ_syn 滤波值落在已知滞后窗（comp_en=0 默认
  *            [g_smo47_jdg_theta_min_deg, g_smo47_jdg_theta_max_deg]=[-60,+5]；
- *            置 g_pll_comp_en=1 补偿后应收窄到 ≈0，可手动收紧窗）
+ *            置 g_pll_comp_en=1 补偿后应收窄到 ≈0）。[!] 窗默认假设轻载
+ *            （δ≈0）；大负载角强拖工况 th≈−(δ+PLL 滞后) 必出窗，把上下限
+ *            Watch 挪到实测值附近（如 [-95,-70]）即恢复判定
  *   J4 SMO：g_smo_emf_ok（内建判定，参照同为 θ_syn/ω_syn，含 1000ms hold）
  * 聚合结果 g_smo47_jdg_ok / g_smo47_jdg_fail 由 foc_obs.c 主循环维护
  * （各分量自带滤波/hold，聚合层不再另加 hold）。
  *
+ * 判定 2（编码器裁判，可选，需先跑 mode 24；与判定 1 相互独立）：
+ *   J5 角度：PLL 角 − 编码器电角（mode 24 offset 还原，ISR 同拍）滤波值
+ *            扣 g_smo47_enc_theta_bias_deg（系统偏差 = PLL 滞后 + mode 24
+ *            锁点残差；跑稳后把实测 eE 稳态值填入）后 ∈ ±win（默认 20°）。
+ *            PLL/编码器测的都是转子角，不含负载角 δ。enc_ok 迟滞防抖：
+ *            进入需 |e|≤win，退出需 |e|>1.5×win（V/F 强拖固有功角小摆动
+ *            会反复扫过窗边界，迟滞防判定翻转；fail 掩码保持实时）
+ *   J6 转速：编码器实测机械转速 ≈ f_cmd×60/PP（±g_smo47_enc_rpm_err_pct%），
+ *            真失步检测——拖动给定还在走而编码器转速掉下来即置失败。
+ * 聚合结果 g_smo47_enc_ok / g_smo47_enc_fail 同由 foc_obs.c 主循环维护；
+ * 未跑 mode 24（本次上电后）时 enc_avail=0，enc_ok 恒 0，不影响判定 1。
+ *
  * 与 mode 45 的关系：45 = 有感闭环 + SMO/PLL 旁观（编码器裁判）；
- * 47 = 开环强拖 + SMO/PLL 旁观（程序给定值裁判）。观测器内核同一套
- * （foc_smo.c / foc_pll.c），模型参数（k/ψf/lpf_alpha/ω_n…）通用。
+ * 47 = 开环强拖 + SMO/PLL 旁观（程序给定值裁判，可选编码器裁判）。
+ * 观测器内核同一套（foc_smo.c / foc_pll.c），模型参数（k/ψf/lpf_alpha/ω_n…）通用。
  *
  * ==============================================================================
  *   模式速览卡   MODE 47   开环强拖 + SMO/PLL 纯程序自检
  *   本卡是本模式唯一事实源；代码内注释与本卡冲突时，以本卡为准
  * ==============================================================================
  *   入口   comm_mode = 47
- *   前置   无（不依赖 mode 24 / 编码器；启动自带 Foc_Calib 零偏窗：三相
- *          零矢量 200 拍 skip + 4000 拍平均 ≈ 210ms，需电机端零电流窗口：
- *          与 mode 24/30 同款要求——测零偏期间相线里不能有电流通路差异）
+ *   前置   判定 1 无前置（不依赖 mode 24 / 编码器；启动自带 Foc_Calib 零偏
+ *          窗：三相零矢量 200 拍 skip + 4000 拍平均 ≈ 210ms，需电机端零电流
+ *          窗口：与 mode 24/30 同款要求——测零偏期间相线里不能有电流通路
+ *          差异）。判定 2（编码器裁判）需先跑 mode 24：校准结果 RAM 掉电
+ *          即失，每次上电后都要重跑；未跑时自动降级（enc_avail=0）
  *   流程   CALIB(零矢量采零偏 ~210ms) -> ALIGN(θ_syn=0 直流吸附 800ms)
  *          -> RAMP(f 从 0 爬到 g_smo47_f_run_hz，限速 g_smo47_f_ramp_hz_s)
  *          -> RUN(匀速稳态，判定窗口打开)
@@ -53,6 +69,9 @@
  *       g_smo47_jdg_omega_err_pct   15      %        J1 转速判据容差
  *       g_smo47_jdg_theta_min_deg   -60     deg      J3 相位窗下限（comp_en=0）
  *       g_smo47_jdg_theta_max_deg   +5      deg      J3 相位窗上限（comp_en=0）
+ *       g_smo47_enc_theta_win_deg   20      deg      J5 角度窗（判定 2 编码器裁判）
+ *       g_smo47_enc_rpm_err_pct     15      %        J6 转速容差（判定 2）
+ *       g_smo47_enc_theta_bias_deg  0       deg      J5 偏差修正（实测稳态 eE 填入）
  *   [!] 置 g_pll_comp_en=1 后 PLL 补偿角生效，J3 应收窄到 ≈0±锁点偏置，
  *       此时把上面两个窗改紧（如 [-20,+20]）才算严格验收。
  * ------------------------------------------------------------------------------
@@ -73,47 +92,61 @@
  *   (*) g_smo47_jdg_ok                 聚合判定：1=四条判据全部通过
  *       g_smo47_jdg_fail               失败掩码 bit0 未稳态 / bit1 J1 转速 /
  *                                      bit2 J3 相位 / bit3 J4 SMO emf
+ *   (*) g_smo47_enc_ok                 判定 2 聚合：1=编码器裁判通过（J5+J6，
+ *                                      需先 mode 24）
+ *       g_smo47_enc_fail               判定 2 掩码 bit0 未备好/未稳态 /
+ *                                      bit1 J5 角度 / bit2 J6 转速
+ *       g_smo47_enc_avail              1=mode 24 校准在，编码器裁判已备妥
+ *       g_smo47_enc_theta_err_filt_deg PLL 角−编码器电角滤波值 (deg, J5 量)
+ *       g_smo47_enc_theta_err_deg      同上原始值（同拍，看纹波用）
+ *       g_smo47_enc_theta_deg          编码器电角度 (deg,[0,360)，ISR 同拍刷新)
+ *       g_smo47_enc_rpm_filt           编码器实测机械转速 (rpm, J6 量)
  *       g_smo47_du/dv/dw               三相占空比观测量 (%)
  *       （SMO/PLL 诊断量沿用 foc_smo.h / foc_pll.h 全套：
  *         g_smo_diag_* / g_smo_jdg_* / g_pll_* —— 参照系已换成本模式的
  *         θ_syn/ω_syn，语义见两头文件，不再重复列表）
  * ------------------------------------------------------------------------------
  *   VOFA 通道 -- 固定 16ch，填充见 Foc_Smo47_VofaFill
+ *   （ch0-3 四件套对比；ch4-6 频率；ch7-9 相位；ch10-12 幅值；ch13-15 辅助/判定）
  * ------------------------------------------------------------------------------
- *       通道  含义                   单位     备注
- *       ----- ---------------------- -------- ----------------------------------
- *       ch0   指令电频率             Hz       RAMP 段可见爬坡
- *       ch1   拖动电压幅值           V        V/f 曲线
- *       ch2   拖动磁场角             deg      θ_syn
- *       ch3   PLL 转子角估计         deg      g_pll_theta_rotor_deg
- *       ch4   PLL 角差原始           deg      θ_park − θ_syn（含全部已知滞后）
- *   (*) ch5   PLL 角差滤波           deg      主判据 J3：comp_en=0 应为稳定
- *                                      负值常数；comp_en=1 应≈0。缓慢漂移/摆
- *                                      动=失步前兆
- *       ch6   PLL 转速估计原始       rpm
- *       ch7   PLL 转速估计低通       rpm      J1 判据用这条
- *   (*) ch8   给定转速               rpm      程序给定值（J1 参照）
- *   (*) ch9   转速差 = ch7 − ch8     rpm      主判据 J1：稳态应≈0（±15%内）
- *       ch10  |e_hat|                V        SMO 实测反电动势幅值
- *   (*) ch11  理论幅值 ω_syn·ψf      V        主判据 J2 参照（给定频率推得）
- *       ch12  e_on_q 投影            V       稳态应为常数（无电频率纹波）
- *       ch13  e_on_d 投影            V       稳态应为常数
- *   (*) ch14  聚合判定               0/1      J1-J4 全过=1
- *       ch15  iq（拖动系）           A        拖动转矩电流；摆动加大=接近失步
+ *       通道  含义                       单位  备注
+ *       ----- -------------------------- ----- --------------------------------
+ *       ch0   PLL 转速（低通）           rpm   判定 1 观测量（=RTT 打印 wO）
+ *       ch1   PLL 电角度                 deg   [0,360)，g_pll_theta_park_deg
+ *       ch2   编码器转速                 rpm   判定 2 观测量（需先 mode 24）
+ *       ch3   编码器电角度               deg   [0,360)，与 ch1 同域可叠看
+ *       ch4   转速差 PLL−编码器          rpm   频率对比主通道（J6 相对量）
+ *   (*) ch5   转速差 PLL−给定            rpm   判定 1 J1：稳态应≈0（±15%内）
+ *       ch6   给定转速                   rpm   程序给定值（RAMP 爬坡参照）
+ *       ch7   角差 PLL−编码器 原始       deg   同拍差，看纹波/量化噪声
+ *   (*) ch8   角差 PLL−编码器 滤波       deg   判定 2 主判据 J5：应为稳定小常
+ *                                                      数；漂移/摆动=失步前兆
+ *       ch9   角差 PLL−拖动磁场 滤波     deg   含负载角 δ（判定 1 J3 量，工作
+ *                                                      点属性，非观测器误差）
+ *   (*) ch10  |e_hat|                    mV    SMO 实测反电动势幅值
+ *   (*) ch11  理论幅值 ω_syn·ψf          mV    判定 1 J2 参照：应与 ch10 重合
+ *       ch12  幅值比 ×1000               --    1000=1.0（J2/J4 归一化量）
+ *       ch13  iq（拖动系）               mA    拖动转矩电流；摆动加大=接近失步
+ *   (*) ch14  判定 1 聚合                0/1   J1-J4 全过=1（无编码器验收）
+ *   (*) ch15  判定 2 聚合                0/1   J5+J6 全过=1（编码器裁判，
+ *                                                      需先 mode 24）
  * ------------------------------------------------------------------------------
  *   判据与坑
  * ------------------------------------------------------------------------------
- *   (*) 验收流程：进 mode 47 -> 等 ch0 爬到 250Hz 且 ch14=1 -> 看 ch5/ch9
- *       平直、ch10/ch11 重合。RTT 有 5ms 节流 [SMO47] 行与判定 OK/FAIL 事件行
- *       （foc_obs.c），失败原因读 g_smo47_jdg_fail 位。
+ *   (*) 验收流程：进 mode 47 -> 等 ch0/ch2 爬到 1500rpm 且 ch6 走平 且 ch14=1
+ *       -> 看 ch5（J1 转速差）/ch8（J5 编码器角差）平直、ch10/ch11 重合、
+ *       ch1/ch3 同步扫。RTT 有 5ms 节流 [SMO47] 行与判定 OK/FAIL 事件行
+ *       （foc_obs.c），失败原因读 g_smo47_jdg_fail / g_smo47_enc_fail 位。
  *   [!] ALIGN 吸附电流 ≈ V0/R = 0.5V/0.1Ω ≈ 5A，默认 800ms 与 mode 24 同量级，
  *       长时间停在 ALIGN/反复重进会发热；带载会更大，测试请摘负载。
- *   [!] 失步签名：ch9 持续偏离 0、ch5 缓慢漂移或周期性摆动、ch15 摆动加大。
+ *   [!] 失步签名：ch4/ch5 持续偏离 0（转差出现）、ch8 缓慢漂移或周期性摆动
+ *       （角差发散）、ch13 摆动加大（转矩电流振荡）。
  *       处置：降 g_smo47_f_ramp_hz_s、或加 g_smo47_v0_v（电压富余=同步裕度）。
  *       V0 过大的反面是电流变大（V−e 全压在 R 上）。
- *   [!] 本模式读不到真实转子角——这是特性（纯程序自检，裁判就是给定值）。
- *       要编码器当裁判的版本用 mode 45。也正因此，47 不写任何编码器相关量，
- *       g_smo45_rotor_deg / encoder.h 与本模式无关。
+ *   [!] 控制路径全程不读编码器（纯程序自检的核心不变，裁判=给定值）；判定 2
+ *       的 TMRA_1 读取是纯旁观（RAMP/RUN 才算，不参与控制）。J5/J6 误差不含
+ *       负载角 δ：PLL 与编码器测的都是转子角，δ 只在 θ_syn 与转子之间。
+ *       要"编码器闭环拖动 + SMO/PLL 旁观"的版本用 mode 45。
  *   [!] SMO 固定 k 的可用验证窗 ≈ 1300~3400rpm（k/e_peak≈1.5~3.5）。默认
  *       1500rpm 在窗内；想拖更高/更低转速先看 foc_smo.h 的窗口推导，别盲改。
  *   [!] J2/J3 的 SMO 内建判定在低转速（<900rpm 给定）不评估——爬频段失败
@@ -168,6 +201,12 @@ extern "C" {
 #define FOC47_JDG_THETA_MIN_DEG (-60.0f)
 #define FOC47_JDG_THETA_MAX_DEG (5.0f)
 
+/* 判定 2：编码器裁判窗（J5/J6；需先跑 mode 24，见速览卡） */
+#define FOC47_ENC_THETA_WIN_DEG  20.0f   /* J5：PLL−编码器角差滤波窗 (deg) */
+#define FOC47_ENC_RPM_ERR_PCT    15.0f   /* J6：编码器转速容差 (%) */
+#define FOC47_ENC_THETA_BIAS_DEG 0.0f    /* J5 系统偏差修正（PLL 滞后 +
+                                            mode 24 锁点残差，实测后填） */
+
 extern volatile uint8_t  g_smo47_running;
 extern volatile uint8_t  g_smo47_state;
 extern volatile uint8_t  g_smo47_evt;
@@ -195,6 +234,21 @@ extern volatile float    g_smo47_dw;
 extern volatile uint8_t  g_smo47_steady;         /* 1=达速后稳定窗已过 */
 extern volatile uint8_t  g_smo47_jdg_ok;         /* 聚合判定（foc_obs.c 维护） */
 extern volatile uint8_t  g_smo47_jdg_fail;       /* 失败掩码（同上） */
+
+/* 判定 2：编码器裁判（输入由 ISR 同拍计算，聚合在 foc_obs.c） */
+extern volatile uint8_t  g_smo47_enc_avail;      /* 1=mode 24 校准在 */
+extern volatile uint8_t  g_smo47_enc_ok;         /* 1=J5/J6 全过（编码器裁判） */
+extern volatile uint8_t  g_smo47_enc_fail;       /* bit0 未备好/未稳态 bit1 角度
+                                                    bit2 转速 */
+extern volatile float    g_smo47_enc_theta_err_deg;      /* PLL−编码器电角 (deg) */
+extern volatile float    g_smo47_enc_theta_err_filt_deg; /* 同上 EMA 滤波 (J5 量) */
+extern volatile float    g_smo47_enc_rpm_filt;           /* 编码器实测转速 (rpm) */
+extern volatile float    g_smo47_enc_theta_deg;          /* 编码器电角度 (deg,[0,360)) */
+
+/* Watch 可调（判定 2 窗口） */
+extern volatile float    g_smo47_enc_theta_win_deg;      /* J5 角度窗 (deg) */
+extern volatile float    g_smo47_enc_rpm_err_pct;        /* J6 转速容差 (%) */
+extern volatile float    g_smo47_enc_theta_bias_deg;     /* J5 偏差修正 (deg) */
 
 void Foc_Smo47_Start(void);
 void Foc_Smo47_Stop(void);

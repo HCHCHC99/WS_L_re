@@ -268,7 +268,9 @@ void Foc_Obs_Task(void)
      *   bit1 J1 转速：|ω_out−ω_ref| > ω_ref×g_smo47_jdg_omega_err_pct%
      *   bit2 J3 相位：g_pll_diag_theta_err_filt_deg 越出
      *        [g_smo47_jdg_theta_min_deg, g_smo47_jdg_theta_max_deg]
-     *        （g_pll_comp_en=0 默认 [-60,+5]；开补偿后应收紧窗）
+     *        （g_pll_comp_en=0 默认 [-60,+5]；开补偿后应收紧窗。窗默认假设
+     *        轻载 δ≈0；大负载角强拖 th≈−(δ+PLL 滞后)，Watch 挪窗到实测附近
+     *        如 [-95,-70]）
      *   bit3 J4 SMO：g_smo_emf_ok 未过（含 J2 ratio 窗 [0.85,1.08]）
      */
     if (g_smo47_running) {
@@ -280,16 +282,19 @@ void Foc_Obs_Task(void)
 
         /* ---- mode47 数据快照 RTT 打印（5ms 节流，供复制粘贴判读） ----
          * st=状态 f=指令电频率 wR=给定转速 wO=PLL 转速估计 dW=转速差(判据 J1)
-         * e=|e_hat|/理论幅值(判据 J2) th=PLL角差滤波(判据 J3) jdg=聚合判定 */
+         * e=|e_hat|/理论幅值(判据 J2) th=PLL角差滤波(判据 J3)
+         * wE=编码器实测转速 eE=PLL−编码器角差滤波(判定2, 先 mode 24)
+         * jdg=判定1/判定2 fail=各自失败掩码 */
         {
             static uint32_t s_smo47_print_t0 = 0;
             uint32_t now = (uint32_t)tickTimer_GetCount();
-            char b1[14], b2[14], b3[14], b4[14];
+            char b1[14], b2[14], b3[14], b4[14], b5[14], b6[14];
 
             if ((uint32_t)(now - s_smo47_print_t0) >= 5u) {
                 s_smo47_print_t0 = now;
                 OBS_DBG("[SMO47] t=%u st=%u f=%d mHz wR=%d rpm wO=%s rpm"
-                        " dW=%d mrpm e=%s/%s V th=%s deg jdg=%u fail=0x%02X",
+                        " dW=%d mrpm e=%s/%s V th=%s deg"
+                        " wE=%s rpm eE=%s deg jdg=%u/%u fail=0x%02X/0x%02X",
                         (unsigned)now,
                         (unsigned)g_smo47_state,
                         (int)(g_smo47_f_cmd_hz * 1000.0f),
@@ -300,8 +305,12 @@ void Foc_Obs_Task(void)
                         Pll_Fmt1000(b2, g_smo_diag_e_mag_v),
                         Pll_Fmt1000(b3, g_smo_diag_e_expect_v),
                         Pll_Fmt1000(b4, g_pll_diag_theta_err_filt_deg),
+                        Pll_Fmt1000(b5, g_smo47_enc_rpm_filt),
+                        Pll_Fmt1000(b6, g_smo47_enc_theta_err_filt_deg),
                         (unsigned)g_smo47_jdg_ok,
-                        (unsigned)g_smo47_jdg_fail);
+                        (unsigned)g_smo47_enc_ok,
+                        (unsigned)g_smo47_jdg_fail,
+                        (unsigned)g_smo47_enc_fail);
             }
         }
 
@@ -351,6 +360,80 @@ void Foc_Obs_Task(void)
                             ((g_smo47_jdg_fail & 0x02u) ? " [omega]" : ""),
                             ((g_smo47_jdg_fail & 0x04u) ? " [theta]" : ""),
                             ((g_smo47_jdg_fail & 0x08u) ? " [emf]" : ""));
+                }
+            }
+        }
+
+        /* ---- 判定 2：编码器裁判聚合（需先跑 mode 24；与判定 1 独立） ----
+         * 输入是 ISR 同拍算好的滤波量（见 foc_47_smoif.c Step）：
+         *   bit0 未备好（未跑 mode 24）或未稳态 —— 前提
+         *   bit1 J5 角度：|enc_err_filt − bias| > win（默认 20°）
+         *   bit2 J6 转速：|g_smo47_enc_rpm_filt − ω_ref| > ω_ref×15%
+         * efail 掩码实时刷新供诊断；enc_ok 本体带迟滞（进入 ≤win、退出
+         * >1.5×win）——V/F 强拖固有功角小摆动会反复扫过窗边界，不加迟滞
+         * 判定会来回翻转 */
+        {
+            static uint8_t s_smo47_enc_prev = 0u;
+            uint8_t efail = 0u;
+            float e_err, e_b;
+
+            if ((g_smo47_enc_avail == 0u) || (g_smo47_steady == 0u)) {
+                efail |= 0x01u;
+            } else {
+                /* J5 判定量 = 滤波角差 − bias：PLL 滞后 + mode 24 锁点残差
+                 * 是系统偏差（跑稳后把实测 eE 稳态值填入 bias），先扣掉只
+                 * 判动态误差 */
+                e_b = g_smo47_enc_theta_err_filt_deg
+                    - g_smo47_enc_theta_bias_deg;
+                e_err = (e_b < 0.0f) ? -e_b : e_b;
+                if (e_err > g_smo47_enc_theta_win_deg) {
+                    efail |= 0x02u;
+                }
+                e_err = (g_smo47_enc_rpm_filt - g_smo47_omega_ref_rpm) * 100.0f
+                      / ((g_smo47_omega_ref_rpm != 0.0f)
+                         ? g_smo47_omega_ref_rpm : 1.0f);
+                if (e_err < 0.0f) {
+                    e_err = -e_err;
+                }
+                if (e_err > g_smo47_enc_rpm_err_pct) {
+                    efail |= 0x04u;
+                }
+            }
+
+            g_smo47_enc_fail = efail;
+            /* enc_ok 迟滞：进入需 J5+J6 全过，退出需 J5 越过 1.5×win 或 J6
+             * 失败；未备好/未稳态直接清零重验 */
+            if ((g_smo47_enc_avail == 0u) || (g_smo47_steady == 0u)) {
+                g_smo47_enc_ok = 0u;
+            } else if (g_smo47_enc_ok == 0u) {
+                if ((efail & 0x06u) == 0u) {
+                    g_smo47_enc_ok = 1u;
+                }
+            } else {
+                e_b = g_smo47_enc_theta_err_filt_deg
+                    - g_smo47_enc_theta_bias_deg;
+                if (e_b < 0.0f) {
+                    e_b = -e_b;
+                }
+                if ((e_b > g_smo47_enc_theta_win_deg * 1.5f)
+                        || ((efail & 0x04u) != 0u)) {
+                    g_smo47_enc_ok = 0u;
+                }
+            }
+
+            if (g_smo47_enc_ok != s_smo47_enc_prev) {
+                s_smo47_enc_prev = g_smo47_enc_ok;
+                if (g_smo47_enc_ok) {
+                    char j3[14];
+                    OBS_DBG("SMO47 enc judge: OK (wE=%d rpm eE=%s deg)",
+                            (int)g_smo47_enc_rpm_filt,
+                            Pll_Fmt1000(j3, g_smo47_enc_theta_err_filt_deg));
+                } else if (g_smo47_enc_fail != 0u) {
+                    OBS_DBG("SMO47 enc judge: FAIL mask=0x%02X%s%s%s",
+                            (int)g_smo47_enc_fail,
+                            ((g_smo47_enc_fail & 0x01u) ? " [not-avail]" : ""),
+                            ((g_smo47_enc_fail & 0x02u) ? " [enc-theta]" : ""),
+                            ((g_smo47_enc_fail & 0x04u) ? " [enc-rpm]" : ""));
                 }
             }
         }
