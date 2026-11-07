@@ -40,6 +40,19 @@ void Output_GPIO_Init(uint8_t u8Port, uint16_t u16Pin, en_gpio_init_state_t u8In
 void Input_GPIO_Init(uint8_t u8Port, uint16_t u16Pin, en_functional_state_t enablePullUp);
 
 /*******************************************************************************
+ * 电流采样 ISR 观测引脚（示波器测 ISR 节拍用）
+ *   PC14 推挽输出，在 ADC EOC 中断入口翻转一次。
+ *   ⚠ PC14 与 XTAL32_IN 复用（Sysclk.h 里 SYSTICK_ENABLE_XTAL32=1）：
+ *     若板上焊了 32.768kHz 晶振，该脚被振荡器占用，需换脚或先关 XTAL32。
+ *   翻转周期 = 2 × 采样周期（20kHz 采样 -> 10kHz 方波）
+ ******************************************************************************/
+#define ISR_TGL_PORT        GPIO_PORT_C
+#define ISR_TGL_PIN         GPIO_PIN_14
+#define ISR_TGL_TOGGLE()    GPIO_TOGGLE(ISR_TGL_PORT, ISR_TGL_PIN)
+
+void IsrTgl_Init(void);
+
+/*******************************************************************************
  * 按键模块（PB 上拉输入，按下为低电平；主循环轮询消抖，仅短按）
  ******************************************************************************/
 

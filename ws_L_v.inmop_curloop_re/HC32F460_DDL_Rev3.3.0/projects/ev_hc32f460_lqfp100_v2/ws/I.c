@@ -7,6 +7,7 @@
  */
 
 #include "I.h"
+#include "Gpio_io.h"
 #include "rtt_log.h"
 #include "TickTimer.h"
 #include "tmr4_pwm.h"
@@ -495,6 +496,9 @@ static void I_ApplyKclDerive(int16_t *pU, int16_t *pV, int16_t *pW)
 
 static void I_IrqCallback(void)
 {
+    /* 示波器观测脚：每次电流采样中断入口翻转一次（10kHz 方波 @20kHz 采样） */
+    ISR_TGL_TOGGLE();
+
     /* Clear the active sequence end-of-conversion flag */
     ADC_ClearStatus(I_ADC_UNIT, I_ADC_INT_FLAG);
 
@@ -663,6 +667,7 @@ void I_Init(void)
 #endif
 
     /* 3. Register the active sequence-complete interrupt */
+    IsrTgl_Init();
     I_IrqConfig();
 
     s_bIInitialized = true;

@@ -203,7 +203,7 @@ void Foc_Obs_Task(void)
     }
 
     /* ---- mode60 龙伯格观测器旁观诊断（sqrtf/atan2f 只在主循环，不进 ISR）----
-     * 与 mode45 同结构，唯一区别：观测器内核换龙伯格（ê 为状态量，无滑模 LPF）。 */
+     * 与 mode45 同结构，唯一区别：观测器内核换龙伯格（ê 为状态量，无滑模切换纹波）。 */
     if (g_luen60_running) {
         float luen_omega_e = g_luen60_speed_filt_rpm * 0.10472f
                            * (float)FOC_POLE_PAIRS;

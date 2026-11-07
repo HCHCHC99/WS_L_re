@@ -4,7 +4,7 @@
  * @brief FOC mode 60 - 龙伯格观测器无感速度/电流双闭环（编码器角作裁判）。
  *
  * 与 mode 45（foc_45_smo.c）**同源**，唯一区别是观测器内核：
- *   mode 45：滑模观测器 foc_smo.c（z = k·sat，e_hat = LPF(z)）
+ *   mode 45：滑模观测器 foc_smo.c（ê 为独立积分状态 ê += Ts·L_SM·sat）
  *   mode 60：龙伯格观测器 foc_luen.c（ê 为观测器状态，极点配置到 −Ωo）
  * 角度/转速提取两模式共用 foc_pll.c，便于直接 A/B 对比。
  *

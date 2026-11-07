@@ -591,10 +591,10 @@ int Foc_Smo45_VofaFill(int32_t *cur)
         return 16;
     } else if (g_smo45_wave_mode != 0u) {
         /*===== wave_mode=1：波形窄帧（8ch=32B，~2.9kHz 帧率）=====*/
-        cur[0] = (int32_t)(g_smo_z_alpha_v * 1000.0f);      /* mV -> V */
-        cur[1] = (int32_t)(g_smo_z_beta_v * 1000.0f);       /* mV -> V */
-        cur[2] = (int32_t)(g_smo_e_alpha_hat_v * 1000.0f);  /* mV -> V */
-        cur[3] = (int32_t)(g_smo_e_beta_hat_v * 1000.0f);   /* mV -> V */
+        cur[0] = (int32_t)(g_smo_z_alpha_v * 1000.0f);      /* ch0 滑模注入 z_α，稳态趋零 (mV -> V) */
+        cur[1] = (int32_t)(g_smo_z_beta_v * 1000.0f);       /* ch1 滑模注入 z_β，稳态趋零 (mV -> V) */
+        cur[2] = (int32_t)(g_smo_e_alpha_hat_v * 1000.0f);  /* ch2 观测 ê_α (mV -> V) */
+        cur[3] = (int32_t)(g_smo_e_beta_hat_v * 1000.0f);   /* ch3 观测 ê_β (mV -> V) */
         cur[4] = (int32_t)(g_smo_theory_alpha_v * 1000.0f); /* mV -> V */
         cur[5] = (int32_t)(g_smo_theory_beta_v * 1000.0f);  /* mV -> V */
         cur[6] = (int32_t)(g_smo_diag_theta_err_deg * 1000.0f);      /* mdeg -> deg */
@@ -607,10 +607,10 @@ int Foc_Smo45_VofaFill(int32_t *cur)
         cur[2] = (int32_t)(g_smo45_iq_ref_ma);                  /* ch2 目标 iq (mA -> A) */
         cur[3] = (int32_t)(g_smo_theory_alpha_v * 1000.0f);     /* ch3 理论 e_alpha (mV -> V) */
         cur[4] = (int32_t)(g_smo_theory_beta_v * 1000.0f);      /* ch4 理论 e_beta (mV -> V) */
-        cur[5] = (int32_t)(g_smo_z_alpha_v * 1000.0f);          /* ch5 SMO 原始 z_alpha (mV -> V) */
-        cur[6] = (int32_t)(g_smo_z_beta_v * 1000.0f);           /* ch6 SMO 原始 z_beta (mV -> V) */
-        cur[7] = (int32_t)(g_smo_e_alpha_hat_v * 1000.0f);      /* ch7 滤波 e_alpha_hat (mV -> V) */
-        cur[8] = (int32_t)(g_smo_e_beta_hat_v * 1000.0f);       /* ch8 滤波 e_beta_hat (mV -> V) */
+        cur[5] = (int32_t)(g_smo_z_alpha_v * 1000.0f);          /* ch5 滑模注入 z_α，稳态趋零 (mV -> V) */
+        cur[6] = (int32_t)(g_smo_z_beta_v * 1000.0f);           /* ch6 滑模注入 z_β，稳态趋零 (mV -> V) */
+        cur[7] = (int32_t)(g_smo_e_alpha_hat_v * 1000.0f);      /* ch7 观测 ê_α (mV -> V) */
+        cur[8] = (int32_t)(g_smo_e_beta_hat_v * 1000.0f);       /* ch8 观测 ê_β (mV -> V) */
         cur[9] = (int32_t)(g_smo_diag_theta_err_deg * 1000.0f); /* ch9 相位误差 (mdeg -> deg) */
         cur[10] = (int32_t)(g_smo_diag_e_on_q_v * 1000.0f);     /* ch10 e_on_q 投影 (mV -> V) */
         cur[11] = (int32_t)(g_smo_diag_e_on_d_v * 1000.0f);     /* ch11 e_on_d 投影 (mV -> V) */

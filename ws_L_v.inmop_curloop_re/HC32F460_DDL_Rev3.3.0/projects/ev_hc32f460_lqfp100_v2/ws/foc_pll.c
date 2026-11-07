@@ -148,30 +148,24 @@ void Foc_Pll_Step(float e_alpha, float e_beta)
     }
 
     /* ---- 滞后补偿 + 无感输出（Step 4，见 foc_pll.h 说明） ----
-     * δ̂ = atan(|ω̂|/ω_c) + atan(|ω̂|·L/(k/φ)) + bias
-     * ω_c = e_hat EMA 精确 −3dB 截止：cos w = (1+b²−2a²)/(2b)，b=1−α，
-     *       fc = fs·w/2π（小 α 近式 620Hz 偏低，精确 ≈805Hz@α=0.39/10kHz）。
+     * δ̂ = atan(|ω̂|/ω_c) + bias
+     * ω_c = SMO 的 ê 环一阶等效极点（g_smo_emf_wc_rad_s，由 foc_smo.c 按当前
+     *       Rs/Ls/K_SM/Δ 离散线性化算出，主循环刷新）。
+     *       旧实现从 g_smo_lpf_alpha 反推 EMA 截止的做法随该参数一并删除；
+     *       d2 = atan(|ω̂|·L/(K_SM/Δ)) 是边界层滞后，ê 前馈结构下已无物理来源，去除。
      * θ_comp = θ̂_rotor + δ̂（δ̂ 为滞后量，补偿=加回）；
      * θ_park = θ_comp + ω̂·Ts（外推一拍：Park 在下一拍首使用本值，
      *          消除一拍滞后的 9°@1500rpm）；
      * ω̂ 经低通输出 g_pll_omega_out_rpm（无感喂速度环，压 25Hz 频段超前）。 */
     {
         float w = fabsf(s_omega);
-        float a = g_smo_lpf_alpha;
-        float b, cosw, wc, kg, d1, d2, th_c;
+        float wc, d1, th_c;
 
-        if (a <= 0.0f || a >= 1.0f) a = 0.39f;
-        b = 1.0f - a;
-        cosw = (1.0f + b * b - 2.0f * a * a) / (2.0f * b);
-        if (cosw > 1.0f)        cosw = 1.0f;
-        else if (cosw < -1.0f)  cosw = -1.0f;
-        wc = (float)FOC_ISR_HZ * acosf(cosw);   /* ω_c = 2π·fc (rad/s) */
+        wc = g_smo_emf_wc_rad_s;
+        if (wc < 1.0f) wc = 1.0f;
 
-        kg = g_smo_obs_gain;
-        if (kg < 0.1f) kg = 0.1f;
         d1 = atan2f(w, wc);
-        d2 = atanf(w * g_smo_model_l_h / kg);
-        g_pll_comp_deg_out = (d1 + d2) * PLL_RAD2DEG + g_pll_comp_bias_deg;
+        g_pll_comp_deg_out = d1 * PLL_RAD2DEG + g_pll_comp_bias_deg;
 
         th_c = g_pll_theta_rotor_deg + ((g_pll_comp_en != 0u) ? g_pll_comp_deg_out : 0.0f);
         th_c = Pll_Wrap180(th_c);

@@ -84,8 +84,12 @@
  *       g_pll_omega_out_rpm            无感锁存后喂速度环的转速估计 (rpm)
  *       g_smo_emf_ok                   SMO 判定通过=1；无感切换的前置条件
  *       g_smo_jdg_fail                 失败掩码 bit0 转速/bit1 幅值/bit2 相位
- *       g_smo_jdg_ratio_filt           幅值比慢速均值，实测中心约 0.98
- *   (*) g_smo_diag_theta_err_filt_deg  SMO 相位差滤波均值，1500rpm 约 -17.5deg
+ *       g_smo_jdg_ratio_filt           幅值比慢速均值；ê 为积分状态，应≈1.0
+ *                                      （旧 LPF 结构实测 0.98，新结构待实测确认）
+ *   (*) g_smo_diag_theta_err_filt_deg  SMO 相位差滤波均值；旧结构 1500rpm 约
+ *                                      -17.5deg，新结构滞后由 L_SM 决定的 ê 环极点
+ *                                      给出，应显著更小（待实测确认）
+ *       g_smo_z_alpha_v/g_smo_z_beta_v 滑模注入 z，稳态趋零 = ê 收敛直观标志
  *   (*) g_pll_diag_theta_err_filt_deg  PLL 角差均值；comp_en=1 后应约 0
  *       g_smo45_state                  状态机：0 空闲 / 1 运行 / 2 过流
  *       g_smo45_evt                    事件码（evt=1 过流）
@@ -170,9 +174,10 @@
  *       1000ms；自动爬坡顶档正好 1000rpm，所以到速后还要约 1.5-2s 才出 OK（慢速
  *       EMA a=0.02 收敛 + hold 1s）。失败原因看 g_smo_jdg_fail：bit0
  *       转速未达（爬坡途中正常）/bit1 幅值/bit2 相位。
- *   [!] 2026-09-23 起 FOC_ISR_HZ=20kHz：SMO/PLL 的 alpha
- *       已同步改过（g_smo_lpf_alpha 0.39->0.21、g_pll_wout_lpf_alpha
- *       0.0125->0.00625）。若再动 MOTOR_PWM_FREQ_HZ，这些 alpha 与
+ *   [!] 2026-09-23 起 FOC_ISR_HZ=20kHz：g_pll_wout_lpf_alpha
+ *       已同步改过（0.0125->0.00625）。SMO 侧原有的 e_hat 后置 EMA 已取消
+ *       （反电动势改为积分状态 ê，带宽由 L_SM 决定），不再有按 1/fs 缩放的 alpha。
+ *       若再动 MOTOR_PWM_FREQ_HZ，g_pll_wout_lpf_alpha、g_pll_diag_filt_alpha 与
  *       FOC45_ENC_DELTA_MAX(36) 必须按 1/f 同步缩放，否则相位滞后变大 /
  *       高速测速削顶（原 32 只支持到 4687rpm）。
  *   [!] 2026-09-26 起本模式速度/电流环增益 = mode 40 定稿值（电流 kp
